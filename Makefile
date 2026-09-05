@@ -13,6 +13,7 @@ SRC_S = boot/boot.S
 SRC_C = \
 	kernel/kmain.c \
 	kernel/serial.c \
+	kernel/string.c \
 	kernel/drivers/input/mouse_ps2.c \
 	kernel/drivers/storage/ata.c \
 	kernel/drivers/video/fb.c \
