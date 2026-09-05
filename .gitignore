@@ -1,4 +1,7 @@
+build/
+isodir/
 kryonos.bin
 kryonos.iso
 *.o
-isodir/
+*.txt
+.vscode/
