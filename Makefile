@@ -14,7 +14,8 @@ SRC_C = \
 	kernel/kmain.c \
 	kernel/serial.c \
 	kernel/drivers/storage/ata.c \
-	kernel/drivers/video/fb.c
+	kernel/drivers/video/fb.c \
+	kernel/fs/kryfs.c
 
 # Kaynak yollarını build/ altındaki nesne dosyalarına (object) dönüştür
 OBJS = $(SRC_S:%.S=$(BUILD)/%.o) \
