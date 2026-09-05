@@ -64,10 +64,14 @@ void mouse_handler(void) {
                     mouse_x += dx;
                     mouse_y -= dy; 
 
+                    // Dinamik ekran sınırları (Ekrana göre otomatik ayarlanır)
+                    int32_t max_x = (int32_t)fb_get_width() - 1;
+                    int32_t max_y = (int32_t)fb_get_height() - 1;
+
                     if (mouse_x < 0) mouse_x = 0;
-                    if (mouse_x > 799) mouse_x = 799;
+                    if (mouse_x > max_x) mouse_x = max_x;
                     if (mouse_y < 0) mouse_y = 0;
-                    if (mouse_y > 599) mouse_y = 599;
+                    if (mouse_y > max_y) mouse_y = max_y;
                 }
                 break;
         }

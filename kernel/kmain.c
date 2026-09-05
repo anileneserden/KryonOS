@@ -32,15 +32,17 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     ata_init();
     kryfs_init();
     mouse_init(); 
-    cursor_init(); // İmleç yöneticisini ve başlangıç arka planını hazırla
 
     uint32_t width = fb_get_width();
     uint32_t height = fb_get_height();
 
     if (width > 0 && height > 0) {
-        fb_clear(0xFF0000FF); // Mavi ekran
-        fb_draw_rect(0, 0, 100, 100, 0xFFFFFFFF); // Beyaz kare
+        fb_clear(0xFF0000FF); // Mavi ekran (Masaüstü duvar kağıdı niyetine)
+        desktop_init();       // Görev çubuğunu çiz
     }
+
+    // İmleci en son başlatıyoruz ki görev çubuğunun üzerine doğru konumda gelsin
+    cursor_init();
 
     // Sürekli fare verilerini yokla (Polling loop)
     while (1) {
