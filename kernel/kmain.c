@@ -31,6 +31,22 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     fb_init(mboot);
     ata_init();
     kryfs_init();
+
+    // Test: Dosya okuma fonksiyonunu sına
+    uint32_t fsize = 0;
+    char* fdata = (char*)kryfs_read_file("test.txt", &fsize);
+    if (fdata && fsize > 0) {
+        serial_write("KRYFS Test Dosyasi Basariyla Okundu:\n[ ");
+        for (uint32_t i = 0; i < fsize; i++) {
+            // Karakteri seri porta yazmak için basit bir döngü
+            char c[2] = { fdata[i], '\0' };
+            serial_write(c);
+        }
+        serial_write(" ]\n");
+    } else {
+        serial_write("KRYFS Test Dosyasi Okunamadi!\n");
+    }
+    
     mouse_init(); 
 
     uint32_t width = fb_get_width();
