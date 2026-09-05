@@ -6,6 +6,15 @@
 #include <kernel/drivers/video/fb.h>
 #include <kernel/drivers/storage/ata.h>
 #include <kernel/fs/kryfs.h>
+#include <kernel/drivers/input/mouse_ps2.h>
+#include <ui/cursor.h>
+
+// I/O port okumak için dışarıdan erişim (veya mouse_ps2.h içinde tanımlı olmalı)
+static inline uint8_t inb_port(uint16_t port) {
+    uint8_t ret;
+    __asm__ volatile ("inb %1, %0" : "=a"(ret) : "Nd"(port));
+    return ret;
+}
 
 void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     serial_init();
@@ -18,10 +27,12 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
 
     multiboot_info_t* mboot = (multiboot_info_t*) mboot_info_addr;
 
-    // Framebuffer, ATA ve KRYFS sistemini başlat
+    // Sistem bileşenlerini başlat
     fb_init(mboot);
     ata_init();
     kryfs_init();
+    mouse_init(); 
+    cursor_init(); // İmleç yöneticisini ve başlangıç arka planını hazırla
 
     uint32_t width = fb_get_width();
     uint32_t height = fb_get_height();
@@ -31,7 +42,19 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         fb_draw_rect(0, 0, 100, 100, 0xFFFFFFFF); // Beyaz kare
     }
 
+    // Sürekli fare verilerini yokla (Polling loop)
     while (1) {
-        __asm__ volatile ("hlt");
+        uint8_t status = inb_port(0x64);
+        if (status & 1) {
+            if (status & 0x20) {
+                // Veri fareden geliyor
+                mouse_handler();
+                cursor_update();
+            } else {
+                // Veri klavyeden geliyor - tamponu temizlemek için mutlaka okuyup boşaltmalıyız
+                volatile uint8_t dummy = inb_port(0x60);
+                (void)dummy;
+            }
+        }
     }
 }

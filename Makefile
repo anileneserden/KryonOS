@@ -13,9 +13,11 @@ SRC_S = boot/boot.S
 SRC_C = \
 	kernel/kmain.c \
 	kernel/serial.c \
+	kernel/drivers/input/mouse_ps2.c \
 	kernel/drivers/storage/ata.c \
 	kernel/drivers/video/fb.c \
-	kernel/fs/kryfs.c
+	kernel/fs/kryfs.c \
+	ui/cursor.c
 
 # Kaynak yollarını build/ altındaki nesne dosyalarına (object) dönüştür
 OBJS = $(SRC_S:%.S=$(BUILD)/%.o) \
@@ -51,4 +53,4 @@ iso: $(TARGET)
 	grub-mkrescue -o kryonos.iso isodir
 
 run: iso
-	qemu-system-i386 -cdrom kryonos.iso -drive format=raw,file=disk.img -serial stdio -vga std
+	qemu-system-i386 -cdrom kryonos.iso -drive format=raw,file=disk.img -serial stdio -vga std -display sdl,gl=on
