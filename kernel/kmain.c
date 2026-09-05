@@ -1,8 +1,13 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <kernel/serial.h>
 
 void kernel_main(void) {
+    // Seri portu başlat ve log gönder
+    serial_init();
+    serial_write("KryonOS baslatildi ve seri port aktif!\n");
+
     // VGA metin tamponu (text buffer) adresi: 0xB8000
     volatile uint16_t* vga_buffer = (uint16_t*) 0xB8000;
     
