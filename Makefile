@@ -12,7 +12,8 @@ TARGET = $(BUILD)/kryonos.bin
 SRC_S = boot/boot.S
 SRC_C = \
 	kernel/kmain.c \
-	kernel/serial.c
+	kernel/serial.c \
+	kernel/drivers/video/fb.c
 
 # Kaynak yollarını build/ altındaki nesne dosyalarına (object) dönüştür
 OBJS = $(SRC_S:%.S=$(BUILD)/%.o) \
@@ -40,7 +41,7 @@ clean:
 iso: $(TARGET)
 	mkdir -p isodir/boot/grub
 	cp $(TARGET) isodir/boot/kryonos.bin
-	echo 'set gfxpayload=800x600x32' > isodir/boot/grub/grub.cfg
+	echo 'set gfxpayload=1920x1080x32' > isodir/boot/grub/grub.cfg
 	echo 'menuentry "KryonOS" {' >> isodir/boot/grub/grub.cfg
 	echo '    multiboot /boot/kryonos.bin' >> isodir/boot/grub/grub.cfg
 	echo '    boot' >> isodir/boot/grub/grub.cfg

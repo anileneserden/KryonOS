@@ -2,20 +2,34 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <kernel/serial.h>
+#include <kernel/multiboot.h>
+#include <kernel/drivers/video/fb.h>
 
-void kernel_main(void) {
-    // Seri portu başlat ve log gönder
+void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     serial_init();
-    serial_write("KryonOS baslatildi ve seri port aktif!\n");
+    serial_write("KryonOS baslatildi!\n");
 
-    // VGA metin tamponu (text buffer) adresi: 0xB8000
-    volatile uint16_t* vga_buffer = (uint16_t*) 0xB8000;
-    
-    const char* str = "KryonOS e Hos Geldiniz!";
-    
-    for (size_t i = 0; str[i] != '\0'; i++) {
-        // Beyaz renk üzerine gri/mavi karakter yazımı (0x0F = Beyaz)
-        vga_buffer[i] = (uint16_t) str[i] | (uint16_t) 0x0F00;
+    if (mboot_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
+        serial_write("HATA: Gecersiz magic number!\n");
+        while (1) { __asm__ volatile("hlt"); }
+    }
+
+    multiboot_info_t* mboot = (multiboot_info_t*) mboot_info_addr;
+
+    // Framebuffer sürücüsünü başlat
+    fb_init(mboot);
+
+    uint32_t width = fb_get_width();
+    uint32_t height = fb_get_height();
+
+    if (width > 0 && height > 0) {
+        serial_write("Ekrana renk yaziliyor...\n");
+
+        // Ekranı tamamen mavi yap (ARGB: 0xFF0000FF)
+        fb_clear(0xFF0000FF);
+
+        // Sol üst köşeye 100x100 beyaz kare çiz (x, y, gen, yükseklik, renk)
+        fb_draw_rect(0, 0, 100, 100, 0xFFFFFFFF);
     }
 
     while (1) {
