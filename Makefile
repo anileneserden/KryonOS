@@ -55,4 +55,4 @@ iso: $(TARGET)
 	grub-mkrescue -o kryonos.iso isodir
 
 run: iso
-	qemu-system-i386 -cdrom kryonos.iso -drive format=raw,file=disk.img -serial stdio -vga std -display sdl,gl=on
+	qemu-system-i386 -cdrom kryonos.iso -drive format=raw,file=$(HOME)/KryonOS/main/disk.img -serial stdio -vga std -display sdl,gl=on
