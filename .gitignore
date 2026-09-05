@@ -5,3 +5,4 @@ kryonos.iso
 *.o
 *.txt
 .vscode/
+*.img

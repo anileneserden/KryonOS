@@ -13,6 +13,7 @@ SRC_S = boot/boot.S
 SRC_C = \
 	kernel/kmain.c \
 	kernel/serial.c \
+	kernel/drivers/storage/ata.c \
 	kernel/drivers/video/fb.c
 
 # Kaynak yollarını build/ altındaki nesne dosyalarına (object) dönüştür
@@ -47,7 +48,6 @@ iso: $(TARGET)
 	echo '    boot' >> isodir/boot/grub/grub.cfg
 	echo '}' >> isodir/boot/grub/grub.cfg
 	grub-mkrescue -o kryonos.iso isodir
-	rm -rf isodir
 
 run: iso
-	qemu-system-i386 -vga std -cdrom kryonos.iso -serial stdio
+	qemu-system-i386 -cdrom kryonos.iso -drive format=raw,file=disk.img -serial stdio -vga std
