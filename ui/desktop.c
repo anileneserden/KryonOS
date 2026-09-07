@@ -1,6 +1,7 @@
 #include <ui/desktop.h>
 #include <ui/window.h>
 #include <kernel/drivers/video/fb.h>
+#include <kernel/drivers/video/gfx.h>
 
 #define TASKBAR_HEIGHT 40
 
@@ -12,13 +13,18 @@ void desktop_init(void) {
 
     // 1. Görev Çubuğu Arkaplanı
     uint32_t taskbar_y = height - TASKBAR_HEIGHT;
-    fb_draw_rect(0, taskbar_y, width, TASKBAR_HEIGHT, 0xFF202020);
+    gfx_fill_rect(0, taskbar_y, width, TASKBAR_HEIGHT, 0xFF202020);
 
     // 2. Görev Çubuğu Üst Çizgisi
-    fb_draw_rect(0, taskbar_y, width, 2, 0xFF404040);
+    gfx_fill_rect(0, taskbar_y, width, 2, 0xFF404040);
 
     // 3. Sol tarafa "Menü / Başlat" butonu
-    fb_draw_rect(10, taskbar_y + 8, 24, 24, 0xFF007ACC);
+    gfx_fill_rect(10, taskbar_y + 8, 24, 24, 0xFF007ACC);
+
+    // Başlat butonunun yanına yazı ekleyelim
+    gfx_draw_text_utf8(42, taskbar_y + 12, 0xFFFFFFFF, "KryonOS");
+
+    gfx_draw_text_utf8(50, 50, 0xFFFFFFFF, "ş s ğ g ü u ı i | Ş S Ğ G Ü U İ I");
 
     // --- ÖRNEK PENCERE OLUŞTURMA VE ÇİZME ---
     window_t sample_win;
@@ -29,8 +35,8 @@ void desktop_init(void) {
     sample_win.is_active = true; // Aktif pencere (mavi başlık çubuğu)
     sample_win.is_dragging = false;
 
-    // Başlık metnini kopyala
-    const char* win_title = "KryonOS Dosya Yoneticisi";
+    // Başlık metnini kopyala (Türkçe karakter testine uygun UTF-8/KVX uyumlu)
+    const char* win_title = "KryonOS Dosya Yöneticisi";
     int i = 0;
     while (win_title[i] != '\0' && i < 31) {
         sample_win.title[i] = win_title[i];
