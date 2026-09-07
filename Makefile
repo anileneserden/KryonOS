@@ -17,6 +17,7 @@ SRC_C = \
 	kernel/drivers/input/mouse_ps2.c \
 	kernel/drivers/storage/ata.c \
 	kernel/drivers/video/fb.c \
+	kernel/drivers/video/gfx.c \
 	kernel/fs/kryfs.c \
 	ui/cursor.c \
 	ui/desktop.c \
