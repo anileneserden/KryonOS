@@ -7,6 +7,7 @@
 #include <kernel/drivers/storage/ata.h>
 #include <kernel/fs/kryfs.h>
 #include <kernel/drivers/input/mouse_ps2.h>
+#include <kernel/drivers/input/keyboard_ps2.h>
 #include <ui/cursor.h>
 #include <ui/desktop.h>
 
@@ -61,7 +62,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     // İmleci en son başlatıyoruz ki görev çubuğunun üzerine doğru konumda gelsin
     cursor_init();
 
-    // Sürekli fare verilerini yokla (Polling loop)
+    // Sürekli giriş verilerini yokla (Polling loop)
     while (1) {
         uint8_t status = inb_port(0x64);
         if (status & 1) {
@@ -70,9 +71,8 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
                 mouse_handler();
                 cursor_update();
             } else {
-                // Veri klavyeden geliyor - tamponu temizlemek için mutlaka okuyup boşaltmalıyız
-                volatile uint8_t dummy = inb_port(0x60);
-                (void)dummy;
+                // Veri klavyeden geliyor - klavye sürücüsünü çağır
+                keyboard_handler();
             }
         }
     }

@@ -14,6 +14,7 @@ SRC_C = \
 	kernel/kmain.c \
 	kernel/serial.c \
 	kernel/string.c \
+	kernel/drivers/input/keyboard_ps2.c \
 	kernel/drivers/input/mouse_ps2.c \
 	kernel/drivers/storage/ata.c \
 	kernel/drivers/video/font/font8x8_basic.c \
