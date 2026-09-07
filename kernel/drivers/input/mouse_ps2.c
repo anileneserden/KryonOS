@@ -1,6 +1,7 @@
 #include <kernel/drivers/input/mouse_ps2.h>
 #include <kernel/serial.h>
 #include <arch/x86/io.h>
+#include <kernel/drivers/video/fb.h>
 
 #define PS2_DATA_PORT 0x60
 #define PS2_STATUS_PORT 0x64

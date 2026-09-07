@@ -8,6 +8,7 @@
 #include <kernel/fs/kryfs.h>
 #include <kernel/drivers/input/mouse_ps2.h>
 #include <ui/cursor.h>
+#include <ui/desktop.h>
 
 // I/O port okumak için dışarıdan erişim (veya mouse_ps2.h içinde tanımlı olmalı)
 static inline uint8_t inb_port(uint16_t port) {
