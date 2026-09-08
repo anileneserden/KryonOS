@@ -5,7 +5,7 @@
 
 #define PS2_DATA_PORT 0x60
 
-static bool keyboard_debug_mode = true;
+static bool keyboard_debug_mode = false;
 static bool keyboard_log_enabled = false; // Karakterlerin serial'a yazılmasını açıp kapatmak için yeni bool
 
 static const char* scancode_utf8[128] = {
@@ -47,7 +47,18 @@ static const char* scancode_utf8[128] = {
     [0x43] = "[F9]",
     [0x44] = "[F10]",
     [0x57] = "[F11]",
-    [0x58] = "[F12]"
+    [0x58] = "[F12]",
+
+    [0x53] = "[DELETE INS]",
+    [0x51] = "[PG DN]",
+    [0x49] = "[PG UP]",
+    [0x4F] = "[END]",
+    [0x47] = "[HOME]",
+
+    [0x45] = "[NUMLOCK]",
+    [0x35] = "/",
+    [0x37] = "*",
+    [0x4A] = "-"
 };
 
 static void print_hex(uint8_t val) {
@@ -69,7 +80,46 @@ void keyboard_init(void) {
 }
 
 void keyboard_handler(void) {
+    static bool e0_prefix = false;
+    static int e1_state = 0;
+
     uint8_t scancode = inb(PS2_DATA_PORT);
+
+    // Pause/Break sekans takibi
+    if (e1_state > 0) {
+        e1_state--;
+        if (e1_state == 0 && keyboard_log_enabled) {
+            serial_write("[PAUSE]");
+        }
+        return;
+    }
+
+    if (scancode == 0xE1) {
+        e1_state = 5;
+        return;
+    }
+
+    if (scancode == 0xE0) {
+        e0_prefix = true;
+        return;
+    }
+
+    // Print Screen ara bayt ve tuş kodları kontrolü
+    if (e0_prefix) {
+        e0_prefix = false;
+        
+        if (scancode == 0x37) {
+            if (keyboard_log_enabled) {
+                serial_write("[PRTSC]");
+            }
+            return;
+        }
+        
+        // 0xAA düzeltmesi burada uygulandı
+        if (scancode == 0xB7 || scancode == 0x2A || scancode == 0xAA) {
+            return;
+        }
+    }
 
     if (scancode & 0x80) {
         return; 
