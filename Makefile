@@ -22,6 +22,7 @@ SRC_C = \
 	kernel/drivers/video/fb.c \
 	kernel/drivers/video/gfx.c \
 	kernel/fs/kryfs.c \
+	kernel/fs/vfs.c \
 	ui/cursor.c \
 	ui/desktop.c \
 	ui/window.c

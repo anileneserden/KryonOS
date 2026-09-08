@@ -5,6 +5,7 @@
 
 #define KRYFS_MAGIC 0x4B525953 // "KRYS"
 #define KRYFS_BLOCK_SIZE 512
+#define KRYFS_MAX_INODES 16    // Klasör sayısını artırmak için inode kapasitesini yükseltebiliriz
 
 typedef struct {
     uint32_t magic;
@@ -16,14 +17,17 @@ typedef struct {
 
 typedef struct {
     uint32_t inode_id;
-    char filename[32];
+    char filename[32];     
     uint32_t size;
     uint32_t first_block;
     uint8_t is_used;
+    uint8_t is_directory;  // Çekirdekle eşleşmesi için buraya da eklenmeli
 } __attribute__((packed)) kryfs_inode_t;
 
 void kryfs_init(void);
 void kryfs_format(void);
 void* kryfs_read_file(const char* filename, uint32_t* out_size);
+void kryfs_list_files(void);
+void kryos_fs_system_init(void);
 
 #endif

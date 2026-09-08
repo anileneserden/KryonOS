@@ -1,4 +1,5 @@
 #include <kernel/fs/kryfs.h>
+#include <kernel/fs/vfs.h>
 #include <kernel/drivers/storage/ata.h>
 #include <kernel/serial.h>
 #include <kernel/string.h>
@@ -63,7 +64,7 @@ void kryfs_init(void) {
     kryfs_superblock_t* sb = (kryfs_superblock_t*)sector_buf;
 
     if (sb->magic != KRYFS_MAGIC) {
-        serial_write("UYARI: Gecersiz KRYFS imzi bulundu, dosya sistemi bicimlendiriliyor...\n");
+        serial_write("UYARI: Gecersiz KRYFS imzasi bulundu, dosya sistemi bicimlendiriliyor...\n");
         kryfs_format();
     } else {
         serial_write("KRYFS superblok basariyla dogrulandi!\n");
@@ -129,4 +130,104 @@ void* kryfs_read_file(const char* filename, uint32_t* out_size) {
 
     if (out_size) *out_size = file_size;
     return file_read_buffer;
+}
+
+void kryfs_list_files(void) {
+    uint8_t sector_buf[KRYFS_BLOCK_SIZE];
+    ata_read_sector(0, sector_buf);
+    kryfs_superblock_t* sb = (kryfs_superblock_t*)sector_buf;
+
+    if (sb->magic != KRYFS_MAGIC) {
+        serial_write("KRYFS: Gecersiz superblok!\n");
+        return;
+    }
+
+    serial_write("\n========================================\n");
+    serial_write(" Sürücü C:\\ [ ");
+    for (int i = 0; i < 31 && sb->volume_name[i] != '\0'; i++) {
+        char c[2] = { sb->volume_name[i], '\0' };
+        serial_write(c);
+    }
+    serial_write(" ]\n");
+    serial_write("========================================\n");
+
+    uint32_t inode_sector_start = 1;
+    uint32_t inodes_per_sector = KRYFS_BLOCK_SIZE / sizeof(kryfs_inode_t);
+    uint32_t total_inode_sectors = (sb->inode_count + inodes_per_sector - 1) / inodes_per_sector;
+
+    int file_count = 0;
+    for (uint32_t s = 0; s < total_inode_sectors; s++) {
+        ata_read_sector(inode_sector_start + s, sector_buf);
+        kryfs_inode_t* inodes = (kryfs_inode_t*)sector_buf;
+
+        for (uint32_t i = 0; i < inodes_per_sector; i++) {
+            uint32_t current_idx = s * inodes_per_sector + i;
+            if (current_idx >= sb->inode_count) break;
+
+            if (inodes[i].is_used) {
+                file_count++;
+                
+                // Dosya adını veya yolunu geçici bir tampona güvenle al
+                char name_buf[33];
+                int name_len = 0;
+                for (int j = 0; j < 32 && inodes[i].filename[j] != '\0'; j++) {
+                    name_buf[j] = inodes[i].filename[j];
+                    name_len = j + 1;
+                }
+                name_buf[name_len] = '\0';
+
+                // 1. Dizin derinliğini hesapla (yoldaki '/' sayısı)
+                int depth = 0;
+                for (int j = 0; j < name_len; j++) {
+                    if (name_buf[j] == '/') {
+                        depth++;
+                    }
+                }
+
+                // Eğer son karakter '/' ise (klasörün kendi yolu), çizimde fazladan sayılmasın diye derinliği dengeleyebiliriz
+                // Veya her seviye için uygun girintiyi bırakıyoruz:
+                // Kök seviyedekiler için depth = 0 (veya klasör içi için 1 vb.)
+                
+                // 2. Derinliğe göre boşluk ve ağaç dallarını bas
+                // Ana dizindekiler için 2 boşluk + "|--- ", alt dizindekiler için hiyerarşik boşluk + "|-- "
+                if (depth == 0 || (depth == 1 && name_buf[name_len - 1] == '/')) {
+                    // Kök seviye dosya veya klasör
+                    serial_write("  |--- ");
+                } else {
+                    // Alt seviyeler için girinti yap
+                    for (int d = 0; d < depth; d++) {
+                        serial_write("    ");
+                    }
+                    serial_write(" |-- ");
+                }
+
+                // 3. İsmi ekrana yazdır (Eğer klasörse sondaki '/' işaretini tree görünümü için temizleyebilir veya koruyabilirsin)
+                for (int j = 0; j < name_len; j++) {
+                    char c[2] = { name_buf[j], '\0' };
+                    serial_write(c);
+                }
+                
+                serial_write("\n");
+            }
+        }
+    }
+
+    if (file_count == 0) {
+        serial_write("  (Dizin bos)\n");
+    }
+    serial_write("========================================\n\n");
+}
+
+// VFS için Sürücü Adaptörü ve Başlatıcı
+fs_driver_t kryfs_get_driver(void) {
+    fs_driver_t driver;
+    driver.read_file = kryfs_read_file;
+    driver.list_dir = kryfs_list_files;
+    return driver;
+}
+
+void kryos_fs_system_init(void) {
+    kryfs_init();
+    fs_driver_t kryfs_driver = kryfs_get_driver();
+    vfs_mount('C', "KryonVolume", kryfs_driver);
 }

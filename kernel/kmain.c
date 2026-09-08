@@ -6,12 +6,13 @@
 #include <kernel/drivers/video/fb.h>
 #include <kernel/drivers/storage/ata.h>
 #include <kernel/fs/kryfs.h>
+#include <kernel/fs/vfs.h> // <-- VFS başlığı eklendi
 #include <kernel/drivers/input/mouse_ps2.h>
 #include <kernel/drivers/input/keyboard_ps2.h>
 #include <ui/cursor.h>
 #include <ui/desktop.h>
 
-// I/O port okumak için dışarıdan erişim (veya mouse_ps2.h içinde tanımlı olmalı)
+// I/O port okumak için dışarıdan erişim
 static inline uint8_t inb_port(uint16_t port) {
     uint8_t ret;
     __asm__ volatile ("inb %1, %0" : "=a"(ret) : "Nd"(port));
@@ -32,21 +33,26 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     // Sistem bileşenlerini başlat
     fb_init(mboot);
     ata_init();
-    kryfs_init();
 
-    // Test: Dosya okuma fonksiyonunu sına
+    // --- VFS VE DOSYA SİSTEMİNİ BAŞLAT ---
+    vfs_init();
+    kryos_fs_system_init(); // KRYFS'yi başlatır ve C:\ olarak mount eder
+
+    // Sürücü içeriğini Windows tarzı liste olarak göster
+    vfs_list_drive('C');
+
+    // Test: VFS üzerinden C:\ harfiyle dosya okuma
     uint32_t fsize = 0;
-    char* fdata = (char*)kryfs_read_file("test.txt", &fsize);
+    char* fdata = (char*)vfs_read_file("C:/test.txt", &fsize);
     if (fdata && fsize > 0) {
-        serial_write("KRYFS Test Dosyasi Basariyla Okundu:\n[ ");
+        serial_write("VFS Uzerinden 'C:/test.txt' Basariyla Okundu:\n[ ");
         for (uint32_t i = 0; i < fsize; i++) {
-            // Karakteri seri porta yazmak için basit bir döngü
             char c[2] = { fdata[i], '\0' };
             serial_write(c);
         }
         serial_write(" ]\n");
     } else {
-        serial_write("KRYFS Test Dosyasi Okunamadi!\n");
+        serial_write("VFS Uzerinden 'C:/test.txt' Okunamadi!\n");
     }
     
     mouse_init(); 
