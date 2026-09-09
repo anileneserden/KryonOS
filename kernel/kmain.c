@@ -68,16 +68,22 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     // İmleci en son başlatıyoruz ki görev çubuğunun üzerine doğru konumda gelsin
     cursor_init();
 
-    // Sürekli giriş verilerini yokla (Polling loop)
+    // Sürekli giriş ve render döngüsü
     while (1) {
         uint8_t status = inb_port(0x64);
         if (status & 1) {
             if (status & 0x20) {
-                // Veri fareden geliyor
+                // 1. Fare verilerini güncelle (mouse_x, mouse_y değişir)
                 mouse_handler();
+                
+                // 2. Pencere sürükleme / tıklama mantığı
+                // (Eğer pencere sürükleniyorsa sadece o bölge yeniden çizilir)
+                wm_process_input();
+
+                // 3. Sadece fare imlecini güncelle (Cursor modülü arkasındaki 
+                //    pikselleri koruyarak imleci hareket ettirir)
                 cursor_update();
             } else {
-                // Veri klavyeden geliyor - klavye sürücüsünü çağır
                 keyboard_handler();
             }
         }

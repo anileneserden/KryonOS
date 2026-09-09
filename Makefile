@@ -25,7 +25,8 @@ SRC_C = \
 	kernel/fs/vfs.c \
 	ui/cursor.c \
 	ui/desktop.c \
-	ui/window.c
+	ui/window.c \
+	ui/wm.c
 
 # Kaynak yollarını build/ altındaki nesne dosyalarına (object) dönüştür
 OBJS = $(SRC_S:%.S=$(BUILD)/%.o) \
