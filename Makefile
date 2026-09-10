@@ -14,6 +14,7 @@ SRC_S = \
 	boot/paging.S
 
 SRC_C = \
+	kernel/app_manager.c \
 	kernel/kmain.c \
 	kernel/serial.c \
 	kernel/string.c \
