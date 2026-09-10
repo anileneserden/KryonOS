@@ -89,10 +89,13 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
             uint8_t status = inb_port(0x64);
             if (status & 0x20) {
                 mouse_handler();
-                cursor_update_and_redraw(); // Tüm ekranı değil, sadece imleç karesini günceller!
+
+                // Fare hareket ettiğinde veya tıklandığında pencere yöneticisini çalıştır
+                wm_process_input();
+
+                cursor_update_and_redraw(); // Sadece imleç karesini günceller
             } else {
                 keyboard_handler();
-                // Tuşa basıldığında tüm ekranı yenilemek gerekiyorsa buraya eklenebilir
             }
         }
     }
