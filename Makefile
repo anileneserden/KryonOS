@@ -9,7 +9,10 @@ BUILD = build
 TARGET = $(BUILD)/kryonos.bin
 
 # --- Kaynak Dosyalar ---
-SRC_S = boot/boot.S
+SRC_S = \
+	boot/boot.S \
+	boot/paging.S
+
 SRC_C = \
 	kernel/kmain.c \
 	kernel/serial.c \
@@ -23,6 +26,9 @@ SRC_C = \
 	kernel/drivers/video/gfx.c \
 	kernel/fs/kryfs.c \
 	kernel/fs/vfs.c \
+	kernel/mem/heap.c \
+	kernel/mem/pmm.c \
+	kernel/mem/vmm.c \
 	ui/cursor.c \
 	ui/desktop.c \
 	ui/window.c \
