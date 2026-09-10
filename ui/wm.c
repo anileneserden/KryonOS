@@ -1,11 +1,15 @@
 #include <ui/wm.h>
+#include <ui/desktop.h>
 #include <kernel/drivers/video/fb.h>
 #include <kernel/drivers/video/gfx.h>
 #include <kernel/serial.h>
+#include <ui/cursor.h>
 
 extern int32_t mouse_x;
 extern int32_t mouse_y;
 extern uint8_t mouse_buttons;
+
+#define WM_TITLEBAR_HEIGHT 24
 
 static window_t window_list[MAX_WINDOWS];
 static int window_count = 0;
@@ -35,6 +39,8 @@ window_t* wm_create_window(int width, int height, const char* title) {
     win->height = height;
     win->is_active = true;
     win->is_dragging = false;
+    win->drag_offset_x = 0;
+    win->drag_offset_y = 0;
 
     int i = 0;
     while (title[i] != '\0' && i < 31) {
@@ -51,8 +57,9 @@ window_t* wm_create_window(int width, int height, const char* title) {
     active_window = win;
     window_count++;
 
-    // İlk oluşturulduğunda hemen çiz
-    wm_draw_window(win);
+    // Tüm ekranı hasarlı işaretleyip çiz
+    damage_union_rect(0, 0, fb_get_width(), fb_get_height());
+    desktop_redraw();
     return win;
 }
 
@@ -81,17 +88,18 @@ void wm_draw_all(void) {
 window_t* wm_find_at(int x, int y) {
     for (int i = window_count - 1; i >= 0; i--) {
         window_t* win = &window_list[i];
+        // Sadece başlık çubuğu değil, tüm pencere alanından tutulabilmesi için height kontrolü eklendi
         if (win->width > 0 &&
             x >= win->x && x <= win->x + win->width &&
-            y >= win->y && y <= win->y + 24) {
+            y >= win->y && y <= win->y + win->height) {
             return win;
         }
     }
     return 0;
 }
 
-static void wm_bring_to_front(window_t* win) {
-    if (!win || window_count <= 1) return;
+static window_t* wm_bring_to_front(window_t* win) {
+    if (!win || window_count <= 1) return win;
 
     int idx = -1;
     for (int i = 0; i < window_count; i++) {
@@ -101,7 +109,7 @@ static void wm_bring_to_front(window_t* win) {
         }
     }
 
-    if (idx == -1 || idx == window_count - 1) return;
+    if (idx == -1 || idx == window_count - 1) return win;
 
     window_t temp = window_list[idx];
     for (int i = idx; i < window_count - 1; i++) {
@@ -110,56 +118,68 @@ static void wm_bring_to_front(window_t* win) {
     window_list[window_count - 1] = temp;
 
     for (int i = 0; i < window_count; i++) {
-        window_list[i].is_active = (&window_list[i] == win);
+        window_list[i].is_active = (&window_list[i] == &window_list[window_count - 1]);
     }
-    active_window = win;
+    active_window = &window_list[window_count - 1];
     
-    // Sıralama değiştiği için tüm pencereleri yeniden çiz
-    fb_clear(0xFF0000FF);
-    wm_draw_all();
+    damage_union_rect(0, 0, fb_get_width(), fb_get_height());
+    return active_window;
 }
 
 void wm_process_input(void) {
     uint8_t left_pressed = mouse_buttons & 0x01;
     uint8_t prev_left = prev_buttons & 0x01;
 
-    // Eğer pencere sürükleniyorsa
+    // 1. Sürükleme Mantığı
     if (dragged_window && dragged_window->is_dragging) {
         int new_x = mouse_x - dragged_window->drag_offset_x;
         int new_y = mouse_y - dragged_window->drag_offset_y;
 
-        // Konum gerçekten değiştiyse kısmi temizlik ve çizim yap
         if (new_x != dragged_window->x || new_y != dragged_window->y) {
-            
-            // 1. ADIM: Pencerenin ESKİ yerini mavi arkaplanla temizle (arkada iz kalmaması için)
-            gfx_fill_rect(dragged_window->x, dragged_window->y, dragged_window->width, dragged_window->height, 0xFF0000FF);
+            int old_x = dragged_window->x;
+            int old_y = dragged_window->y;
+            int32_t old_cursor_x;
+            int32_t old_cursor_y;
 
-            // 2. ADIM: Koordinatları güncelle
+            cursor_get_position(&old_cursor_x, &old_cursor_y);
+            cursor_prepare_redraw();
+
+            // Koordinatları güncelle
             dragged_window->x = new_x;
             dragged_window->y = new_y;
 
-            // 3. ADIM: Altta kalan diğer pencerelerin bu alanla kesişen kısımlarını tekrar çiz (Alt alta binişme sorununu çözer)
-            for (int i = 0; i < window_count; i++) {
-                if (&window_list[i] != dragged_window && window_list[i].width > 0) {
-                    wm_draw_window(&window_list[i]);
-                }
-            }
+            // Eski ve yeni pencere alanlarını yeniden çiz; tam ekran kopyası yapma.
+            damage_union_rect(old_x, old_y, dragged_window->width, dragged_window->height);
+            damage_union_rect(new_x, new_y, dragged_window->width, dragged_window->height);
+            damage_union_rect(old_cursor_x, old_cursor_y, CURSOR_WIDTH, CURSOR_HEIGHT);
+            damage_union_rect(mouse_x, mouse_y, CURSOR_WIDTH, CURSOR_HEIGHT);
+            desktop_redraw();
 
-            // 4. ADIM: Sürüklenen pencereyi YENİ konumuna çiz
-            wm_draw_window(dragged_window);
+            cursor_show();
         }
     }
 
+    // 2. Tıklama Mantığı
     if (left_pressed && !prev_left) {
         window_t* target = wm_find_at(mouse_x, mouse_y);
         if (target) {
-            wm_bring_to_front(target);
-            dragged_window = target;
-            target->is_dragging = true;
-            target->drag_offset_x = mouse_x - target->x;
-            target->drag_offset_y = mouse_y - target->y;
+            cursor_prepare_redraw();
+            dragged_window = wm_bring_to_front(target);
+            dragged_window->is_dragging =
+                mouse_y >= dragged_window->y &&
+                mouse_y < dragged_window->y + WM_TITLEBAR_HEIGHT;
+
+            if (dragged_window->is_dragging) {
+                dragged_window->drag_offset_x = mouse_x - dragged_window->x;
+                dragged_window->drag_offset_y = mouse_y - dragged_window->y;
+            }
+
+            desktop_redraw();
+            cursor_show();
         }
-    } else if (!left_pressed && prev_left) {
+    }
+    // 3. Bırakma Mantığı
+    else if (!left_pressed && prev_left) {
         if (dragged_window) {
             dragged_window->is_dragging = false;
             dragged_window = 0;
