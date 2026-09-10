@@ -36,4 +36,13 @@ typedef struct multiboot_info {
     uint8_t  framebuffer_type;
 } __attribute__((packed)) multiboot_info_t;
 
+typedef struct multiboot_memory_map {
+    uint32_t size;
+    uint32_t addr_low;
+    uint32_t addr_high;
+    uint32_t len_low;
+    uint32_t len_high;
+    uint32_t type;
+} __attribute__((packed)) multiboot_memory_map_t;
+
 #endif

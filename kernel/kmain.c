@@ -6,11 +6,14 @@
 #include <kernel/drivers/video/fb.h>
 #include <kernel/drivers/storage/ata.h>
 #include <kernel/fs/kryfs.h>
-#include <kernel/fs/vfs.h> // <-- VFS başlığı eklendi
+#include <kernel/fs/vfs.h>
 #include <kernel/drivers/input/mouse_ps2.h>
 #include <kernel/drivers/input/keyboard_ps2.h>
 #include <ui/cursor.h>
 #include <ui/desktop.h>
+#include <kernel/mem/heap.h>
+#include <kernel/mem/pmm.h>
+#include <kernel/mem/vmm.h>
 
 // I/O port okumak için dışarıdan erişim
 static inline uint8_t inb_port(uint16_t port) {
@@ -29,6 +32,11 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     }
 
     multiboot_info_t* mboot = (multiboot_info_t*) mboot_info_addr;
+
+    // --- FİZİKSEL BELLEK YÖNETİCİSİNİ BAŞLAT ---
+    pmm_init(mboot);
+    vmm_init();
+    heap_init(0x600000, 0x400000);
 
     // Sistem bileşenlerini başlat
     fb_init(mboot);
