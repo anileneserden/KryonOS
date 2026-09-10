@@ -57,16 +57,39 @@ window_t* wm_create_window(int width, int height, const char* title) {
     active_window = win;
     window_count++;
 
-    // Tüm ekranı hasarlı işaretleyip çiz
     damage_union_rect(0, 0, fb_get_width(), fb_get_height());
     desktop_redraw();
     return win;
 }
 
+// Pencereyi tamamen sistemden kaldıran fonksiyon
+void wm_close_window(window_t* win) {
+    if (!win) return;
+
+    // Pencerenin kapladığı alanı hasarlı işaretle ki arkası yeniden çizilsin
+    damage_union_rect(win->x, win->y, win->width, win->height);
+
+    win->width = 0; // Kapatıldı olarak işaretle
+
+    // Eğer kapanan aktif pencere ise başka bir pencereyi öne getir
+    if (active_window == win) {
+        active_window = 0;
+        for (int i = window_count - 1; i >= 0; i--) {
+            if (window_list[i].width > 0) {
+                active_window = &window_list[i];
+                active_window->is_active = true;
+                break;
+            }
+        }
+    }
+
+    desktop_redraw();
+}
+
 void wm_draw_window(window_t* win) {
     if (!win || win->width == 0) return;
 
-    // 1. Pencere Gövdesi (Arka plan)
+    // 1. Pencere Gövdesi
     gfx_fill_rect(win->x, win->y, win->width, win->height, 0xFF303030);
 
     // 2. Başlık Çubuğu
@@ -75,6 +98,12 @@ void wm_draw_window(window_t* win) {
 
     // 3. Başlık Metni
     gfx_draw_text_utf8(win->x + 8, win->y + 6, 0xFFFFFFFF, win->title);
+
+    // 4. Kapat [X] Butonu (Sağ üst köşe)
+    int btn_x = win->x + win->width - 22;
+    int btn_y = win->y + 3;
+    gfx_fill_rect(btn_x, btn_y, 18, 18, 0xFFE81123); // Kırmızı buton
+    gfx_draw_text_utf8(btn_x + 5, btn_y + 2, 0xFFFFFFFF, "X");
 }
 
 void wm_draw_all(void) {
@@ -88,7 +117,6 @@ void wm_draw_all(void) {
 window_t* wm_find_at(int x, int y) {
     for (int i = window_count - 1; i >= 0; i--) {
         window_t* win = &window_list[i];
-        // Sadece başlık çubuğu değil, tüm pencere alanından tutulabilmesi için height kontrolü eklendi
         if (win->width > 0 &&
             x >= win->x && x <= win->x + win->width &&
             y >= win->y && y <= win->y + win->height) {
@@ -144,11 +172,9 @@ void wm_process_input(void) {
             cursor_get_position(&old_cursor_x, &old_cursor_y);
             cursor_prepare_redraw();
 
-            // Koordinatları güncelle
             dragged_window->x = new_x;
             dragged_window->y = new_y;
 
-            // Eski ve yeni pencere alanlarını yeniden çiz; tam ekran kopyası yapma.
             damage_union_rect(old_x, old_y, dragged_window->width, dragged_window->height);
             damage_union_rect(new_x, new_y, dragged_window->width, dragged_window->height);
             damage_union_rect(old_cursor_x, old_cursor_y, CURSOR_WIDTH, CURSOR_HEIGHT);
@@ -164,6 +190,19 @@ void wm_process_input(void) {
         window_t* target = wm_find_at(mouse_x, mouse_y);
         if (target) {
             cursor_prepare_redraw();
+            
+            // [X] Kapat butonuna basıldı mı kontrol et
+            int btn_x = target->x + target->width - 22;
+            int btn_y = target->y + 3;
+
+            if (mouse_x >= btn_x && mouse_x <= btn_x + 18 &&
+                mouse_y >= btn_y && mouse_y <= btn_y + 18) {
+                wm_close_window(target);
+                cursor_show();
+                prev_buttons = mouse_buttons;
+                return;
+            }
+
             dragged_window = wm_bring_to_front(target);
             dragged_window->is_dragging =
                 mouse_y >= dragged_window->y &&

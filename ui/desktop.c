@@ -22,7 +22,6 @@ void damage_union_rect(int x, int y, int w, int h) {
     int sw = fb_get_width();
     int sh = fb_get_height();
 
-    // Ekran sınırları dışına taşmayı kırp (clip)
     if (x < 0) { w += x; x = 0; }
     if (y < 0) { h += y; y = 0; }
     if (x + w > sw) w = sw - x;
@@ -36,7 +35,6 @@ void damage_union_rect(int x, int y, int w, int h) {
         screen_damage.h = h;
         screen_damage.active = true;
     } else {
-        // Mevcut hasar alanı ile yeni alanı birleştir (Bounding Box)
         int min_x = (screen_damage.x < x) ? screen_damage.x : x;
         int min_y = (screen_damage.y < y) ? screen_damage.y : y;
         int max_x = ((screen_damage.x + screen_damage.w) > (x + w)) ? (screen_damage.x + screen_damage.w) : (x + w);
@@ -52,16 +50,27 @@ void damage_union_rect(int x, int y, int w, int h) {
 void desktop_redraw(void) {
     if (!screen_damage.active) return;
 
-    // 1. Sadece hasarlı alanı arka plan rengiyle (mavi) doldur
+    uint32_t sw = fb_get_width();
+    uint32_t sh = fb_get_height();
+
+    // 1. Hasarlı alanı arka plan rengiyle (mavi) doldur
     gfx_fill_rect(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h, 0xFF0000FF);
 
     // 2. Pencereleri çiz
     wm_draw_all();
 
-    // 3. Sadece hasarlı bölgeyi ekrana aktar (Blit)
+    // 3. Alt Görev Çubuğu (Taskbar - 32px yükseklik)
+    gfx_fill_rect(0, sh - 32, sw, 32, 0xFF1E1E1E); // Koyu gri alt bar
+    gfx_fill_rect(0, sh - 32, sw, 1, 0xFF333333);  // Üst ince çizgi
+
+    // Başlat Butonu
+    gfx_fill_rect(4, sh - 28, 65, 24, 0xFF007ACC);
+    gfx_draw_text_utf8(10, sh - 22, 0xFFFFFFFF, "Baslat");
+
+    // 4. Sadece hasarlı bölgeyi ekrana aktar (Blit)
     fb_blit_region(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h);
 
-    // 4. Hasarı temizle
+    // 5. Hasarı temizle
     damage_clear();
 }
 
