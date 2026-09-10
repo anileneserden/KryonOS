@@ -64,3 +64,11 @@ void pmm_free_block(void* b) {
     mmap_unset(frame);
     used_blocks--;
 }
+
+uint32_t pmm_get_total_memory(void) {
+    return total_blocks * PAGE_SIZE;
+}
+
+uint32_t pmm_get_free_memory(void) {
+    return (total_blocks - used_blocks) * PAGE_SIZE;
+}
