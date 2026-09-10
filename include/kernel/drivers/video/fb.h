@@ -11,5 +11,11 @@ void fb_clear(uint32_t color);
 void fb_draw_rect(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color);
 uint32_t fb_get_width(void);
 uint32_t fb_get_height(void);
+void fb_swap(void);
+void fb_blit_region(uint32_t x, uint32_t y, uint32_t width, uint32_t height);
+
+// Yeni eklenen getter fonksiyonları
+volatile uint32_t* fb_get_address(void);
+uint32_t fb_get_pitch(void);
 
 #endif

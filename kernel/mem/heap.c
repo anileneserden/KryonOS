@@ -14,9 +14,8 @@ typedef struct block_header {
 static block_header_t* heap_head = (block_header_t*)HEAP_START_ADDRESS;
 
 void heap_init(uint32_t heap_start, uint32_t heap_size) {
-    (void)heap_size;
     heap_head = (block_header_t*)heap_start;
-    heap_head->size = HEAP_INITIAL_SIZE - sizeof(block_header_t);
+    heap_head->size = heap_size - sizeof(block_header_t); // Sabit yerine gelen parametreyi kullan
     heap_head->is_free = 1;
     heap_head->next = 0;
     serial_write("HEAP: Dinamik bellek yoneticisi (Heap) baslatildi.\n");
