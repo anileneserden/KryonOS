@@ -6,25 +6,14 @@ static int32_t old_mouse_x = 400;
 static int32_t old_mouse_y = 300;
 static uint32_t cursor_bg_buffer[CURSOR_WIDTH * CURSOR_HEIGHT];
 
-// İmleci ekrana çizen yardımcı fonksiyon
-static void draw_cursor_pixels(int32_t x, int32_t y) {
-    for (int cy = 0; cy < CURSOR_HEIGHT; cy++) {
-        for (int cx = 0; cx < CURSOR_WIDTH; cx++) {
-            int px = x + cx;
-            int py = y + cy;
-            if (px >= 0 && (uint32_t)px < fb_get_width() && py >= 0 && (uint32_t)py < fb_get_height()) {
-                fb_putpixel(px, py, 0xFFFFFFFF); // Beyaz kare imleç testi
-            }
-        }
-    }
-}
+// fb.c içerisindeki bölgesel blit fonksiyonunun prototipi
+extern void fb_blit_region(uint32_t x, uint32_t y, uint32_t width, uint32_t height);
 
 void cursor_init(void) {
-    // Fare sürücüsünün başladığı güncel koordinatları al
     old_mouse_x = mouse_x;
     old_mouse_y = mouse_y;
     
-    // 1. O anki konumun arka planını güvenli bir şekilde tampona kaydet (Artık ekran mavi/boyalı olacak)
+    // İlk konumun arka planını kaydet
     for (int y = 0; y < CURSOR_HEIGHT; y++) {
         for (int x = 0; x < CURSOR_WIDTH; x++) {
             int px = old_mouse_x + x;
@@ -34,17 +23,15 @@ void cursor_init(void) {
             }
         }
     }
-
-    // 2. Açılışta imlecin hemen görünmesi için ilk çizimi gerçekleştir
-    draw_cursor_pixels(old_mouse_x, old_mouse_y);
 }
 
-void cursor_update(void) {
+// Sadece fare hareket ettiğinde çağrılan optimize fonksiyon
+void cursor_update_and_redraw(void) {
     if (mouse_x == old_mouse_x && mouse_y == old_mouse_y) {
-        return; // Hareket yoksa işlem yapma
+        return; // Fare oynamadıysa hiçbir şey yapma (CPU'yu yorma)
     }
 
-    // 1. Adım: Önce eski konumdaki arka planı ekrana geri yükle (Eski imleci tamamen sil)
+    // 1. ADIM: Eski konumdaki arka planı back_buffer'a geri yükle (Eski imleci sil)
     for (int y = 0; y < CURSOR_HEIGHT; y++) {
         for (int x = 0; x < CURSOR_WIDTH; x++) {
             int px = old_mouse_x + x;
@@ -54,8 +41,10 @@ void cursor_update(void) {
             }
         }
     }
+    // Sadece eski imleç karesini ekrana yansıt
+    fb_blit_region(old_mouse_x, old_mouse_y, CURSOR_WIDTH, CURSOR_HEIGHT);
 
-    // 2. Adım: Yeni konumun arkasındaki pikselleri kaybetmemek için tampona kaydet
+    // 2. ADIM: Yeni konumun arka planını kaydet
     for (int y = 0; y < CURSOR_HEIGHT; y++) {
         for (int x = 0; x < CURSOR_WIDTH; x++) {
             int px = mouse_x + x;
@@ -66,10 +55,20 @@ void cursor_update(void) {
         }
     }
 
-    // 3. Adım: Yeni konuma imleci çiz
-    draw_cursor_pixels(mouse_x, mouse_y);
+    // 3. ADIM: Yeni konuma imleci çiz
+    for (int y = 0; y < CURSOR_HEIGHT; y++) {
+        for (int x = 0; x < CURSOR_WIDTH; x++) {
+            int px = mouse_x + x;
+            int py = mouse_y + y;
+            if (px >= 0 && (uint32_t)px < fb_get_width() && py >= 0 && (uint32_t)py < fb_get_height()) {
+                fb_putpixel(px, py, 0xFFFFFFFF); // Beyaz imleç
+            }
+        }
+    }
+    // Sadece yeni imleç karesini ekrana yansıt
+    fb_blit_region(mouse_x, mouse_y, CURSOR_WIDTH, CURSOR_HEIGHT);
 
-    // 4. Adım: Eski koordinatları güncelle
+    // Konumları güncelle
     old_mouse_x = mouse_x;
     old_mouse_y = mouse_y;
 }

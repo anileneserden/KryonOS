@@ -36,7 +36,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     // --- FİZİKSEL BELLEK YÖNETİCİSİNİ BAŞLAT ---
     pmm_init(mboot);
     vmm_init();
-    heap_init(0x600000, 0x400000);
+    heap_init(0x600000, 0x1000000);
 
     // Sistem bileşenlerini başlat
     fb_init(mboot);
@@ -69,30 +69,30 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     uint32_t height = fb_get_height();
 
     if (width > 0 && height > 0) {
-        fb_clear(0xFF0000FF); // Mavi ekran (Masaüstü duvar kağıdı niyetine)
-        desktop_init();       // Görev çubuğunu çiz
+        fb_clear(0xFF0000FF); // Mavi ekran arka planı
+        desktop_init();       // Görev çubuğu ve pencereler
     }
 
-    // İmleci en son başlatıyoruz ki görev çubuğunun üzerine doğru konumda gelsin
+    // İmleci başlangıç konumuna hazırla ve ilk tam ekranı yansıt
     cursor_init();
+    
+    // İlk çizimi ekrana komple basıyoruz
+    // (Not: cursor_init arka plandan okuduğu için önce masaüstü buffer'da olmalı)
+    // İmleci ilk konumuna back_buffer üzerine çizip tam ekran swap yapabiliriz:
+    // Ya da doğrudan fb_swap() çağırabilirsin:
+    fb_swap();
 
     // Sürekli giriş ve render döngüsü
     while (1) {
-        uint8_t status = inb_port(0x64);
-        if (status & 1) {
+        // Girdi kontrolü (non-blocking)
+        if (inb_port(0x64) & 1) {
+            uint8_t status = inb_port(0x64);
             if (status & 0x20) {
-                // 1. Fare verilerini güncelle (mouse_x, mouse_y değişir)
                 mouse_handler();
-                
-                // 2. Pencere sürükleme / tıklama mantığı
-                // (Eğer pencere sürükleniyorsa sadece o bölge yeniden çizilir)
-                wm_process_input();
-
-                // 3. Sadece fare imlecini güncelle (Cursor modülü arkasındaki 
-                //    pikselleri koruyarak imleci hareket ettirir)
-                cursor_update();
+                cursor_update_and_redraw(); // Tüm ekranı değil, sadece imleç karesini günceller!
             } else {
                 keyboard_handler();
+                // Tuşa basıldığında tüm ekranı yenilemek gerekiyorsa buraya eklenebilir
             }
         }
     }

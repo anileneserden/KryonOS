@@ -22,12 +22,19 @@ void vmm_init(void) {
     kernel_page_directory = (uint32_t*)pmm_alloc_block();
     
     // 2. Adim: Tum 4GB adres uzayini 4MB'lik buyuk sayfalarla identity-map yap 
-    // (1024 giris * 4MB = 4GB. Framebuffer, MMIO ve tum RAM kapsanir)
     for (int i = 0; i < 1024; i++) {
         uint32_t physical_addr = i * 0x400000; // Her giris 4MB temsil eder
         
-        // Adres | Present (1) | Write (2) | Page Size - 4MB (0x80)
-        kernel_page_directory[i] = physical_addr | PAGE_PRESENT | PAGE_WRITE | 0x80;
+        // Temel bayraklar: Present (1) | Write (2) | Page Size - 4MB (0x80)
+        uint32_t flags = PAGE_PRESENT | PAGE_WRITE | 0x80;
+        
+        // PMM 32MB RAM kabul ettigi icin, 32MB otesindeki tum alanlar (MMIO, Framebuffer vb.) 
+        // önbelleksiz (Uncacheable) olmalidir. PCD (Page-level Cache Disable) biti = 0x10
+        if (physical_addr >= 32 * 1024 * 1024) {
+            flags |= 0x10; 
+        }
+
+        kernel_page_directory[i] = physical_addr | flags;
     }
 
     // Sayfa dizinini CR3'e yükle ve paging'i aktif et
