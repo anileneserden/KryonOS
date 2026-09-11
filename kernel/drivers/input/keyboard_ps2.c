@@ -6,7 +6,8 @@
 #define PS2_DATA_PORT 0x60
 
 static bool keyboard_debug_mode = false;
-static bool keyboard_log_enabled = false; // Karakterlerin serial'a yazılmasını açıp kapatmak için yeni bool
+static bool keyboard_log_enabled = false; 
+static uint8_t last_scancode = 0;
 
 static const char* scancode_utf8[128] = {
     [0x01] = "[ESC]",
@@ -35,43 +36,22 @@ static const char* scancode_utf8[128] = {
     [0x38] = "[ALT]",
     [0x39] = "[SPACE]",
     
-    // Fonksiyon Tuşları (F1 - F12)
-    [0x3B] = "[F1]",
-    [0x3C] = "[F2]",
-    [0x3D] = "[F3]",
-    [0x3E] = "[F4]",
-    [0x3F] = "[F5]",
-    [0x40] = "[F6]",
-    [0x41] = "[F7]",
-    [0x42] = "[F8]",
-    [0x43] = "[F9]",
-    [0x44] = "[F10]",
-    [0x57] = "[F11]",
-    [0x58] = "[F12]",
+    [0x3B] = "[F1]", [0x3C] = "[F2]", [0x3D] = "[F3]", [0x3E] = "[F4]",
+    [0x3F] = "[F5]", [0x40] = "[F6]", [0x41] = "[F7]", [0x42] = "[F8]",
+    [0x43] = "[F9]", [0x44] = "[F10]", [0x57] = "[F11]", [0x58] = "[F12]",
 
-    [0x53] = "[DELETE INS]",
-    [0x51] = "[PG DN]",
-    [0x49] = "[PG UP]",
-    [0x4F] = "[END]",
-    [0x47] = "[HOME]",
-
-    [0x45] = "[NUMLOCK]",
-    [0x35] = "/",
-    [0x37] = "*",
-    [0x4A] = "-"
+    [0x53] = "[DELETE INS]", [0x51] = "[PG DN]", [0x49] = "[PG UP]",
+    [0x4F] = "[END]", [0x47] = "[HOME]", [0x45] = "[NUMLOCK]",
+    [0x35] = "/", [0x37] = "*", [0x4A] = "-"
 };
 
 static void print_hex(uint8_t val) {
     char hex[] = "0123456789ABCDEF";
     char buf[8];
-    buf[0] = '[';
-    buf[1] = '0';
-    buf[2] = 'x';
+    buf[0] = '['; buf[1] = '0'; buf[2] = 'x';
     buf[3] = hex[(val >> 4) & 0x0F];
     buf[4] = hex[val & 0x0F];
-    buf[5] = ']';
-    buf[6] = ' ';
-    buf[7] = '\0';
+    buf[5] = ']'; buf[6] = ' '; buf[7] = '\0';
     serial_write(buf);
 }
 
@@ -85,54 +65,38 @@ void keyboard_handler(void) {
 
     uint8_t scancode = inb(PS2_DATA_PORT);
 
-    // Pause/Break sekans takibi
     if (e1_state > 0) {
         e1_state--;
-        if (e1_state == 0 && keyboard_log_enabled) {
-            serial_write("[PAUSE]");
-        }
         return;
     }
+    if (scancode == 0xE1) { e1_state = 5; return; }
+    if (scancode == 0xE0) { e0_prefix = true; return; }
 
-    if (scancode == 0xE1) {
-        e1_state = 5;
-        return;
-    }
-
-    if (scancode == 0xE0) {
-        e0_prefix = true;
-        return;
-    }
-
-    // Print Screen ara bayt ve tuş kodları kontrolü
     if (e0_prefix) {
         e0_prefix = false;
-        
-        if (scancode == 0x37) {
-            if (keyboard_log_enabled) {
-                serial_write("[PRTSC]");
-            }
-            return;
-        }
-        
-        // 0xAA düzeltmesi burada uygulandı
-        if (scancode == 0xB7 || scancode == 0x2A || scancode == 0xAA) {
-            return;
-        }
+        if (scancode == 0x37) return;
+        if (scancode == 0xB7 || scancode == 0x2A || scancode == 0xAA) return;
     }
 
     if (scancode & 0x80) {
-        return; 
+        return; // Tuş bırakma
     }
 
     if (scancode < 128) {
+        last_scancode = scancode; // Son basılan tuşu sakla
         if (keyboard_debug_mode) {
             print_hex(scancode);
         } else if (keyboard_log_enabled) {
             const char* str = scancode_utf8[scancode];
-            if (str != 0) {
-                serial_write(str);
-            }
+            if (str != 0) serial_write(str);
         }
     }
+}
+
+uint8_t keyboard_get_last_scancode(void) {
+    return last_scancode;
+}
+
+void keyboard_clear_last_scancode(void) {
+    last_scancode = 0;
 }

@@ -1,7 +1,11 @@
 #include <ui/desktop.h>
 #include <ui/wm.h>
+#include <ui/cursor.h>
 #include <kernel/drivers/video/fb.h>
 #include <kernel/drivers/video/gfx.h>
+#include <kernel/drivers/input/keyboard_ps2.h>
+#include <arch/x86/io.h>
+#include <kernel/serial.h>
 
 typedef struct {
     int x, y, w, h;
@@ -53,24 +57,18 @@ void desktop_redraw(void) {
     uint32_t sw = fb_get_width();
     uint32_t sh = fb_get_height();
 
-    // 1. Hasarlı alanı arka plan rengiyle (mavi) doldur
+    // Arka plan rengi ve pencereler
     gfx_fill_rect(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h, 0xFF0000FF);
-
-    // 2. Pencereleri çiz
     wm_draw_all();
 
-    // 3. Alt Görev Çubuğu (Taskbar - 32px yükseklik)
-    gfx_fill_rect(0, sh - 32, sw, 32, 0xFF1E1E1E); // Koyu gri alt bar
-    gfx_fill_rect(0, sh - 32, sw, 1, 0xFF333333);  // Üst ince çizgi
+    // Alt Görev Çubuğu (Taskbar)
+    gfx_fill_rect(0, sh - 32, sw, 32, 0xFF1E1E1E); 
+    gfx_fill_rect(0, sh - 32, sw, 1, 0xFF333333);  
 
-    // Başlat Butonu
     gfx_fill_rect(4, sh - 28, 65, 24, 0xFF007ACC);
     gfx_draw_text_utf8(10, sh - 22, 0xFFFFFFFF, "Baslat");
 
-    // 4. Sadece hasarlı bölgeyi ekrana aktar (Blit)
     fb_blit_region(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h);
-
-    // 5. Hasarı temizle
     damage_clear();
 }
 
@@ -80,14 +78,19 @@ void desktop_init(void) {
 
     if (width == 0 || height == 0) return;
 
-    // 1. Pencere yöneticisini başlat
     wm_init();
-
-    // 2. Test pencereleri oluştur
     wm_create_window(300, 200, "KryonOS Dosya Yoneticisi");
     wm_create_window(250, 180, "Sistem Ayarlari");
 
-    // İlk açılışta tüm ekranı hasarlı kabul edip çizelim
     damage_union_rect(0, 0, width, height);
     desktop_redraw();
+}
+
+// Sadece klavye kontrolünü yöneten merkezi fonksiyon
+void desktop_process_input(void) {
+    uint8_t key = keyboard_get_last_scancode();
+    if (key == 0x01) {
+        serial_write("ESC tuşuna basıldı.\n");
+        keyboard_clear_last_scancode();
+    }
 }
