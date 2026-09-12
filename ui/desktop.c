@@ -1,19 +1,21 @@
 #include <ui/desktop.h>
+#include <ui/desktop_icons.h>
 #include <ui/wm.h>
 #include <ui/cursor.h>
 #include <kernel/drivers/video/fb.h>
 #include <kernel/drivers/video/gfx.h>
 #include <kernel/drivers/input/keyboard_ps2.h>
-#include <kernel/fs/vfs.h>
 #include <arch/x86/io.h>
-#include <kernel/serial.h>
+
+extern uint8_t mouse_buttons;
 
 typedef struct {
     int x, y, w, h;
     bool active;
 } damage_rect_t;
 
-static damage_rect_t screen_damage = {0, 0, 0, 0};
+static damage_rect_t screen_damage = {0, 0, 0, 0, false};
+static bool prev_mouse_buttons = false;
 
 void damage_clear(void) {
     screen_damage.active = false;
@@ -55,35 +57,21 @@ void damage_union_rect(int x, int y, int w, int h) {
 void desktop_redraw(void) {
     if (!screen_damage.active) return;
 
-    // Çizim başlamadan önce varsa eski imleci temizle
     cursor_prepare_redraw();
 
-    uint32_t sw = fb_get_width();
-    uint32_t sh = fb_get_height();
-
-    // 1. Masaüstü Arka Planı (Koyu mavi/gri ton)
+    // 1. Masaüstü Arka Planı
     gfx_fill_rect(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h, 0xFF0000FF);
     
-    // 1.1 VFS Üzerinden Belirtilen Klasördeki Dosyaları Okuyup Masaüstü İkonları Olarak Çiz
-    vfs_file_info_t files[16];
-    int file_count = vfs_get_directory_files("C:/Users/anil/Desktop/", files, 16);
+    int32_t mx, my;
+    cursor_get_position(&mx, &my);
+    bool left_clicked = (mouse_buttons & 1);
+    bool click_started = left_clicked && !prev_mouse_buttons; 
+    prev_mouse_buttons = left_clicked;
 
-    int icon_x = 30;
-    int icon_y = 30;
+    // 2. İkonları Yönet ve Çiz
+    desktop_icons_draw(mx, my, click_started);
 
-    for (int i = 0; i < file_count; i++) {
-        // İkon Arka Plan Kutusu (Dosya simgesi efekti)
-        gfx_fill_rect(icon_x, icon_y, 40, 40, 0xFFE0E0E0);
-        gfx_fill_rect(icon_x + 4, icon_y + 4, 32, 28, 0xFFFFFFFF);
-
-        // Dosya Adı Etiketi
-        gfx_draw_text_utf8(icon_x - 4, icon_y + 45, 0xFFFFFFFF, files[i].name);
-
-        // Sonraki ikon için dikeyde aşağı kaydır
-        icon_y += 70;
-    }
-
-    // 2. Açık Pencereleri Çiz
+    // 3. Açık Pencereleri Çiz
     wm_draw_all();
 
     fb_blit_region(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h);
@@ -96,16 +84,15 @@ void desktop_init(void) {
 
     if (width == 0 || height == 0) return;
 
-    // Window Manager'ı başlat ve örnek pencereler oluştur
+    desktop_icons_init(); // İkon modülünü başlat
+
     wm_init();
     wm_create_window(300, 200, "KryonOS Dosya Yoneticisi");
     wm_create_window(250, 180, "Sistem Ayarlari");
 
-    // Ekranı hasarlı işaretleyip ilk çizimi tetikle
     damage_union_rect(0, 0, width, height);
     desktop_redraw();
 
-    // İmleci başlat ve konumunu mühürle
     cursor_init();
     cursor_sync_position();
     cursor_show();
@@ -113,5 +100,4 @@ void desktop_init(void) {
 }
 
 void desktop_process_input(void) {
-    // Klavye veya genel masaüstü kısayolları buraya eklenebilir
 }

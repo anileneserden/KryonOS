@@ -96,14 +96,28 @@ void cursor_show(void) {
     cursor_show_internal(true);
 }
 
+extern uint8_t mouse_buttons; // mouse_ps2.c'den gelen buton durumu
+static uint8_t old_mouse_buttons = 0;
+extern void damage_union_rect(int x, int y, int w, int h);
+extern void desktop_redraw(void);
+
 void cursor_update_and_redraw(void) {
-    // Önce güncel fare konumunu kontrol et (mouse_x ve mouse_y değişti mi?)
-    if (mouse_x == old_mouse_x && mouse_y == old_mouse_y) {
+    // Fare konumu VEYA buton durumu değişti mi kontrol et
+    bool position_changed = (mouse_x != old_mouse_x || mouse_y != old_mouse_y);
+    bool buttons_changed = (mouse_buttons != old_mouse_buttons);
+
+    if (!position_changed && !buttons_changed) {
         return;
     }
 
+    old_mouse_buttons = mouse_buttons;
+
     int32_t old_x = old_mouse_x;
     int32_t old_y = old_mouse_y;
+
+    // İkonların olduğu alanı hasarlı işaretleyip yeniden çizilmesini tetikle
+    damage_union_rect(0, 0, 150, 400);
+    desktop_redraw();
 
     // 1. Eski imleci back-buffer'dan ekrana geri yükle (eski izi sil)
     cursor_prepare_redraw();
@@ -112,10 +126,10 @@ void cursor_update_and_redraw(void) {
     old_mouse_x = mouse_x;
     old_mouse_y = mouse_y;
 
-    // 3. Yeni konumun arka planını kaydet ve imleci yeni konuma çiz (blit yapmadan)
+    // 3. Yeni konumun arka planını kaydet ve imleci yeni konuma çiz
     cursor_show_internal(false);
 
-    // 4. Eski ve yeni alanı kapsayan bölgeyi tek seferde ekrana blit et
+    // 4. Blit işlemi
     int32_t blit_x = (old_x < mouse_x) ? old_x : mouse_x;
     int32_t blit_y = (old_y < mouse_y) ? old_y : mouse_y;
     int32_t right = ((old_x + CURSOR_WIDTH) > (mouse_x + CURSOR_WIDTH))

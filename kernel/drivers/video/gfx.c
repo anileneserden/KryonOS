@@ -16,6 +16,36 @@ void gfx_fill_rect(int x, int y, int width, int height, uint32_t color) {
     }
 }
 
+// Gerçek RGBA Alpha Blending destekli dikdörtgen çizim fonksiyonu
+void gfx_fill_rect_alpha(int x, int y, int w, int h, uint32_t color, uint8_t alpha) {
+    uint32_t sw = fb_get_width();
+    uint32_t sh = fb_get_height();
+
+    uint8_t r = (color >> 16) & 0xFF;
+    uint8_t g = (color >> 8) & 0xFF;
+    uint8_t b = color & 0xFF;
+
+    for (int py = y; py < y + h; py++) {
+        if (py < 0 || (uint32_t)py >= sh) continue;
+        for (int px = x; px < x + w; px++) {
+            if (px < 0 || (uint32_t)px >= sw) continue;
+
+            uint32_t bg_color = fb_getpixel(px, py);
+            uint8_t bg_r = (bg_color >> 16) & 0xFF;
+            uint8_t bg_g = (bg_color >> 8) & 0xFF;
+            uint8_t bg_b = bg_color & 0xFF;
+
+            // Alpha harmanlama formülü: Result = (Source * Alpha + Background * (255 - Alpha)) / 255
+            uint8_t res_r = (r * alpha + bg_r * (255 - alpha)) / 255;
+            uint8_t res_g = (g * alpha + bg_g * (255 - alpha)) / 255;
+            uint8_t res_b = (b * alpha + bg_b * (255 - alpha)) / 255;
+
+            uint32_t final_color = (0xFF << 24) | (res_r << 16) | (res_g << 8) | res_b;
+            fb_putpixel(px, py, final_color);
+        }
+    }
+}
+
 void gfx_draw_rect(int x, int y, int width, int height, uint32_t color) {
     if (width <= 0 || height <= 0) return;
 
