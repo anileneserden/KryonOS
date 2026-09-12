@@ -53,13 +53,12 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
 
     if (width > 0 && height > 0) {
         fb_clear(0xFF0000FF); 
-        desktop_init();       
+        desktop_init(); // Tüm masaüstü ve imleç burada kusursuzca ayağa kalkıyor
     }
 
     app_manager_init();
     app_create("Not Defteri", 250, 180, 0, sample_app_draw);
 
-    cursor_init();
     fb_swap();
 
     // Ana döngü
@@ -72,11 +71,10 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
             } else {
                 keyboard_handler();
             }
-            
-            // Girdi işleme ve ekran güncellemelerini her iki cihaz için de ortak çalıştır
             desktop_process_input(); 
             app_manager_update_all();
-            cursor_update_and_redraw();
         }
+
+        cursor_update_and_redraw();
     }
 }

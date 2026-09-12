@@ -12,5 +12,7 @@ void cursor_hide(void); // Pencere/ekran çiziminden önce imleci silmek için
 void cursor_prepare_redraw(void); // İmleci back-buffer'a geri yükler, VRAM'e kopyalamaz
 void cursor_get_position(int32_t* x, int32_t* y);
 void cursor_show(void); // Çizim bittikten sonra imleci tekrar çizmek için
+void cursor_refresh_background(void);
+void cursor_sync_position(void);
 
 #endif

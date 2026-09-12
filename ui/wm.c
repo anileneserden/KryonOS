@@ -170,6 +170,8 @@ void wm_process_input(void) {
             int32_t old_cursor_y;
 
             cursor_get_position(&old_cursor_x, &old_cursor_y);
+            
+            // İmleci ve ekranı güncellemeden önce kesin olarak hazırla
             cursor_prepare_redraw();
 
             dragged_window->x = new_x;
@@ -179,9 +181,13 @@ void wm_process_input(void) {
             damage_union_rect(new_x, new_y, dragged_window->width, dragged_window->height);
             damage_union_rect(old_cursor_x, old_cursor_y, CURSOR_WIDTH, CURSOR_HEIGHT);
             damage_union_rect(mouse_x, mouse_y, CURSOR_WIDTH, CURSOR_HEIGHT);
+            
             desktop_redraw();
 
+            // Çizim biter bitmez imleç konumunu eşitle ve arka planını taze al
+            cursor_sync_position();
             cursor_show();
+            cursor_refresh_background();
         }
     }
 
@@ -189,16 +195,21 @@ void wm_process_input(void) {
     if (left_pressed && !prev_left) {
         window_t* target = wm_find_at(mouse_x, mouse_y);
         if (target) {
-            cursor_prepare_redraw();
-            
             // [X] Kapat butonuna basıldı mı kontrol et
             int btn_x = target->x + target->width - 22;
             int btn_y = target->y + 3;
 
+            // Kapat butonuna tıklandıysa: Ekran değişeceği için önce imleci sakla
+            cursor_prepare_redraw();
+
             if (mouse_x >= btn_x && mouse_x <= btn_x + 18 &&
                 mouse_y >= btn_y && mouse_y <= btn_y + 18) {
                 wm_close_window(target);
+                
+                cursor_sync_position();
                 cursor_show();
+                cursor_refresh_background();
+                
                 prev_buttons = mouse_buttons;
                 return;
             }
@@ -214,7 +225,11 @@ void wm_process_input(void) {
             }
 
             desktop_redraw();
+            
+            // Pencere öne geldi, başlık rengi değişti. İmlecin yeni alt planını hafızaya alıyoruz.
+            cursor_sync_position();
             cursor_show();
+            cursor_refresh_background();
         }
     }
     // 3. Bırakma Mantığı
@@ -222,6 +237,11 @@ void wm_process_input(void) {
         if (dragged_window) {
             dragged_window->is_dragging = false;
             dragged_window = 0;
+            
+            cursor_prepare_redraw();
+            cursor_sync_position();
+            cursor_show();
+            cursor_refresh_background();
         }
     }
 

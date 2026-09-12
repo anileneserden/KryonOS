@@ -16,6 +16,22 @@ void gfx_fill_rect(int x, int y, int width, int height, uint32_t color) {
     }
 }
 
+void gfx_draw_rect(int x, int y, int width, int height, uint32_t color) {
+    if (width <= 0 || height <= 0) return;
+
+    // Üst ve Alt Kenar çizgileri
+    for (int cx = 0; cx < width; cx++) {
+        gfx_draw_pixel(x + cx, y, color);               // Üst kenar
+        gfx_draw_pixel(x + cx, y + height - 1, color);  // Alt kenar
+    }
+
+    // Sol ve Sağ Kenar çizgileri (köşeler dahil)
+    for (int cy = 0; cy < height; cy++) {
+        gfx_draw_pixel(x, y + cy, color);               // Sol kenar
+        gfx_draw_pixel(x + width - 1, y + cy, color);   // Sağ kenar
+    }
+}
+
 void gfx_fill_rounded_rect(int x, int y, int width, int height, int radius, uint32_t color) {
     for (int cy = 0; cy < height; cy++) {
         for (int cx = 0; cx < width; cx++) {

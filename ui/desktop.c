@@ -1,5 +1,4 @@
 #include <ui/desktop.h>
-#include <ui/wm.h>
 #include <ui/cursor.h>
 #include <kernel/drivers/video/fb.h>
 #include <kernel/drivers/video/gfx.h>
@@ -54,22 +53,19 @@ void damage_union_rect(int x, int y, int w, int h) {
 void desktop_redraw(void) {
     if (!screen_damage.active) return;
 
+    // Çizim başlamadan önce varsa eski imleci temizle
+    cursor_prepare_redraw();
+
     uint32_t sw = fb_get_width();
     uint32_t sh = fb_get_height();
 
-    // Arka plan rengi ve pencereler
-    gfx_fill_rect(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h, 0xFF0000FF);
-    wm_draw_all();
-
-    // Alt Görev Çubuğu (Taskbar)
-    gfx_fill_rect(0, sh - 32, sw, 32, 0xFF1E1E1E); 
-    gfx_fill_rect(0, sh - 32, sw, 1, 0xFF333333);  
-
-    gfx_fill_rect(4, sh - 28, 65, 24, 0xFF007ACC);
-    gfx_draw_text_utf8(10, sh - 22, 0xFFFFFFFF, "Baslat");
-
+    // Siyah arka planı çiz ve ekrana aktar
+    gfx_fill_rect(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h, 0xFF000000);
     fb_blit_region(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h);
     damage_clear();
+
+    // DİKKAT: Burada cursor_show() ÇAĞrilMIYOR! 
+    // İmleç yönetimini ana döngüdeki cursor_update_and_redraw() üstlenecek.
 }
 
 void desktop_init(void) {
@@ -78,19 +74,19 @@ void desktop_init(void) {
 
     if (width == 0 || height == 0) return;
 
-    wm_init();
-    wm_create_window(300, 200, "KryonOS Dosya Yoneticisi");
-    wm_create_window(250, 180, "Sistem Ayarlari");
-
+    // 1. Ekranı tamamen çiz ve temizle
     damage_union_rect(0, 0, width, height);
     desktop_redraw();
+
+    // 2. İmleci başlat ve koordinatları mühürle
+    cursor_init();
+    cursor_sync_position();
+    
+    // 3. İmleci ekrana bas ve arka planını tazeleyip kilitle
+    cursor_show();
+    cursor_refresh_background();
 }
 
-// Sadece klavye kontrolünü yöneten merkezi fonksiyon
 void desktop_process_input(void) {
-    uint8_t key = keyboard_get_last_scancode();
-    if (key == 0x01) {
-        serial_write("ESC tuşuna basıldı.\n");
-        keyboard_clear_last_scancode();
-    }
+    // Boş
 }
