@@ -96,3 +96,27 @@ void vfs_list_drive(char drive_letter) {
     }
     serial_write("========================================\n\n");
 }
+
+int vfs_get_directory_files(const char* full_path, vfs_file_info_t* out_list, int max_count) {
+    char drive;
+    const char* rel_path;
+
+    if (!parse_path(full_path, &drive, &rel_path)) {
+        serial_write("VFS Hata: Gecersiz yol formati!\n");
+        return 0;
+    }
+
+    if (drive >= 'a' && drive <= 'z') drive -= 32;
+    int index = drive - 'A';
+
+    if (!mount_table[index].is_mounted) {
+        serial_write("VFS Hata: Surucu takili degil!\n");
+        return 0;
+    }
+
+    if (mount_table[index].driver.get_dir_files) {
+        return mount_table[index].driver.get_dir_files(rel_path, out_list, max_count);
+    }
+
+    return 0;
+}

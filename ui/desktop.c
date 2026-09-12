@@ -4,6 +4,7 @@
 #include <kernel/drivers/video/fb.h>
 #include <kernel/drivers/video/gfx.h>
 #include <kernel/drivers/input/keyboard_ps2.h>
+#include <kernel/fs/vfs.h>
 #include <arch/x86/io.h>
 #include <kernel/serial.h>
 
@@ -60,9 +61,28 @@ void desktop_redraw(void) {
     uint32_t sw = fb_get_width();
     uint32_t sh = fb_get_height();
 
-    // 1. Masaüstü Arka Planı (Mavi tonlar veya siyah - şimdilik şık bir koyu mavi/gri)
+    // 1. Masaüstü Arka Planı (Koyu mavi/gri ton)
     gfx_fill_rect(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h, 0xFF0000FF);
     
+    // 1.1 VFS Üzerinden Belirtilen Klasördeki Dosyaları Okuyup Masaüstü İkonları Olarak Çiz
+    vfs_file_info_t files[16];
+    int file_count = vfs_get_directory_files("C:/Users/anil/Desktop/", files, 16);
+
+    int icon_x = 30;
+    int icon_y = 30;
+
+    for (int i = 0; i < file_count; i++) {
+        // İkon Arka Plan Kutusu (Dosya simgesi efekti)
+        gfx_fill_rect(icon_x, icon_y, 40, 40, 0xFFE0E0E0);
+        gfx_fill_rect(icon_x + 4, icon_y + 4, 32, 28, 0xFFFFFFFF);
+
+        // Dosya Adı Etiketi
+        gfx_draw_text_utf8(icon_x - 4, icon_y + 45, 0xFFFFFFFF, files[i].name);
+
+        // Sonraki ikon için dikeyde aşağı kaydır
+        icon_y += 70;
+    }
+
     // 2. Açık Pencereleri Çiz
     wm_draw_all();
 

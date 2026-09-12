@@ -218,11 +218,78 @@ void kryfs_list_files(void) {
     serial_write("========================================\n\n");
 }
 
+int kryfs_get_dir_files(const char* path, vfs_file_info_t* out_list, int max_count) {
+    uint8_t sector_buf[KRYFS_BLOCK_SIZE];
+    ata_read_sector(0, sector_buf);
+    kryfs_superblock_t* sb = (kryfs_superblock_t*)sector_buf;
+
+    if (sb->magic != KRYFS_MAGIC) return 0;
+
+    uint32_t inode_sector_start = 1;
+    uint32_t inodes_per_sector = KRYFS_BLOCK_SIZE / sizeof(kryfs_inode_t);
+    uint32_t total_inode_sectors = (sb->inode_count + inodes_per_sector - 1) / inodes_per_sector;
+
+    int target_len = 0;
+    while (path[target_len] != '\0') target_len++;
+
+    int count = 0;
+    for (uint32_t s = 0; s < total_inode_sectors && count < max_count; s++) {
+        ata_read_sector(inode_sector_start + s, sector_buf);
+        kryfs_inode_t* inodes = (kryfs_inode_t*)sector_buf;
+
+        for (uint32_t i = 0; i < inodes_per_sector && count < max_count; i++) {
+            uint32_t current_idx = s * inodes_per_sector + i;
+            if (current_idx >= sb->inode_count) break;
+
+            if (inodes[i].is_used) {
+                // Aranan dizinle (örn: Users/anil/Desktop/) başlayıp başlamadığını kontrol et
+                int match = 1;
+                for (int j = 0; j < target_len; j++) {
+                    if (inodes[i].filename[j] != path[j]) {
+                        match = 0;
+                        break;
+                    }
+                }
+
+                if (match) {
+                    int len = 0;
+                    while (inodes[i].filename[len] != '\0') len++;
+
+                    int internal_slashes = 0;
+                    int end_limit = (inodes[i].filename[len - 1] == '/') ? len - 1 : len;
+                    
+                    for (int j = target_len; j < end_limit; j++) {
+                        if (inodes[i].filename[j] == '/') {
+                            internal_slashes++;
+                        }
+                    }
+
+                    // Sadece doğrudan o dizinin içindeki ilk seviye öğeleri al (alt klasör içindekileri atla)
+                    if (internal_slashes == 0 && len > target_len) {
+                        const char* base_name = &inodes[i].filename[target_len];
+                        int k = 0;
+                        while (base_name[k] != '\0' && k < 31) {
+                            out_list[count].name[k] = base_name[k];
+                            k++;
+                        }
+                        out_list[count].name[k] = '\0';
+                        out_list[count].size = inodes[i].size;
+                        out_list[count].is_directory = inodes[i].is_directory;
+                        count++;
+                    }
+                }
+            }
+        }
+    }
+    return count;
+}
+
 // VFS için Sürücü Adaptörü ve Başlatıcı
 fs_driver_t kryfs_get_driver(void) {
     fs_driver_t driver;
     driver.read_file = kryfs_read_file;
     driver.list_dir = kryfs_list_files;
+    driver.get_dir_files = kryfs_get_dir_files;
     return driver;
 }
 

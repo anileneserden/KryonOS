@@ -29,5 +29,6 @@ void kryfs_format(void);
 void* kryfs_read_file(const char* filename, uint32_t* out_size);
 void kryfs_list_files(void);
 void kryos_fs_system_init(void);
+int kryfs_get_files(kryfs_inode_t* out_inodes, int max_count);
 
 #endif
