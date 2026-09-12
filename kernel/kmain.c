@@ -15,6 +15,7 @@
 #include <kernel/mem/pmm.h>
 #include <kernel/mem/vmm.h>
 #include <kernel/app.h>
+#include <kernel/kef.h>
 #include <arch/x86/io.h>
 
 static inline uint8_t inb_port(uint16_t port) {
@@ -44,6 +45,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     ata_init();
     vfs_init();
     kryos_fs_system_init();
+    kef_load_and_run("C:/test1.kef");
 
     mouse_init(); 
     keyboard_init();

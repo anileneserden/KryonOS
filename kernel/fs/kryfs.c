@@ -114,6 +114,12 @@ void* kryfs_read_file(const char* filename, uint32_t* out_size) {
     }
 
     uint32_t file_size = target_inode.size;
+    if (file_size > sizeof(file_read_buffer)) {
+        serial_write("KRYFS: Dosya okuma tamponuna sigmiyor!\n");
+        if (out_size) *out_size = 0;
+        return 0;
+    }
+
     uint32_t current_block = target_inode.first_block;
     uint32_t bytes_read = 0;
 

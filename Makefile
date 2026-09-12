@@ -7,6 +7,9 @@ LDFLAGS = -T linker.ld -nostdlib
 
 BUILD = build
 TARGET = $(BUILD)/kryonos.bin
+SDK = ../../sdk
+KEF = $(SDK)/examples/test1/test1.kef
+DISK_IMAGE = disk.img
 
 # --- Kaynak Dosyalar ---
 SRC_S = \
@@ -15,6 +18,7 @@ SRC_S = \
 
 SRC_C = \
 	kernel/app_manager.c \
+	kernel/kef_loader.c \
 	kernel/kmain.c \
 	kernel/serial.c \
 	kernel/string.c \
@@ -39,7 +43,7 @@ SRC_C = \
 OBJS = $(SRC_S:%.S=$(BUILD)/%.o) \
 		$(SRC_C:%.c=$(BUILD)/%.o)
 
-all: $(TARGET)
+all: $(TARGET) $(KEF)
 
 $(TARGET): $(OBJS) linker.ld
 	@mkdir -p $(dir $@)
@@ -56,17 +60,28 @@ $(BUILD)/%.o: %.S
 	$(AS) $< -o $@
 
 clean:
-	rm -rf $(BUILD) isodir kryonos.iso
+	rm -rf $(BUILD) isodir kryonos.iso $(DISK_IMAGE)
+
+
+.PHONY: FORCE
+FORCE:
+
+$(KEF): FORCE
+	$(MAKE) -C $(dir $@)
+
+disk: $(KEF)
+	python3 $(SDK)/kryfs_image.py $(DISK_IMAGE) $(KEF)
 
 iso: $(TARGET)
 	mkdir -p isodir/boot/grub
 	cp $(TARGET) isodir/boot/kryonos.bin
-	echo 'set gfxpayload=1920x1080x32' > isodir/boot/grub/grub.cfg
+	echo 'set timeout=0' > isodir/boot/grub/grub.cfg
+	echo 'set gfxpayload=1920x1080x32' >> isodir/boot/grub/grub.cfg
 	echo 'menuentry "KryonOS" {' >> isodir/boot/grub/grub.cfg
 	echo '    multiboot /boot/kryonos.bin' >> isodir/boot/grub/grub.cfg
 	echo '    boot' >> isodir/boot/grub/grub.cfg
 	echo '}' >> isodir/boot/grub/grub.cfg
 	grub-mkrescue -o kryonos.iso isodir
 
-run: iso
-	qemu-system-i386 -cdrom kryonos.iso -drive format=raw,file=$(HOME)/KryonOS/main/disk.img -serial stdio -vga std -display sdl,gl=on
+run: disk iso
+	qemu-system-i386 -cdrom kryonos.iso -drive format=raw,file=$(DISK_IMAGE) -serial stdio -vga std -display sdl,gl=on
