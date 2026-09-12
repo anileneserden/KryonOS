@@ -1,4 +1,5 @@
 #include <ui/desktop.h>
+#include <ui/wm.h>
 #include <ui/cursor.h>
 #include <kernel/drivers/video/fb.h>
 #include <kernel/drivers/video/gfx.h>
@@ -59,13 +60,14 @@ void desktop_redraw(void) {
     uint32_t sw = fb_get_width();
     uint32_t sh = fb_get_height();
 
-    // Siyah arka planı çiz ve ekrana aktar
-    gfx_fill_rect(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h, 0xFF000000);
+    // 1. Masaüstü Arka Planı (Mavi tonlar veya siyah - şimdilik şık bir koyu mavi/gri)
+    gfx_fill_rect(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h, 0xFF0000FF);
+    
+    // 2. Açık Pencereleri Çiz
+    wm_draw_all();
+
     fb_blit_region(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h);
     damage_clear();
-
-    // DİKKAT: Burada cursor_show() ÇAĞrilMIYOR! 
-    // İmleç yönetimini ana döngüdeki cursor_update_and_redraw() üstlenecek.
 }
 
 void desktop_init(void) {
@@ -74,19 +76,22 @@ void desktop_init(void) {
 
     if (width == 0 || height == 0) return;
 
-    // 1. Ekranı tamamen çiz ve temizle
+    // Window Manager'ı başlat ve örnek pencereler oluştur
+    wm_init();
+    wm_create_window(300, 200, "KryonOS Dosya Yoneticisi");
+    wm_create_window(250, 180, "Sistem Ayarlari");
+
+    // Ekranı hasarlı işaretleyip ilk çizimi tetikle
     damage_union_rect(0, 0, width, height);
     desktop_redraw();
 
-    // 2. İmleci başlat ve koordinatları mühürle
+    // İmleci başlat ve konumunu mühürle
     cursor_init();
     cursor_sync_position();
-    
-    // 3. İmleci ekrana bas ve arka planını tazeleyip kilitle
     cursor_show();
     cursor_refresh_background();
 }
 
 void desktop_process_input(void) {
-    // Boş
+    // Klavye veya genel masaüstü kısayolları buraya eklenebilir
 }

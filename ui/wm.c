@@ -66,23 +66,23 @@ window_t* wm_create_window(int width, int height, const char* title) {
 void wm_close_window(window_t* win) {
     if (!win) return;
 
-    // Pencerenin kapladığı alanı hasarlı işaretle ki arkası yeniden çizilsin
-    damage_union_rect(win->x, win->y, win->width, win->height);
-
     win->width = 0; // Kapatıldı olarak işaretle
 
-    // Eğer kapanan aktif pencere ise başka bir pencereyi öne getir
+    // Kapatılan pencere aktifse, aktifliği tamamen sıfırla (null yap)
     if (active_window == win) {
         active_window = 0;
-        for (int i = window_count - 1; i >= 0; i--) {
-            if (window_list[i].width > 0) {
-                active_window = &window_list[i];
-                active_window->is_active = true;
-                break;
-            }
+    }
+
+    // Tüm pencerelerin is_active durumunu güncelle (Hiçbiri seçili olmayabilir)
+    for (int i = 0; i < window_count; i++) {
+        if (window_list[i].width > 0) {
+            window_list[i].is_active = (&window_list[i] == active_window);
+        } else {
+            window_list[i].is_active = false;
         }
     }
 
+    damage_union_rect(0, 0, fb_get_width(), fb_get_height());
     desktop_redraw();
 }
 
@@ -137,7 +137,14 @@ static window_t* wm_bring_to_front(window_t* win) {
         }
     }
 
-    if (idx == -1 || idx == window_count - 1) return win;
+    if (idx == -1) return win;
+
+    // Eğer zaten en üstteyse ve aktifse dokunma
+    if (idx == window_count - 1) {
+        win->is_active = true;
+        active_window = win;
+        return win;
+    }
 
     window_t temp = window_list[idx];
     for (int i = idx; i < window_count - 1; i++) {
@@ -145,9 +152,13 @@ static window_t* wm_bring_to_front(window_t* win) {
     }
     window_list[window_count - 1] = temp;
 
+    // Tüm pencerelerin aktiflik durumunu güncelle (Sadece en üstteki true olacak)
     for (int i = 0; i < window_count; i++) {
-        window_list[i].is_active = (&window_list[i] == &window_list[window_count - 1]);
+        if (window_list[i].width > 0) {
+            window_list[i].is_active = (i == window_count - 1);
+        }
     }
+    
     active_window = &window_list[window_count - 1];
     
     damage_union_rect(0, 0, fb_get_width(), fb_get_height());
@@ -184,10 +195,9 @@ void wm_process_input(void) {
             
             desktop_redraw();
 
-            // Çizim biter bitmez imleç konumunu eşitle ve arka planını taze al
+            // Çizim biter bitmez imleç konumunu eşitle ve göster (refresh_background kaldırıldı)
             cursor_sync_position();
             cursor_show();
-            cursor_refresh_background();
         }
     }
 
@@ -199,7 +209,6 @@ void wm_process_input(void) {
             int btn_x = target->x + target->width - 22;
             int btn_y = target->y + 3;
 
-            // Kapat butonuna tıklandıysa: Ekran değişeceği için önce imleci sakla
             cursor_prepare_redraw();
 
             if (mouse_x >= btn_x && mouse_x <= btn_x + 18 &&
@@ -208,7 +217,6 @@ void wm_process_input(void) {
                 
                 cursor_sync_position();
                 cursor_show();
-                cursor_refresh_background();
                 
                 prev_buttons = mouse_buttons;
                 return;
@@ -226,10 +234,26 @@ void wm_process_input(void) {
 
             desktop_redraw();
             
-            // Pencere öne geldi, başlık rengi değişti. İmlecin yeni alt planını hafızaya alıyoruz.
             cursor_sync_position();
             cursor_show();
-            cursor_refresh_background();
+        } 
+        else {
+            // Hiçbir pencereye tıklanmadı -> Masaüstüne tıklandı (Seçimi kaldır / Null yap)
+            if (active_window != 0) {
+                cursor_prepare_redraw();
+
+                active_window = 0;
+                for (int i = 0; i < window_count; i++) {
+                    if (window_list[i].width > 0) {
+                        window_list[i].is_active = false;
+                    }
+                }
+
+                desktop_redraw();
+                
+                cursor_sync_position();
+                cursor_show();
+            }
         }
     }
     // 3. Bırakma Mantığı
@@ -241,7 +265,6 @@ void wm_process_input(void) {
             cursor_prepare_redraw();
             cursor_sync_position();
             cursor_show();
-            cursor_refresh_background();
         }
     }
 
