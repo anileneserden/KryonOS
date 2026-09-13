@@ -17,7 +17,7 @@ void kryfs_format(void) {
 
     kryfs_superblock_t* sb = (kryfs_superblock_t*)sector_buf;
     sb->magic = KRYFS_MAGIC;
-    sb->total_sectors = 2048;
+    sb->total_sectors = 65536;
     sb->inode_count = 16;
     sb->block_size = KRYFS_BLOCK_SIZE;
     
