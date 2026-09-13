@@ -1,4 +1,5 @@
 #include <kernel/mem/pmm.h>
+#include <kernel/kef.h>
 #include <kernel/serial.h>
 
 // Bitmap'i çekirdekten ve ilk alanlardan çok güvenli bir uzakta (4MB) başlatıyoruz
@@ -35,6 +36,13 @@ void pmm_init(multiboot_info_t* mboot) {
     for (uint32_t b = start_free_block; b < end_free_block; b++) {
         mmap_unset(b);
         used_blocks--;
+    }
+
+    // KEF API tablosunu VMM'nin page directory'sinden sonra ayir.
+    uint32_t kef_api_block = KEF_API_ADDRESS / PAGE_SIZE;
+    if (kef_api_block >= start_free_block && kef_api_block < end_free_block) {
+        mmap_set(kef_api_block);
+        used_blocks++;
     }
 
     serial_write("PMM: Bellek haritasi basariyla olusturuldu (Guvenli Mod v2).\n");

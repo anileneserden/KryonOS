@@ -5,7 +5,7 @@
 
 #define KRYFS_MAGIC 0x4B525953 // "KRYS"
 #define KRYFS_BLOCK_SIZE 512
-#define KRYFS_MAX_INODES 16    // Klasör sayısını artırmak için inode kapasitesini yükseltebiliriz
+#define KRYFS_MAX_INODES 64
 
 typedef struct {
     uint32_t magic;

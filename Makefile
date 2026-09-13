@@ -7,6 +7,7 @@ LDFLAGS = -T linker.ld -nostdlib
 
 BUILD = build
 TARGET = $(BUILD)/kryonos.bin
+DISK_IMAGE ?= $(HOME)/KryonOS/main/disk.img
 
 # --- Kaynak Dosyalar ---
 SRC_S = \
@@ -14,10 +15,13 @@ SRC_S = \
 	boot/paging.S
 
 SRC_C = \
+	kernel/audio/wav.c \
 	kernel/app_manager.c \
+	kernel/kef_loader.c \
 	kernel/kmain.c \
 	kernel/serial.c \
 	kernel/string.c \
+	kernel/drivers/audio/ac97.c \
 	kernel/drivers/input/keyboard_ps2.c \
 	kernel/drivers/input/mouse_ps2.c \
 	kernel/drivers/storage/ata.c \
@@ -25,6 +29,7 @@ SRC_C = \
 	kernel/drivers/video/font/font8x16_basic.c \
 	kernel/drivers/video/fb.c \
 	kernel/drivers/video/gfx.c \
+	kernel/drivers/pci.c \
 	kernel/fs/kryfs.c \
 	kernel/fs/vfs.c \
 	kernel/mem/heap.c \
@@ -59,10 +64,12 @@ $(BUILD)/%.o: %.S
 clean:
 	rm -rf $(BUILD) isodir kryonos.iso
 
+
 iso: $(TARGET)
 	mkdir -p isodir/boot/grub
 	cp $(TARGET) isodir/boot/kryonos.bin
-	echo 'set gfxpayload=1920x1080x32' > isodir/boot/grub/grub.cfg
+	echo 'set timeout=0' > isodir/boot/grub/grub.cfg
+	echo 'set gfxpayload=1920x1080x32' >> isodir/boot/grub/grub.cfg
 	echo 'menuentry "KryonOS" {' >> isodir/boot/grub/grub.cfg
 	echo '    multiboot /boot/kryonos.bin' >> isodir/boot/grub/grub.cfg
 	echo '    boot' >> isodir/boot/grub/grub.cfg
@@ -70,4 +77,4 @@ iso: $(TARGET)
 	grub-mkrescue -o kryonos.iso isodir
 
 run: iso
-	qemu-system-i386 -cdrom kryonos.iso -drive format=raw,file=$(HOME)/KryonOS/main/disk.img -serial stdio -vga std -display sdl,gl=on
+	qemu-system-i386 -cdrom kryonos.iso -drive format=raw,file=$(DISK_IMAGE) -audiodev pa,id=audio0 -device AC97,audiodev=audio0 -serial stdio -vga std -display sdl,gl=on
