@@ -57,12 +57,26 @@ static void kef_draw_rect(int x, int y, int w, int h, uint32_t color) {
     }
 }
 
+static void kef_draw_button(int x, int y, int w, int h, const char* text, uint32_t color) {
+    if (text) {
+        char* real_text = (char*)(current_payload_base + (uint32_t)text);
+        window_t* win = wm_get_active_window();
+        
+        if (win && win->width > 0) {
+            wm_add_window_button(win, x, y, w, h, real_text, color);
+            damage_union_rect(win->x, win->y, win->width, win->height);
+            desktop_redraw();
+        }
+    }
+}
+
 static void kef_install_api(void) {
     volatile kef_api_t* api = (volatile kef_api_t*)KEF_API_ADDRESS;
     api->window_create = kef_window_create;
     api->serial_write = kef_serial_write;
     api->draw_text = kef_draw_text;
     api->draw_rect = kef_draw_rect;
+    api->draw_button = kef_draw_button;
 }
 
 bool kef_load_and_run(const char* path) {

@@ -7,6 +7,7 @@
 #define MAX_WINDOWS 10
 #define MAX_WINDOW_TEXTS 16
 #define MAX_WINDOW_RECTS 16
+#define MAX_WINDOW_BUTTONS 16
 
 typedef struct {
     int x, y, width, height;
@@ -18,6 +19,12 @@ typedef struct {
     uint32_t color;
     char text[64];
 } window_text_t;
+
+typedef struct {
+    int x, y, width, height;
+    uint32_t color;
+    char text[32];
+} window_button_t;
 
 typedef struct {
     int x, y;
@@ -34,6 +41,9 @@ typedef struct {
 
     window_rect_t rects[MAX_WINDOW_RECTS];
     int rect_count;
+
+    window_button_t buttons[MAX_WINDOW_BUTTONS];
+    int button_count;
 } window_t;
 
 void wm_init(void);
@@ -41,6 +51,7 @@ window_t* wm_create_window(int width, int height, const char* title);
 window_t* wm_get_active_window(void);
 void wm_add_window_text(window_t* win, int x, int y, const char* text, uint32_t color);
 void wm_add_window_rect(window_t* win, int x, int y, int width, int height, uint32_t color);
+void wm_add_window_button(window_t* win, int x, int y, int width, int height, const char* text, uint32_t color);
 void wm_draw_window(window_t* win);
 void wm_draw_all(void);
 
