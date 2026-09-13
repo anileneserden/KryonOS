@@ -39,9 +39,16 @@ typedef struct {
     uint8_t  found;
 } ac97_device_t;
 
+// Nota Yapısı
+typedef struct {
+    uint32_t freq;     // Frekans (Hz)
+    uint32_t duration; // Süre (ms)
+} note_t;
+
 // Fonksiyon Bildirimleri
 int  ac97_init(void);
 void ac97_set_master_volume(uint8_t volume);
 void ac97_play_sound(uint16_t* buffer, uint32_t length);
+void ac97_play_tone(uint32_t frequency, uint32_t duration_ms);
 
 #endif

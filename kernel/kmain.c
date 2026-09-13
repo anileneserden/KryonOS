@@ -20,8 +20,15 @@
 #include <kernel/kef.h>
 #include <arch/x86/io.h>
 
-// AC97 Ses Testi İçin Statik Tampon (Stack taşmasını önlemek için static yapıldı)
-static uint16_t sound_buffer[44100];
+// Windows XP Açılış Melodisi Notaları (Hz, ms)
+static note_t win_xp_tune[] = {
+    {311, 200}, // D#4
+    {466, 200}, // A#4
+    {392, 200}, // G4
+    {622, 350}, // D#5
+    {466, 300}, // A#4
+    {622, 600}  // D#5
+};
 
 static inline uint8_t inb_port(uint16_t port) {
     uint8_t ret;
@@ -33,7 +40,7 @@ void sample_app_draw(app_t* app) {}
 
 void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     serial_init();
-    serial_write("KryonOS baslatildi!\n");
+    serial_write("KuvixOS baslatildi!\n");
 
     if (mboot_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
         serial_write("HATA: Gecersiz magic number!\n");
@@ -42,30 +49,23 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
 
     multiboot_info_t* mboot = (multiboot_info_t*) mboot_info_addr;
 
+    // 1. Bellek Yönetimi
     pmm_init(mboot);
     vmm_init();
     heap_init(0x600000, 0x1000000);
 
-    // --- PCI Subsystem & Audio ---
+    // 2. PCI ve Ekran Donanım Sürücüleri
     pci_init();
-    if (ac97_init() == 0) {
-        // 440 Hz (La notası) kare dalga test sesi üretimi (1 Saniye)
-        for (int i = 0; i < 44100; i++) {
-            sound_buffer[i] = (i % 100 < 50) ? 0x2000 : -0x2000;
-        }
-        
-        ac97_set_master_volume(100);
-        ac97_play_sound(sound_buffer, sizeof(sound_buffer));
-    }
-
     fb_init(mboot);
     ata_init();
+
+    // 3. Dosya Sistemleri ve Girdi Sürücüleri
     vfs_init();
     kryos_fs_system_init();
-
     mouse_init(); 
     keyboard_init();
 
+    // 4. Grafik Arayüzünün Başlatılması ve İlk Çizim
     uint32_t width = fb_get_width();
     uint32_t height = fb_get_height();
 
@@ -80,9 +80,20 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     }
     app_create("Not Defteri", 250, 180, 0, sample_app_draw);
 
+    // Ekrana görüntüyü aktar (Siyah ekran kalmasını önler)
     fb_swap();
 
-    // Ana döngü
+    // 5. AC97 Ses Sürücüsü ve Melodi Oynatma (Ekran çizildikten sonra)
+    if (ac97_init() == 0) {
+        ac97_set_master_volume(100);
+        
+        int note_count = sizeof(win_xp_tune) / sizeof(note_t);
+        for (int i = 0; i < note_count; i++) {
+            ac97_play_tone(win_xp_tune[i].freq, win_xp_tune[i].duration);
+        }
+    }
+
+    // 6. Ana Olay Döngüsü
     while (1) {
         if (inb_port(0x64) & 1) {
             uint8_t status = inb_port(0x64);
