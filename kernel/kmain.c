@@ -8,6 +8,7 @@
 #include <kernel/fs/kryfs.h>
 #include <kernel/fs/vfs.h>
 #include <kernel/drivers/audio/ac97.h>
+#include <kernel/audio/wav.h>
 #include <kernel/drivers/input/mouse_ps2.h>
 #include <kernel/drivers/input/keyboard_ps2.h>
 #include <kernel/drivers/pci.h>
@@ -80,17 +81,20 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     }
     app_create("Not Defteri", 250, 180, 0, sample_app_draw);
 
-    // Ekrana görüntüyü aktar (Siyah ekran kalmasını önler)
     fb_swap();
 
-    // 5. AC97 Ses Sürücüsü ve Melodi Oynatma (Ekran çizildikten sonra)
+    // 5. AC97 Ses Sürücüsü ve WAV Oynatıcı
     if (ac97_init() == 0) {
         ac97_set_master_volume(100);
         
+        // XP Melodisini Çal
         int note_count = sizeof(win_xp_tune) / sizeof(note_t);
         for (int i = 0; i < note_count; i++) {
             ac97_play_tone(win_xp_tune[i].freq, win_xp_tune[i].duration);
         }
+
+        // KRYFS diskinizdeki bir .wav dosyasını oynatmak için:
+        wav_play_file("C:/startup.wav");
     }
 
     // 6. Ana Olay Döngüsü

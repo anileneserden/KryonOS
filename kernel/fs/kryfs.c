@@ -3,6 +3,7 @@
 #include <kernel/drivers/storage/ata.h>
 #include <kernel/serial.h>
 #include <kernel/string.h>
+#include <kernel/mem/heap.h>
 
 #define KRYFS_SUPERBLOCK_SECTOR 0
 
@@ -114,8 +115,11 @@ void* kryfs_read_file(const char* filename, uint32_t* out_size) {
     }
 
     uint32_t file_size = target_inode.size;
-    if (file_size > sizeof(file_read_buffer)) {
-        serial_write("KRYFS: Dosya okuma tamponuna sigmiyor!\n");
+
+    // Sabit tampon yerine Heap'ten dosya boyutu kadar dinamik alan ayırıyoruz
+    uint8_t* dynamic_buffer = (uint8_t*)kmalloc(file_size);
+    if (!dynamic_buffer) {
+        serial_write("KRYFS: Yetersiz bellek (kmalloc basarisiz)!\n");
         if (out_size) *out_size = 0;
         return 0;
     }
@@ -128,14 +132,14 @@ void* kryfs_read_file(const char* filename, uint32_t* out_size) {
         ata_read_sector(current_block, block_buf);
 
         uint32_t chunk = (file_size - bytes_read > KRYFS_BLOCK_SIZE) ? KRYFS_BLOCK_SIZE : (file_size - bytes_read);
-        memcpy(file_read_buffer + bytes_read, block_buf, chunk);
+        memcpy(dynamic_buffer + bytes_read, block_buf, chunk);
 
         bytes_read += chunk;
         current_block++;
     }
 
     if (out_size) *out_size = file_size;
-    return file_read_buffer;
+    return dynamic_buffer;
 }
 
 void kryfs_list_files(void) {

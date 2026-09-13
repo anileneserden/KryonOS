@@ -16,9 +16,10 @@
 #define AC97_GLOB_CNT 0x2C // Global Control Register
 
 // NAMBAR (Mixer) Register Offset'leri
-#define AC97_RESET        0x00
-#define AC97_MASTER_VOL   0x02
-#define AC97_PCM_OUT_VOL  0x18
+#define AC97_RESET               0x00
+#define AC97_MASTER_VOL          0x02
+#define AC97_PCM_OUT_VOL         0x18
+#define AC97_PCM_FRONT_DAC_RATE  0x2C // Sample Rate Register
 
 // Control Register Bit'leri
 #define AC97_CR_RPBM  0x01 // Run/Pause Bus Master
@@ -48,6 +49,7 @@ typedef struct {
 // Fonksiyon Bildirimleri
 int  ac97_init(void);
 void ac97_set_master_volume(uint8_t volume);
+void ac97_set_sample_rate(uint32_t hz);
 void ac97_play_sound(uint16_t* buffer, uint32_t length);
 void ac97_play_tone(uint32_t frequency, uint32_t duration_ms);
 

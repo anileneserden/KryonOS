@@ -15,6 +15,7 @@ SRC_S = \
 	boot/paging.S
 
 SRC_C = \
+	kernel/audio/wav.c \
 	kernel/app_manager.c \
 	kernel/kef_loader.c \
 	kernel/kmain.c \

@@ -3,7 +3,6 @@
 #include <kernel/mem/heap.h>
 #include <kernel/serial.h>
 
-// Garanti Port I/O fonksiyonları
 static inline void ac97_outb(uint16_t port, uint8_t val) {
     __asm__ volatile ("outb %0, %1" : : "a"(val), "Nd"(port));
 }
@@ -11,6 +10,12 @@ static inline void ac97_outb(uint16_t port, uint8_t val) {
 static inline uint8_t ac97_inb(uint16_t port) {
     uint8_t ret;
     __asm__ volatile ("inb %1, %0" : "=a"(ret) : "Nd"(port));
+    return ret;
+}
+
+static inline uint16_t ac97_inw(uint16_t port) {
+    uint16_t ret;
+    __asm__ volatile ("inw %1, %0" : "=a"(ret) : "Nd"(port));
     return ret;
 }
 
@@ -66,20 +71,59 @@ void ac97_set_master_volume(uint8_t volume) {
     ac97_outw(ac97_dev.nambar + AC97_MASTER_VOL, val);
 }
 
+void ac97_set_sample_rate(uint32_t hz) {
+    if (!ac97_dev.found) return;
+    ac97_outw(ac97_dev.nambar + AC97_PCM_FRONT_DAC_RATE, (uint16_t)hz);
+}
+
 void ac97_play_sound(uint16_t* buffer, uint32_t length) {
-    if (!ac97_dev.found || !bdl_list) return;
+    if (!ac97_dev.found || !bdl_list || !buffer || length == 0) return;
 
-    bdl_list[0].ptr = (uint32_t)buffer;
-    bdl_list[0].samples = (length / 2);
-    bdl_list[0].flags = 0x8000;
+    // AC'97 DMA Kontrolcüsünü durdur
+    ac97_outb(ac97_dev.nabmbar + AC97_PO_CR, 0x00);
 
+    // 16-bit stereo/mono için toplam sample (word) sayısı
+    uint32_t total_samples = length / 2;
+    uint32_t remaining_samples = total_samples;
+    uint32_t current_offset = 0;
+    int bdl_index = 0;
+
+    // BDL tablosunu temizle
+    memset(bdl_list, 0, sizeof(ac97_bdl_entry_t) * 32);
+
+    // Veriyi 32768 sample'lık (64 KB) parçalara bölerek BDL tablosuna doldur
+    while (remaining_samples > 0 && bdl_index < 32) {
+        uint32_t chunk_samples = (remaining_samples > 32768) ? 32768 : remaining_samples;
+
+        // VMM mimarinde identity-mapping kullanıldığı için buffer adresi doğrudan fiziksel adrestir.
+        bdl_list[bdl_index].ptr = (uint32_t)(buffer + current_offset);
+        bdl_list[bdl_index].samples = (uint16_t)chunk_samples;
+        
+        // Varsayılan bayrak 0 (Devam ediyor)
+        bdl_list[bdl_index].flags = 0;
+
+        remaining_samples -= chunk_samples;
+        current_offset += chunk_samples;
+        bdl_index++;
+    }
+
+    if (bdl_index == 0) return;
+
+    // Son BDL elemanına Interrupt On Completion (IOC) bayrağını koy
+    bdl_list[bdl_index - 1].flags = 0x8000;
+
+    // BDL Adresini yaz
     ac97_outl(ac97_dev.nabmbar + AC97_PO_BDBAR, (uint32_t)bdl_list);
-    ac97_outb(ac97_dev.nabmbar + AC97_PO_LVI, 0);
 
-    uint8_t cr = ac97_inb(ac97_dev.nabmbar + AC97_PO_CR);
-    ac97_outb(ac97_dev.nabmbar + AC97_PO_CR, cr | AC97_CR_RPBM);
+    // Son geçerli indeks değerini (LVI) bildir (0-indexed olduğu için bdl_index - 1)
+    ac97_outb(ac97_dev.nabmbar + AC97_PO_LVI, (uint8_t)(bdl_index - 1));
 
-    serial_write("AC97: Ses calmaya basladi.\n");
+    // Transferi başlat (Run/Pause bitini set et)
+    ac97_outb(ac97_dev.nabmbar + AC97_PO_CR, AC97_CR_RPBM);
+
+    serial_write("AC97: Ses calmaya basladi (BDL parca sayisi: ");
+    // basit bir log bildirimi
+    serial_write("OK)\n");
 }
 
 void ac97_play_tone(uint32_t frequency, uint32_t duration_ms) {
@@ -94,30 +138,25 @@ void ac97_play_tone(uint32_t frequency, uint32_t duration_ms) {
     uint32_t total_samples = (sample_rate * duration_ms) / 1000;
     uint32_t period = sample_rate / frequency;
 
-    // Kare dalga ses verisini doldur
     for (uint32_t i = 0; i < total_samples; i++) {
         pcm_buffer[i] = ((i % period) < (period / 2)) ? 0x2000 : -0x2000;
     }
 
-    // DMA Reset ve Durdurma
     ac97_outb(ac97_dev.nabmbar + AC97_PO_CR, 0x00);
     
     bdl_list[0].ptr = (uint32_t)pcm_buffer;
     bdl_list[0].samples = total_samples;
     bdl_list[0].flags = 0x8000;
 
-    ac97_outw(ac97_dev.nabmbar + AC97_PO_SR, 0x001C); // Status temizle
+    ac97_outw(ac97_dev.nabmbar + AC97_PO_SR, 0x001C);
     ac97_outl(ac97_dev.nabmbar + AC97_PO_BDBAR, (uint32_t)bdl_list);
     ac97_outb(ac97_dev.nabmbar + AC97_PO_LVI, 0);
 
-    // Çalmayı başlat
     ac97_outb(ac97_dev.nabmbar + AC97_PO_CR, AC97_CR_RPBM);
 
-    // İşlemciyi kilitleyen while döngüsü yerine kontrollü delay:
     for (volatile uint32_t i = 0; i < duration_ms * 10000; i++) {
         __asm__ volatile ("pause");
     }
 
-    // Kanalı durdur
     ac97_outb(ac97_dev.nabmbar + AC97_PO_CR, 0x00);
 }
