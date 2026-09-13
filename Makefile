@@ -7,9 +7,7 @@ LDFLAGS = -T linker.ld -nostdlib
 
 BUILD = build
 TARGET = $(BUILD)/kryonos.bin
-SDK = ../../sdk
-KEF = $(SDK)/examples/test1/test1.kef
-DISK_IMAGE = disk.img
+DISK_IMAGE ?= $(HOME)/KryonOS/main/disk.img
 
 # --- Kaynak Dosyalar ---
 SRC_S = \
@@ -43,7 +41,7 @@ SRC_C = \
 OBJS = $(SRC_S:%.S=$(BUILD)/%.o) \
 		$(SRC_C:%.c=$(BUILD)/%.o)
 
-all: $(TARGET) $(KEF)
+all: $(TARGET)
 
 $(TARGET): $(OBJS) linker.ld
 	@mkdir -p $(dir $@)
@@ -60,17 +58,8 @@ $(BUILD)/%.o: %.S
 	$(AS) $< -o $@
 
 clean:
-	rm -rf $(BUILD) isodir kryonos.iso $(DISK_IMAGE)
+	rm -rf $(BUILD) isodir kryonos.iso
 
-
-.PHONY: FORCE
-FORCE:
-
-$(KEF): FORCE
-	$(MAKE) -C $(dir $@)
-
-disk: $(KEF)
-	python3 $(SDK)/kryfs_image.py $(DISK_IMAGE) $(KEF)
 
 iso: $(TARGET)
 	mkdir -p isodir/boot/grub
@@ -83,5 +72,5 @@ iso: $(TARGET)
 	echo '}' >> isodir/boot/grub/grub.cfg
 	grub-mkrescue -o kryonos.iso isodir
 
-run: disk iso
+run: iso
 	qemu-system-i386 -cdrom kryonos.iso -drive format=raw,file=$(DISK_IMAGE) -serial stdio -vga std -display sdl,gl=on

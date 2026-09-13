@@ -45,7 +45,9 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     ata_init();
     vfs_init();
     kryos_fs_system_init();
-    kef_load_and_run("C:/test1.kef");
+    if (!kef_load_and_run("C:/Kryon/System32/test1.kef")) {
+        kef_load_and_run("C:/test1.kef");
+    }
 
     mouse_init(); 
     keyboard_init();

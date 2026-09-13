@@ -19,7 +19,7 @@ typedef struct {
     uint32_t header_size;
 } __attribute__((packed)) kef_header_t;
 
-typedef void (*kef_entry_t)(void);
+typedef int (*kef_entry_t)(void);
 
 bool kef_load_and_run(const char* path);
 

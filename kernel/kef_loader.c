@@ -34,9 +34,9 @@ bool kef_load_and_run(const char* path) {
 
     memcpy(payload, file + header->header_size, header->payload_size);
 
-    serial_write("KEF: C:/test1.kef yuklendi, entry cagriliyor.\n");
+    serial_write("KEF: dosya yuklendi, entry cagriliyor.\n");
     kef_entry_t entry = (kef_entry_t)(payload + header->entry_offset);
-    entry();
+    (void)entry();
     serial_write("KEF: uygulama geri dondu.\n");
     return true;
 }
