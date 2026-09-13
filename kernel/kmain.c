@@ -86,15 +86,9 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     // 5. AC97 Ses Sürücüsü ve WAV Oynatıcı
     if (ac97_init() == 0) {
         ac97_set_master_volume(100);
-        
-        // XP Melodisini Çal
-        int note_count = sizeof(win_xp_tune) / sizeof(note_t);
-        for (int i = 0; i < note_count; i++) {
-            ac97_play_tone(win_xp_tune[i].freq, win_xp_tune[i].duration);
-        }
 
         // KRYFS diskinizdeki bir .wav dosyasını oynatmak için:
-        wav_play_file("C:/startup.wav");
+        wav_play_file("C:/Kryon/Media/startup.wav");
     }
 
     // 6. Ana Olay Döngüsü
