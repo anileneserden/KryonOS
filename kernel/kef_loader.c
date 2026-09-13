@@ -5,14 +5,35 @@
 #include <kernel/string.h>
 #include <ui/wm.h>
 
+// KEF payload'ının bellekteki gerçek başlangıç adresi
+static uint8_t* current_payload_base = 0;
+
 static int kef_window_create(const char* title, int width, int height) {
-    window_t* window = wm_create_window(width, height, title);
+    // Offset adresini gerçek belleğe çevir
+    char* real_title = (char*)(current_payload_base + (uint32_t)title);
+    
+    serial_write("KEF Window Title: ");
+    serial_write(real_title);
+    serial_write("\n");
+
+    window_t* window = wm_create_window(width, height, real_title);
     return window != 0;
+}
+
+static void kef_serial_write(const char* str) {
+    if (str) {
+        // Offset adresini gerçek belleğe çevir
+        char* real_str = (char*)(current_payload_base + (uint32_t)str);
+        serial_write("[KEF App]: ");
+        serial_write(real_str);
+        serial_write("\n");
+    }
 }
 
 static void kef_install_api(void) {
     volatile kef_api_t* api = (volatile kef_api_t*)KEF_API_ADDRESS;
     api->window_create = kef_window_create;
+    api->serial_write = kef_serial_write;
 }
 
 bool kef_load_and_run(const char* path) {
@@ -44,6 +65,9 @@ bool kef_load_and_run(const char* path) {
     }
 
     memcpy(payload, file + header->header_size, header->payload_size);
+
+    // Payload taban adresini kaydet
+    current_payload_base = payload;
 
     kef_install_api();
     serial_write("KEF: dosya yuklendi, entry cagriliyor.\n");

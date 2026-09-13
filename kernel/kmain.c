@@ -58,10 +58,10 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     }
 
     app_manager_init();
-    if (!kef_load_and_run("C:/Kryon/System32/test1.kef")) {
-        kef_load_and_run("C:/test1.kef");
+    if (!kef_load_and_run("C:/Kryon/System32/mediaplayer.kef")) {
+        kef_load_and_run("C:/mediaplayer.kef");
     }
-    app_create("Not Defteri", 250, 180, 0, sample_app_draw);
+    // app_create("Not Defteri", 250, 180, 0, sample_app_draw);
 
     fb_swap();
 

@@ -98,8 +98,8 @@ void desktop_init(void) {
 
     // Window Manager'ı başlat ve örnek pencereler oluştur
     wm_init();
-    wm_create_window(300, 200, "KryonOS Dosya Yoneticisi");
-    wm_create_window(250, 180, "Sistem Ayarlari");
+    // wm_create_window(300, 200, "KryonOS Dosya Yoneticisi");
+    // wm_create_window(250, 180, "Sistem Ayarlari");
 
     // Ekranı hasarlı işaretleyip ilk çizimi tetikle
     damage_union_rect(0, 0, width, height);
