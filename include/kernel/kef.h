@@ -24,6 +24,7 @@ typedef int (*kef_entry_t)(void);
 
 typedef struct {
     int (*window_create)(const char* title, int width, int height);
+    void (*serial_write)(const char* str);
 } kef_api_t;
 
 bool kef_load_and_run(const char* path);
