@@ -62,6 +62,7 @@ window_t* wm_create_window(int width, int height, const char* title) {
     win->drag_offset_y = 0;
     win->text_count = 0;
     win->rect_count = 0;
+    win->button_count = 0;
 
     int i = 0;
     while (title[i] != '\0' && i < 31) {
@@ -131,6 +132,24 @@ void wm_add_window_rect(window_t* win, int x, int y, int width, int height, uint
     wr->color = color;
 }
 
+void wm_add_window_button(window_t* win, int x, int y, int width, int height, const char* text, uint32_t color) {
+    if (!win || win->button_count >= MAX_WINDOW_BUTTONS) return;
+    
+    window_button_t* wb = &win->buttons[win->button_count++];
+    wb->x = x;
+    wb->y = y;
+    wb->width = width;
+    wb->height = height;
+    wb->color = color;
+    
+    int i = 0;
+    while (text[i] != '\0' && i < 31) {
+        wb->text[i] = text[i];
+        i++;
+    }
+    wb->text[i] = '\0';
+}
+
 void wm_draw_window(window_t* win) {
     if (!win || win->width == 0) return;
 
@@ -144,20 +163,35 @@ void wm_draw_window(window_t* win) {
         gfx_fill_rect(abs_x, abs_y, win->rects[i].width, win->rects[i].height, win->rects[i].color);
     }
 
-    // 3. Başlık Çubuğu
+    // 3. Kayıtlı Butonlar (Arka plan + Üzerinde Ortalanmış Metin)
+    for (int i = 0; i < win->button_count; i++) {
+        int abs_x = win->x + win->buttons[i].x;
+        int abs_y = win->y + WM_TITLEBAR_HEIGHT + win->buttons[i].y;
+        
+        // Buton Arka Planı
+        gfx_fill_rect(abs_x, abs_y, win->buttons[i].width, win->buttons[i].height, win->buttons[i].color);
+        
+        // Basit bir çerçeve efekti (İsteğe bağlı, şık durur)
+        // gfx_draw_rect(...) ekleyebilirsin veya doğrudan metne geçebilirsin.
+
+        // Buton Üstündeki Metin (Görsel olarak ortalamaya yakın konumlandırma)
+        gfx_draw_text_utf8(abs_x + 8, abs_y + 6, 0xFFFFFFFF, win->buttons[i].text);
+    }
+
+    // 4. Başlık Çubuğu
     uint32_t title_color = win->is_active ? 0xFF007ACC : 0xFF505050;
     gfx_fill_rect(win->x, win->y, win->width, 24, title_color);
 
-    // 4. Başlık Metni
+    // 5. Başlık Metni
     gfx_draw_text_utf8(win->x + 8, win->y + 6, 0xFFFFFFFF, win->title);
 
-    // 5. Kapat [X] Butonu (Sağ üst köşe)
+    // 6. Kapat [X] Butonu (Sağ üst köşe)
     int btn_x = win->x + win->width - 22;
     int btn_y = win->y + 3;
     gfx_fill_rect(btn_x, btn_y, 18, 18, 0xFFE81123);
     gfx_draw_text_utf8(btn_x + 5, btn_y + 2, 0xFFFFFFFF, "X");
 
-    // 6. Pencere İçindeki Kayıtlı Metinleri Çiz
+    // 7. Pencere İçindeki Kayıtlı Metinleri Çiz
     for (int i = 0; i < win->text_count; i++) {
         int abs_x = win->x + win->texts[i].x;
         int abs_y = win->y + WM_TITLEBAR_HEIGHT + win->texts[i].y;

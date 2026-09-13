@@ -27,6 +27,7 @@ typedef struct {
     void (*serial_write)(const char* str);
     void (*draw_text)(int x, int y, const char* text, uint32_t color);
     void (*draw_rect)(int x, int y, int w, int h, uint32_t color);
+    void (*draw_button)(int x, int y, int w, int h, const char* text, uint32_t color);
 } kef_api_t;
 
 bool kef_load_and_run(const char* path);
