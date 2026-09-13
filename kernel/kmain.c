@@ -7,9 +7,10 @@
 #include <kernel/drivers/storage/ata.h>
 #include <kernel/fs/kryfs.h>
 #include <kernel/fs/vfs.h>
+#include <kernel/drivers/audio/ac97.h>
 #include <kernel/drivers/input/mouse_ps2.h>
 #include <kernel/drivers/input/keyboard_ps2.h>
-#include <kernel/drivers/pci.h> // <-- PCI başlık dosyası eklendi
+#include <kernel/drivers/pci.h>
 #include <ui/cursor.h>
 #include <ui/desktop.h>
 #include <kernel/mem/heap.h>
@@ -18,6 +19,9 @@
 #include <kernel/app.h>
 #include <kernel/kef.h>
 #include <arch/x86/io.h>
+
+// AC97 Ses Testi İçin Statik Tampon (Stack taşmasını önlemek için static yapıldı)
+static uint16_t sound_buffer[44100];
 
 static inline uint8_t inb_port(uint16_t port) {
     uint8_t ret;
@@ -42,8 +46,17 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     vmm_init();
     heap_init(0x600000, 0x1000000);
 
-    // --- PCI Subsystem Başlatılıyor ---
-    pci_init(); // Donanım sürücülerinden hemen önce PCI taranıyor
+    // --- PCI Subsystem & Audio ---
+    pci_init();
+    if (ac97_init() == 0) {
+        // 440 Hz (La notası) kare dalga test sesi üretimi (1 Saniye)
+        for (int i = 0; i < 44100; i++) {
+            sound_buffer[i] = (i % 100 < 50) ? 0x2000 : -0x2000;
+        }
+        
+        ac97_set_master_volume(100);
+        ac97_play_sound(sound_buffer, sizeof(sound_buffer));
+    }
 
     fb_init(mboot);
     ata_init();

@@ -20,6 +20,7 @@ SRC_C = \
 	kernel/kmain.c \
 	kernel/serial.c \
 	kernel/string.c \
+	kernel/drivers/audio/ac97.c \
 	kernel/drivers/input/keyboard_ps2.c \
 	kernel/drivers/input/mouse_ps2.c \
 	kernel/drivers/storage/ata.c \
@@ -74,4 +75,4 @@ iso: $(TARGET)
 	grub-mkrescue -o kryonos.iso isodir
 
 run: iso
-	qemu-system-i386 -cdrom kryonos.iso -drive format=raw,file=$(DISK_IMAGE) -serial stdio -vga std -display sdl,gl=on
+	qemu-system-i386 -cdrom kryonos.iso -drive format=raw,file=$(DISK_IMAGE) -audiodev pa,id=audio0 -device AC97,audiodev=audio0 -serial stdio -vga std -display sdl,gl=on
