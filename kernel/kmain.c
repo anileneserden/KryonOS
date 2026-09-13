@@ -9,6 +9,7 @@
 #include <kernel/fs/vfs.h>
 #include <kernel/drivers/input/mouse_ps2.h>
 #include <kernel/drivers/input/keyboard_ps2.h>
+#include <kernel/drivers/pci.h> // <-- PCI başlık dosyası eklendi
 #include <ui/cursor.h>
 #include <ui/desktop.h>
 #include <kernel/mem/heap.h>
@@ -41,6 +42,9 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     vmm_init();
     heap_init(0x600000, 0x1000000);
 
+    // --- PCI Subsystem Başlatılıyor ---
+    pci_init(); // Donanım sürücülerinden hemen önce PCI taranıyor
+
     fb_init(mboot);
     ata_init();
     vfs_init();
@@ -54,7 +58,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
 
     if (width > 0 && height > 0) {
         fb_clear(0xFF0000FF); 
-        desktop_init(); // Tüm masaüstü ve imleç burada kusursuzca ayağa kalkıyor
+        desktop_init(); 
     }
 
     app_manager_init();

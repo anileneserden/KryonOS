@@ -27,6 +27,7 @@ SRC_C = \
 	kernel/drivers/video/font/font8x16_basic.c \
 	kernel/drivers/video/fb.c \
 	kernel/drivers/video/gfx.c \
+	kernel/drivers/pci.c \
 	kernel/fs/kryfs.c \
 	kernel/fs/vfs.c \
 	kernel/mem/heap.c \
