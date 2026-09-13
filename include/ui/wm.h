@@ -5,6 +5,13 @@
 #include <stdbool.h>
 
 #define MAX_WINDOWS 10
+#define MAX_WINDOW_TEXTS 16
+
+typedef struct {
+    int x, y;
+    uint32_t color;
+    char text[64];
+} window_text_t;
 
 typedef struct {
     int x, y;
@@ -14,10 +21,16 @@ typedef struct {
     bool is_dragging;
     int drag_offset_x;
     int drag_offset_y;
+    
+    // Pencere içerik tamponu (Sürükleme ve yeniden çizilmelerde kaybolmayı önler)
+    window_text_t texts[MAX_WINDOW_TEXTS];
+    int text_count;
 } window_t;
 
 void wm_init(void);
 window_t* wm_create_window(int width, int height, const char* title);
+window_t* wm_get_active_window(void);
+void wm_add_window_text(window_t* win, int x, int y, const char* text, uint32_t color);
 void wm_draw_window(window_t* win);
 void wm_draw_all(void);
 

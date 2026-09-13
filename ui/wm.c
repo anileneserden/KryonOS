@@ -60,6 +60,7 @@ window_t* wm_create_window(int width, int height, const char* title) {
     win->is_dragging = false;
     win->drag_offset_x = 0;
     win->drag_offset_y = 0;
+    win->text_count = 0;
 
     int i = 0;
     while (title[i] != '\0' && i < 31) {
@@ -102,6 +103,22 @@ void wm_close_window(window_t* win) {
     desktop_redraw();
 }
 
+void wm_add_window_text(window_t* win, int x, int y, const char* text, uint32_t color) {
+    if (!win || win->text_count >= MAX_WINDOW_TEXTS) return;
+    
+    window_text_t* wt = &win->texts[win->text_count++];
+    wt->x = x;
+    wt->y = y;
+    wt->color = color;
+    
+    int i = 0;
+    while (text[i] != '\0' && i < 63) {
+        wt->text[i] = text[i];
+        i++;
+    }
+    wt->text[i] = '\0';
+}
+
 void wm_draw_window(window_t* win) {
     if (!win || win->width == 0) return;
 
@@ -120,6 +137,17 @@ void wm_draw_window(window_t* win) {
     int btn_y = win->y + 3;
     gfx_fill_rect(btn_x, btn_y, 18, 18, 0xFFE81123);
     gfx_draw_text_utf8(btn_x + 5, btn_y + 2, 0xFFFFFFFF, "X");
+
+    // 5. Pencere İçindeki Kayıtlı Metinleri Çiz (Sürüklemede silinmeyi önler)
+    for (int i = 0; i < win->text_count; i++) {
+        int abs_x = win->x + win->texts[i].x;
+        int abs_y = win->y + WM_TITLEBAR_HEIGHT + win->texts[i].y;
+        gfx_draw_text_utf8(abs_x, abs_y, win->texts[i].color, win->texts[i].text);
+    }
+}
+
+window_t* wm_get_active_window(void) {
+    return active_window;
 }
 
 void wm_draw_all(void) {

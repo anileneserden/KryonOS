@@ -4,6 +4,8 @@
 #include <kernel/serial.h>
 #include <kernel/string.h>
 #include <ui/wm.h>
+#include <ui/desktop.h>
+#include <kernel/drivers/video/gfx.h>
 
 // KEF payload'ının bellekteki gerçek başlangıç adresi
 static uint8_t* current_payload_base = 0;
@@ -30,10 +32,27 @@ static void kef_serial_write(const char* str) {
     }
 }
 
+static void kef_draw_text(int x, int y, const char* text, uint32_t color) {
+    if (text) {
+        char* real_text = (char*)(current_payload_base + (uint32_t)text);
+        window_t* win = wm_get_active_window();
+        
+        if (win && win->width > 0) {
+            // Pencere metin tamponuna kaydet
+            wm_add_window_text(win, x, y, real_text, color);
+            
+            // Ekranı hasarlı işaretleyip yeniden çizilmesini sağla
+            damage_union_rect(win->x, win->y, win->width, win->height);
+            desktop_redraw();
+        }
+    }
+}
+
 static void kef_install_api(void) {
     volatile kef_api_t* api = (volatile kef_api_t*)KEF_API_ADDRESS;
     api->window_create = kef_window_create;
     api->serial_write = kef_serial_write;
+    api->draw_text = kef_draw_text;
 }
 
 bool kef_load_and_run(const char* path) {
