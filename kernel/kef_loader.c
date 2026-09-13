@@ -3,6 +3,17 @@
 #include <kernel/mem/heap.h>
 #include <kernel/serial.h>
 #include <kernel/string.h>
+#include <ui/wm.h>
+
+static int kef_window_create(const char* title, int width, int height) {
+    window_t* window = wm_create_window(width, height, title);
+    return window != 0;
+}
+
+static void kef_install_api(void) {
+    volatile kef_api_t* api = (volatile kef_api_t*)KEF_API_ADDRESS;
+    api->window_create = kef_window_create;
+}
 
 bool kef_load_and_run(const char* path) {
     uint32_t file_size = 0;
@@ -34,6 +45,7 @@ bool kef_load_and_run(const char* path) {
 
     memcpy(payload, file + header->header_size, header->payload_size);
 
+    kef_install_api();
     serial_write("KEF: dosya yuklendi, entry cagriliyor.\n");
     kef_entry_t entry = (kef_entry_t)(payload + header->entry_offset);
     (void)entry();

@@ -45,9 +45,6 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     ata_init();
     vfs_init();
     kryos_fs_system_init();
-    if (!kef_load_and_run("C:/Kryon/System32/test1.kef")) {
-        kef_load_and_run("C:/test1.kef");
-    }
 
     mouse_init(); 
     keyboard_init();
@@ -61,6 +58,9 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     }
 
     app_manager_init();
+    if (!kef_load_and_run("C:/Kryon/System32/test1.kef")) {
+        kef_load_and_run("C:/test1.kef");
+    }
     app_create("Not Defteri", 250, 180, 0, sample_app_draw);
 
     fb_swap();
