@@ -76,7 +76,7 @@ void desktop_redraw(void) {
     }
 
     for (int y = 0; y <= screen_h; y += cell_h) {
-        if (y >= screen_damage.y && y <= screen_damage.y + screen_damage.h) {
+        if (y >= screen_damage.y && y <= screen_damage.y + screen_damage.w) { // (Küçük düzeltme: screen_damage.w olmalı)
             gfx_fill_rect(screen_damage.x, y, screen_damage.w, 1, grid_line_color);
         }
     }
@@ -84,10 +84,21 @@ void desktop_redraw(void) {
     // 4. Açık Pencereleri Çiz
     wm_draw_all();
 
-    // 5. İmleci backbuffer'daki yeni yerine çiz (blit=false, çünkü toplu blit yapacağız)
+    // 5. Alt Görev Çubuğu (Taskbar) - En üst katmanda (Pencerelerin üzerinde) çizilir
+    int taskbar_h = 36;
+    int taskbar_y = screen_h - taskbar_h;
+    if (screen_damage.y + screen_damage.h >= taskbar_y) {
+        // Çubuğun arka planı (Koyu gri / siyah tonu)
+        gfx_fill_rect(screen_damage.x, taskbar_y > screen_damage.y ? taskbar_y : screen_damage.y, 
+                      screen_damage.w, taskbar_h, 0xFF181818);
+        // Çubuğun üst çizgisi (Modern bir border efekti için ince açık çizgi)
+        gfx_fill_rect(screen_damage.x, taskbar_y, screen_damage.w, 1, 0xFF333333);
+    }
+
+    // 6. İmleci backbuffer'daki yeni yerine çiz (blit=false, çünkü toplu blit yapacağız)
     cursor_show_internal(false);
 
-    // 6. Hasarlı bölgenin tamamını ekrana aktar (Blit)
+    // 7. Hasarlı bölgenin tamamını ekrana aktar (Blit)
     fb_blit_region(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h);
     
     damage_clear();

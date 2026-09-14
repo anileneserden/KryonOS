@@ -377,9 +377,12 @@ void wm_process_input(void) {
             if (new_y < 0) {
                 new_y = 0;
             }
+            
             // Alt sınır: Pencere alt taraftan kaybolmasın, başlık çubuğu kalsın
-            if (new_y > screen_h - WM_TITLEBAR_HEIGHT) {
-                new_y = screen_h - WM_TITLEBAR_HEIGHT;
+            int taskbar_h = 36;
+            
+            if (new_y > screen_h - taskbar_h - WM_TITLEBAR_HEIGHT) {
+                new_y = screen_h - taskbar_h - WM_TITLEBAR_HEIGHT;
             }
 
             if (new_x != dragged_window->x || new_y != dragged_window->y) {
