@@ -10,14 +10,14 @@
 static uint8_t file_read_buffer[16384];
 
 void kryfs_format(void) {
-    serial_write("KRYFS bicimlendiriliyor...\n");
+    serial_write("KRYFS bicimlendiriliyor (Varsayılan dizinler ekleniyor)...\n");
 
     uint8_t sector_buf[KRYFS_BLOCK_SIZE];
     memset(sector_buf, 0, KRYFS_BLOCK_SIZE);
 
     kryfs_superblock_t* sb = (kryfs_superblock_t*)sector_buf;
     sb->magic = KRYFS_MAGIC;
-    sb->total_sectors = 65536;
+    sb->total_sectors = 2048;
     sb->inode_count = 16;
     sb->block_size = KRYFS_BLOCK_SIZE;
     
@@ -25,35 +25,62 @@ void kryfs_format(void) {
     for (int i = 0; i < 31 && name[i] != '\0'; i++) {
         sb->volume_name[i] = name[i];
     }
-
-    // Süperbloğu 0. sektöre yaz
     ata_write_sector(KRYFS_SUPERBLOCK_SECTOR, sector_buf);
 
-    // --- TEST DOSYASI OLUŞTURMA (Inode 0) ---
+    // --- INODE TABLOSU (Varsayılan Dizinler ve Dosyalar) ---
     memset(sector_buf, 0, KRYFS_BLOCK_SIZE);
     kryfs_inode_t* inodes = (kryfs_inode_t*)sector_buf;
-    
+
+    // 0. Inode: Users/ klasörü
     inodes[0].inode_id = 1;
-    const char* test_filename = "test.txt";
-    for (int i = 0; i < 31 && test_filename[i] != '\0'; i++) {
-        inodes[0].filename[i] = test_filename[i];
-    }
-    inodes[0].size = 13; // "KryonOS Rocks!" yazısının uzunluğu
-    inodes[0].first_block = 2; // Verinin yazılacağı blok
+    strcpy(inodes[0].filename, "Users/");
+    inodes[0].size = 0;
+    inodes[0].first_block = 0;
     inodes[0].is_used = 1;
+    inodes[0].is_directory = 1;
+
+    // 1. Inode: Users/anil/ klasörü
+    inodes[1].inode_id = 2;
+    strcpy(inodes[1].filename, "Users/anil/");
+    inodes[1].size = 0;
+    inodes[1].first_block = 0;
+    inodes[1].is_used = 1;
+    inodes[1].is_directory = 1;
+
+    // 2. Inode: Users/anil/Desktop/ klasörü
+    inodes[2].inode_id = 3;
+    strcpy(inodes[2].filename, "Users/anil/Desktop/");
+    inodes[2].size = 0;
+    inodes[2].first_block = 0;
+    inodes[2].is_used = 1;
+    inodes[2].is_directory = 1;
+
+    // 3. Inode: Users/anil/Music/ klasörü
+    inodes[3].inode_id = 4;
+    strcpy(inodes[3].filename, "Users/anil/Music/");
+    inodes[3].size = 0;
+    inodes[3].first_block = 0;
+    inodes[3].is_used = 1;
+    inodes[3].is_directory = 1;
+
+    // 4. Inode: Test Dosyası (Desktop içinde)
+    inodes[4].inode_id = 5;
+    strcpy(inodes[4].filename, "Users/anil/Desktop/test.txt");
+    inodes[4].size = 13;
+    inodes[4].first_block = 5; // Verinin durduğu blok
+    inodes[4].is_used = 1;
+    inodes[4].is_directory = 0;
 
     // Inode tablosunu 1. sektöre yaz
     ata_write_sector(1, sector_buf);
 
-    // --- DOSYA İÇERİĞİNİ YAZMA (2. Sektör) ---
+    // --- TEST DOSYASI İÇERİĞİNİ YAZMA (5. Sektör) ---
     memset(sector_buf, 0, KRYFS_BLOCK_SIZE);
     const char* file_content = "KryonOS Rocks!";
-    for (int i = 0; i < 13; i++) {
-        sector_buf[i] = file_content[i];
-    }
-    ata_write_sector(2, sector_buf);
+    memcpy(sector_buf, file_content, 13);
+    ata_write_sector(5, sector_buf);
 
-    serial_write("KRYFS bicimlendirme tamamlandi, test dosyasi diske yazildi.\n");
+    serial_write("KRYFS bicimlendirme tamamlandi, dizin agaci olusturuldu.\n");
 }
 
 void kryfs_init(void) {
