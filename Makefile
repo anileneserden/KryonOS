@@ -38,6 +38,7 @@ SRC_C = \
 	ui/cursor.c \
 	ui/desktop_icons.c \
 	ui/desktop.c \
+	ui/grid.c \
 	ui/window.c \
 	ui/wm.c
 

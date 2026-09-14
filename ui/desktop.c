@@ -1,7 +1,7 @@
 #include <ui/desktop.h>
-#include <ui/desktop_icons.h>
 #include <ui/wm.h>
 #include <ui/cursor.h>
+#include <ui/grid.h> // Grid başlığını eklemeyi unutma
 #include <kernel/drivers/video/fb.h>
 #include <kernel/drivers/video/gfx.h>
 #include <kernel/drivers/input/keyboard_ps2.h>
@@ -15,7 +15,6 @@ typedef struct {
 } damage_rect_t;
 
 static damage_rect_t screen_damage = {0, 0, 0, 0, false};
-static bool prev_mouse_buttons = false;
 
 void damage_clear(void) {
     screen_damage.active = false;
@@ -60,21 +59,35 @@ void desktop_redraw(void) {
     cursor_prepare_redraw();
 
     // 1. Masaüstü Arka Planı
-    gfx_fill_rect(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h, 0xFF0000FF);
-    
-    int32_t mx, my;
-    cursor_get_position(&mx, &my);
-    bool left_clicked = (mouse_buttons & 1);
-    bool click_started = left_clicked && !prev_mouse_buttons; 
-    prev_mouse_buttons = left_clicked;
+    gfx_fill_rect(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h, 0xFF1E1E1E);
 
-    // 2. İkonları Yönet ve Çiz
-    desktop_icons_draw(mx, my, click_started);
+    // 2. Ekran Boyunca Grid Çizgileri ve Çerçeve (0,0'dan ekran sınırlarına kadar)
+    int screen_w = fb_get_width();
+    int screen_h = fb_get_height();
+    int cell_w = grid_get_cell_width();   // Örn: 64
+    int cell_h = grid_get_cell_height(); // Örn: 64
+    uint32_t grid_line_color = 0xFF2A2A2A; // Şık, koyu gri bir çizgi rengi (istersen beyaz yapabilirsin: 0xFFFFFFFF)
+
+    // Dikey çizgileri çiz (0'dan screen_w'ye kadar)
+    for (int x = 0; x <= screen_w; x += cell_w) {
+        if (x >= screen_damage.x && x <= screen_damage.x + screen_damage.w) {
+            gfx_fill_rect(x, screen_damage.y, 1, screen_damage.h, grid_line_color);
+        }
+    }
+
+    // Yatay çizgileri çiz (0'dan screen_h'ye kadar)
+    for (int y = 0; y <= screen_h; y += cell_h) {
+        if (y >= screen_damage.y && y <= screen_damage.y + screen_damage.h) {
+            gfx_fill_rect(screen_damage.x, y, screen_damage.w, 1, grid_line_color);
+        }
+    }
 
     // 3. Açık Pencereleri Çiz
     wm_draw_all();
 
+    // 4. Backbuffer'dan VRAM'e aktar
     fb_blit_region(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h);
+    
     damage_clear();
 }
 
@@ -84,11 +97,11 @@ void desktop_init(void) {
 
     if (width == 0 || height == 0) return;
 
-    desktop_icons_init(); // İkon modülünü başlat
+    // Grid sistemini burada ekran boyutlarıyla başlatıyoruz (örn: 64x64 hücre boyutu)
+    grid_init(width, height, 100, 100);
 
     wm_init();
-    wm_create_window(300, 200, "KryonOS Dosya Yoneticisi");
-    wm_create_window(250, 180, "Sistem Ayarlari");
+    wm_create_window(350, 220, "KryonOS Pencere");
 
     damage_union_rect(0, 0, width, height);
     desktop_redraw();
@@ -100,4 +113,5 @@ void desktop_init(void) {
 }
 
 void desktop_process_input(void) {
+    wm_process_input();
 }

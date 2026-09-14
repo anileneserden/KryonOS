@@ -3,6 +3,7 @@
 #include <kernel/drivers/video/gfx.h>
 #include <kernel/fs/vfs.h>
 #include <kernel/serial.h>
+#include <stddef.h>
 
 static int selected_icon_index = -1;
 static int last_clicked_index = -1;
@@ -49,8 +50,28 @@ void desktop_icons_draw(int32_t mx, int32_t my, bool click_started) {
 
         if (clicked_index != -1) {
             if (clicked_index == last_clicked_index && (global_tick_counter - last_click_tick) < 45) {
+                const char* filename = files[clicked_index].name;
+                
+                // Uzantı kontrolü için basit bir nokta arama
+                const char *ext = NULL;
+                for (const char *p = filename; *p != '\0'; p++) {
+                    if (*p == '.') ext = p;
+                }
+
                 serial_write("cift tiklama algilandi: ikon ");
-                serial_write(files[clicked_index].name);
+                serial_write(filename);
+
+                if (ext) {
+                    // Örneğin .txt dosyaları için notepad handler'ı
+                    if (ext[1] == 't' && ext[2] == 'x' && ext[3] == 't' && ext[4] == '\0') {
+                        serial_write(" -> Tip: Metin Belgesi (Notepad Handler)");
+                    } else {
+                        serial_write(" -> Tip: Bilinmeyen Uzantı");
+                    }
+                } else {
+                    // Uzantısız veya .kef gibi doğrudan çekirdek/çalıştırılabilir dosyalar
+                    serial_write(" -> Tip: KEF / Çekirdek Modülü / Çalıştırılabilir");
+                }
                 serial_write("\n");
 
                 last_clicked_index = -1;

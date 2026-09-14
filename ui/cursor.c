@@ -115,8 +115,6 @@ void cursor_update_and_redraw(void) {
     int32_t old_x = old_mouse_x;
     int32_t old_y = old_mouse_y;
 
-    // İkonların olduğu alanı hasarlı işaretleyip yeniden çizilmesini tetikle
-    damage_union_rect(0, 0, 150, 400);
     desktop_redraw();
 
     // 1. Eski imleci back-buffer'dan ekrana geri yükle (eski izi sil)
