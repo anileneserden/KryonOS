@@ -272,12 +272,22 @@ void wm_process_input(void) {
             // Masaüstü boşluğuna tıklandıysa odak düşürme
             if (active_window != 0) {
                 cursor_prepare_redraw();
-                active_window = 0;
+                
+                // Tüm pencerelerin alanlarını hasarlı işaretle ki gri başlık çubuğuna dönecekleri anlaşılsın
                 for (int i = 0; i < window_count; i++) {
                     if (window_list[i].width > 0) {
+                        damage_union_rect(window_list[i].x, window_list[i].y, window_list[i].width, window_list[i].height);
                         window_list[i].is_active = false;
                     }
                 }
+                
+                active_window = 0;
+
+                // İmlecin yerini de hasara ekle
+                int32_t cur_x, cur_y;
+                cursor_get_position(&cur_x, &cur_y);
+                damage_union_rect(cur_x, cur_y, CURSOR_WIDTH, CURSOR_HEIGHT);
+
                 desktop_redraw();
                 cursor_sync_position();
                 cursor_show();
@@ -323,6 +333,9 @@ void wm_process_input(void) {
 
                 cursor_prepare_redraw();
 
+                resized_window->is_active = true;
+                active_window = resized_window;
+
                 damage_union_rect(old_x, old_y, old_w, old_h);
                 resized_window->x = new_x;
                 resized_window->y = new_y;
@@ -352,14 +365,40 @@ void wm_process_input(void) {
                 
                 cursor_prepare_redraw();
 
+                // Sürüklenen pencere kesinlikle aktif olmalı ve mavi görünmeli!
+                dragged_window->is_active = true;
+                active_window = dragged_window;
+
                 dragged_window->x = new_x;
                 dragged_window->y = new_y;
 
+                // Eski ve yeni konumu hasarlı işaretle (Başlık çubuğu dahil tam boyut)
                 damage_union_rect(old_x, old_y, dragged_window->width, dragged_window->height);
                 damage_union_rect(new_x, new_y, dragged_window->width, dragged_window->height);
+                
                 damage_union_rect(old_cursor_x, old_cursor_y, CURSOR_WIDTH, CURSOR_HEIGHT);
                 damage_union_rect(mouse_x, mouse_y, CURSOR_WIDTH, CURSOR_HEIGHT);
                 
+                desktop_redraw();
+
+                cursor_sync_position();
+                cursor_show();
+            }
+        }
+        else {
+            // ÖNEMLİ KISIM: Sol tuşa basılı ama hiçbir pencereyi sürüklemiyoruz.
+            // Sadece imleç pencerelerin üzerinden geçiyor.
+            int32_t old_cursor_x, old_cursor_y;
+            cursor_get_position(&old_cursor_x, &old_cursor_y);
+
+            if (old_cursor_x != mouse_x || old_cursor_y != mouse_y) {
+                cursor_prepare_redraw();
+
+                // İmlecin eski ve yeni yerini hasarlı ilan et ki arkasındaki 
+                // başlık çubuğu/pencere renkleri bozulmasın, yeniden çizilsin.
+                damage_union_rect(old_cursor_x, old_cursor_y, CURSOR_WIDTH, CURSOR_HEIGHT);
+                damage_union_rect(mouse_x, mouse_y, CURSOR_WIDTH, CURSOR_HEIGHT);
+
                 desktop_redraw();
 
                 cursor_sync_position();
