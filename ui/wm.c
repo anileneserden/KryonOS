@@ -353,8 +353,34 @@ void wm_process_input(void) {
             }
         }
         else if (dragged_window && dragged_window->is_dragging) {
+            // İmlecin konumuna göre hedef pencere koordinatı
             int new_x = mouse_x - dragged_window->drag_offset_x;
             int new_y = mouse_y - dragged_window->drag_offset_y;
+
+            // Ekran sınırlarını al
+            int screen_w = fb_get_width();
+            int screen_h = fb_get_height();
+
+            // Sınırlandırma: Pencere imleci takip etsin ama başlık çubuğunun 
+            // en azından tutulabilecek bir kısmı (örn: 50 pikseli) her zaman ekranda kalsın.
+            
+            // Sol sınır: Pencerenin sağ kısmı en azından 50 piksel içeride kalsın ki yakalayabilelim
+            if (new_x + dragged_window->width < 50) {
+                new_x = 50 - dragged_window->width;
+            }
+            // Sağ sınır: Pencerenin sol kısmı ekranın sağından çok fazla taşmasın
+            if (new_x > screen_w - 50) {
+                new_x = screen_w - 50;
+            }
+
+            // Üst sınır: Başlık çubuğu yukarıdan tamamen kaybolmasın
+            if (new_y < 0) {
+                new_y = 0;
+            }
+            // Alt sınır: Pencere alt taraftan kaybolmasın, başlık çubuğu kalsın
+            if (new_y > screen_h - WM_TITLEBAR_HEIGHT) {
+                new_y = screen_h - WM_TITLEBAR_HEIGHT;
+            }
 
             if (new_x != dragged_window->x || new_y != dragged_window->y) {
                 int old_x = dragged_window->x;
@@ -365,14 +391,12 @@ void wm_process_input(void) {
                 
                 cursor_prepare_redraw();
 
-                // Sürüklenen pencere kesinlikle aktif olmalı ve mavi görünmeli!
                 dragged_window->is_active = true;
                 active_window = dragged_window;
 
                 dragged_window->x = new_x;
                 dragged_window->y = new_y;
 
-                // Eski ve yeni konumu hasarlı işaretle (Başlık çubuğu dahil tam boyut)
                 damage_union_rect(old_x, old_y, dragged_window->width, dragged_window->height);
                 damage_union_rect(new_x, new_y, dragged_window->width, dragged_window->height);
                 
