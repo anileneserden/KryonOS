@@ -6,6 +6,7 @@
 #include <kernel/drivers/video/fb.h>
 #include <kernel/drivers/storage/ata.h>
 #include <kernel/fs/kryfs.h>
+#include <kernel/fs/fat32.h>
 #include <kernel/fs/vfs.h>
 #include <kernel/drivers/audio/ac97.h>
 #include <kernel/audio/wav.h>
@@ -37,11 +38,58 @@ static inline uint8_t inb_port(uint16_t port) {
     return ret;
 }
 
-void sample_app_draw(app_t* app) {}
+void sample_app_draw(app_t* app) {
+    (void)app; // -Wunused-parameter uyarısını önlemek için
+}
+
+// Seri port üzerinden sayıları basabilmek için basit yardımcı fonksiyon
+static void serial_write_dec(uint32_t val) {
+    if (val == 0) {
+        serial_write("0");
+        return;
+    }
+    char buf[12];
+    int i = 10;
+    buf[11] = '\0';
+    while (val > 0 && i >= 0) {
+        buf[i--] = '0' + (val % 10);
+        val /= 10;
+    }
+    serial_write(&buf[i + 1]);
+}
+
+void test_fat32_read(void) {
+    uint32_t file_size = 0;
+    
+    // VFS üzerindeki basit read_file arayüzü kullanılır
+    char* file_data = (char*) vfs_read_file("D:/TEST.TXT", &file_size);
+
+    if (file_data == NULL || file_size == 0) {
+        serial_write("[FAT32 TEST] Hata: D:/TEST.TXT acilamadi veya dosya bos!\n");
+        return;
+    }
+
+    serial_write("\n========================================\n");
+    serial_write(" D:\\TEST.TXT Icerigi (");
+    serial_write_dec(file_size);
+    serial_write(" byte):\n");
+    serial_write("========================================\n");
+    
+    // Ekrana basarken taşmayı önlemek için 100 bayt ile sınırla veya tamamını yazdır
+    uint32_t print_bytes = file_size > 100 ? 100 : file_size;
+    for (uint32_t i = 0; i < print_bytes; i++) {
+        char c_str[2] = { file_data[i], '\0' };
+        serial_write(c_str);
+    }
+    
+    serial_write("\n========================================\n\n");
+
+    // Sürücünüzün read_file implementasyonunda kalloc/kmalloc yapılıyorsa kfree ekleyebilirsiniz.
+}
 
 void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     serial_init();
-    serial_write("KuvixOS baslatildi!\n");
+    serial_write("KryonOS baslatildi!\n");
 
     if (mboot_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
         serial_write("HATA: Gecersiz magic number!\n");
@@ -63,6 +111,17 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     // 3. Dosya Sistemleri ve Girdi Sürücüleri
     vfs_init();
     kryos_fs_system_init();
+
+    if (fat32_init_disk(1, 0)) {
+        fs_driver_t fat32_driver = fat32_get_driver();
+        vfs_mount('D', "FAT32_VOL", fat32_driver);
+        vfs_list_drive('D');
+    } else {
+        serial_write("FAT32: Surucu baslatilamadi!\n");
+    }
+
+    test_fat32_read();
+
     mouse_init(); 
     keyboard_init();
 
@@ -86,8 +145,6 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     // 5. AC97 Ses Sürücüsü ve WAV Oynatıcı
     if (ac97_init() == 0) {
         ac97_set_master_volume(100);
-
-        // KRYFS diskinizdeki bir .wav dosyasını oynatmak için:
         wav_play_file("C:/Kryon/Media/startup.wav");
     }
 
