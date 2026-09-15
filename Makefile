@@ -7,7 +7,7 @@ LDFLAGS = -T linker.ld -nostdlib
 
 BUILD = build
 TARGET = $(BUILD)/kryonos.bin
-DISK_IMAGE ?= $(HOME)/KryonOS/main/disk.img
+DISK_IMAGE ?= $(HOME)/KryonOS/main/disk-kryfs.img
 
 # --- Kaynak Dosyalar ---
 SRC_S = \
