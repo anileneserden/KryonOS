@@ -3,13 +3,13 @@
 #include <kernel/drivers/storage/ata.h>
 #include <kernel/serial.h>
 #include <kernel/string.h>
+#include <kernel/mem/heap.h>
 
 #define KRYFS_SUPERBLOCK_SECTOR 0
-
-static uint8_t file_read_buffer[16384];
+#define KRYFS_DRIVE 0 // Master Drive (Drive 0)
 
 void kryfs_format(void) {
-    serial_write("KRYFS bicimlendiriliyor...\n");
+    serial_write("KRYFS bicimlendiriliyor (Varsayilan dizinler ekleniyor)...\n");
 
     uint8_t sector_buf[KRYFS_BLOCK_SIZE];
     memset(sector_buf, 0, KRYFS_BLOCK_SIZE);
@@ -24,42 +24,70 @@ void kryfs_format(void) {
     for (int i = 0; i < 31 && name[i] != '\0'; i++) {
         sb->volume_name[i] = name[i];
     }
+    // DRIVE 0 PARAMETRESİ EKLENDİ
+    ata_write_sector(KRYFS_DRIVE, KRYFS_SUPERBLOCK_SECTOR, sector_buf);
 
-    // Süperbloğu 0. sektöre yaz
-    ata_write_sector(KRYFS_SUPERBLOCK_SECTOR, sector_buf);
-
-    // --- TEST DOSYASI OLUŞTURMA (Inode 0) ---
+    // --- INODE TABLOSU (Varsayılan Dizinler ve Dosyalar) ---
     memset(sector_buf, 0, KRYFS_BLOCK_SIZE);
     kryfs_inode_t* inodes = (kryfs_inode_t*)sector_buf;
-    
+
+    // 0. Inode: Users/ klasörü
     inodes[0].inode_id = 1;
-    const char* test_filename = "test.txt";
-    for (int i = 0; i < 31 && test_filename[i] != '\0'; i++) {
-        inodes[0].filename[i] = test_filename[i];
-    }
-    inodes[0].size = 13; // "KryonOS Rocks!" yazısının uzunluğu
-    inodes[0].first_block = 2; // Verinin yazılacağı blok
+    strcpy(inodes[0].filename, "Users/");
+    inodes[0].size = 0;
+    inodes[0].first_block = 0;
     inodes[0].is_used = 1;
+    inodes[0].is_directory = 1;
 
-    // Inode tablosunu 1. sektöre yaz
-    ata_write_sector(1, sector_buf);
+    // 1. Inode: Users/anil/ klasörü
+    inodes[1].inode_id = 2;
+    strcpy(inodes[1].filename, "Users/anil/");
+    inodes[1].size = 0;
+    inodes[1].first_block = 0;
+    inodes[1].is_used = 1;
+    inodes[1].is_directory = 1;
 
-    // --- DOSYA İÇERİĞİNİ YAZMA (2. Sektör) ---
+    // 2. Inode: Users/anil/Desktop/ klasörü
+    inodes[2].inode_id = 3;
+    strcpy(inodes[2].filename, "Users/anil/Desktop/");
+    inodes[2].size = 0;
+    inodes[2].first_block = 0;
+    inodes[2].is_used = 1;
+    inodes[2].is_directory = 1;
+
+    // 3. Inode: Users/anil/Music/ klasörü
+    inodes[3].inode_id = 4;
+    strcpy(inodes[3].filename, "Users/anil/Music/");
+    inodes[3].size = 0;
+    inodes[3].first_block = 0;
+    inodes[3].is_used = 1;
+    inodes[3].is_directory = 1;
+
+    // 4. Inode: Test Dosyası (Desktop içinde)
+    inodes[4].inode_id = 5;
+    strcpy(inodes[4].filename, "Users/anil/Desktop/test.txt");
+    inodes[4].size = 13;
+    inodes[4].first_block = 5; // Verinin durduğu blok
+    inodes[4].is_used = 1;
+    inodes[4].is_directory = 0;
+
+    // Inode tablosunu 1. sektöre yaz (DRIVE 0)
+    ata_write_sector(KRYFS_DRIVE, 1, sector_buf);
+
+    // --- TEST DOSYASI İÇERİĞİNİ YAZMA (5. Sektör) ---
     memset(sector_buf, 0, KRYFS_BLOCK_SIZE);
     const char* file_content = "KryonOS Rocks!";
-    for (int i = 0; i < 13; i++) {
-        sector_buf[i] = file_content[i];
-    }
-    ata_write_sector(2, sector_buf);
+    memcpy(sector_buf, file_content, 13);
+    ata_write_sector(KRYFS_DRIVE, 5, sector_buf);
 
-    serial_write("KRYFS bicimlendirme tamamlandi, test dosyasi diske yazildi.\n");
+    serial_write("KRYFS bicimlendirme tamamlandi, dizin agaci olusturuldu.\n");
 }
 
 void kryfs_init(void) {
     serial_write("KRYFS baslatiliyor...\n");
 
     uint8_t sector_buf[KRYFS_BLOCK_SIZE];
-    ata_read_sector(KRYFS_SUPERBLOCK_SECTOR, sector_buf);
+    ata_read_sector(KRYFS_DRIVE, KRYFS_SUPERBLOCK_SECTOR, sector_buf);
 
     kryfs_superblock_t* sb = (kryfs_superblock_t*)sector_buf;
 
@@ -78,7 +106,7 @@ void* kryfs_read_file(const char* filename, uint32_t* out_size) {
     }
 
     uint8_t sector_buf[KRYFS_BLOCK_SIZE];
-    ata_read_sector(0, sector_buf);
+    ata_read_sector(KRYFS_DRIVE, 0, sector_buf);
     kryfs_superblock_t* sb = (kryfs_superblock_t*)sector_buf;
 
     if (sb->magic != KRYFS_MAGIC) {
@@ -94,7 +122,7 @@ void* kryfs_read_file(const char* filename, uint32_t* out_size) {
     int found = 0;
 
     for (uint32_t s = 0; s < total_inode_sectors; s++) {
-        ata_read_sector(inode_sector_start + s, sector_buf);
+        ata_read_sector(KRYFS_DRIVE, inode_sector_start + s, sector_buf);
         kryfs_inode_t* inodes = (kryfs_inode_t*)sector_buf;
 
         for (uint32_t i = 0; i < inodes_per_sector; i++) {
@@ -114,8 +142,10 @@ void* kryfs_read_file(const char* filename, uint32_t* out_size) {
     }
 
     uint32_t file_size = target_inode.size;
-    if (file_size > sizeof(file_read_buffer)) {
-        serial_write("KRYFS: Dosya okuma tamponuna sigmiyor!\n");
+
+    uint8_t* dynamic_buffer = (uint8_t*)kmalloc(file_size);
+    if (!dynamic_buffer) {
+        serial_write("KRYFS: Yetersiz bellek (kmalloc basarisiz)!\n");
         if (out_size) *out_size = 0;
         return 0;
     }
@@ -125,22 +155,22 @@ void* kryfs_read_file(const char* filename, uint32_t* out_size) {
 
     while (bytes_read < file_size && current_block > 0) {
         uint8_t block_buf[KRYFS_BLOCK_SIZE];
-        ata_read_sector(current_block, block_buf);
+        ata_read_sector(KRYFS_DRIVE, current_block, block_buf);
 
         uint32_t chunk = (file_size - bytes_read > KRYFS_BLOCK_SIZE) ? KRYFS_BLOCK_SIZE : (file_size - bytes_read);
-        memcpy(file_read_buffer + bytes_read, block_buf, chunk);
+        memcpy(dynamic_buffer + bytes_read, block_buf, chunk);
 
         bytes_read += chunk;
         current_block++;
     }
 
     if (out_size) *out_size = file_size;
-    return file_read_buffer;
+    return dynamic_buffer;
 }
 
 void kryfs_list_files(void) {
     uint8_t sector_buf[KRYFS_BLOCK_SIZE];
-    ata_read_sector(0, sector_buf);
+    ata_read_sector(KRYFS_DRIVE, 0, sector_buf);
     kryfs_superblock_t* sb = (kryfs_superblock_t*)sector_buf;
 
     if (sb->magic != KRYFS_MAGIC) {
@@ -163,7 +193,7 @@ void kryfs_list_files(void) {
 
     int file_count = 0;
     for (uint32_t s = 0; s < total_inode_sectors; s++) {
-        ata_read_sector(inode_sector_start + s, sector_buf);
+        ata_read_sector(KRYFS_DRIVE, inode_sector_start + s, sector_buf);
         kryfs_inode_t* inodes = (kryfs_inode_t*)sector_buf;
 
         for (uint32_t i = 0; i < inodes_per_sector; i++) {
@@ -173,7 +203,6 @@ void kryfs_list_files(void) {
             if (inodes[i].is_used) {
                 file_count++;
                 
-                // Dosya adını veya yolunu geçici bir tampona güvenle al
                 char name_buf[33];
                 int name_len = 0;
                 for (int j = 0; j < 32 && inodes[i].filename[j] != '\0'; j++) {
@@ -182,7 +211,6 @@ void kryfs_list_files(void) {
                 }
                 name_buf[name_len] = '\0';
 
-                // 1. Dizin derinliğini hesapla (yoldaki '/' sayısı)
                 int depth = 0;
                 for (int j = 0; j < name_len; j++) {
                     if (name_buf[j] == '/') {
@@ -190,24 +218,15 @@ void kryfs_list_files(void) {
                     }
                 }
 
-                // Eğer son karakter '/' ise (klasörün kendi yolu), çizimde fazladan sayılmasın diye derinliği dengeleyebiliriz
-                // Veya her seviye için uygun girintiyi bırakıyoruz:
-                // Kök seviyedekiler için depth = 0 (veya klasör içi için 1 vb.)
-                
-                // 2. Derinliğe göre boşluk ve ağaç dallarını bas
-                // Ana dizindekiler için 2 boşluk + "|--- ", alt dizindekiler için hiyerarşik boşluk + "|-- "
                 if (depth == 0 || (depth == 1 && name_buf[name_len - 1] == '/')) {
-                    // Kök seviye dosya veya klasör
                     serial_write("  |--- ");
                 } else {
-                    // Alt seviyeler için girinti yap
                     for (int d = 0; d < depth; d++) {
                         serial_write("    ");
                     }
                     serial_write(" |-- ");
                 }
 
-                // 3. İsmi ekrana yazdır (Eğer klasörse sondaki '/' işaretini tree görünümü için temizleyebilir veya koruyabilirsin)
                 for (int j = 0; j < name_len; j++) {
                     char c[2] = { name_buf[j], '\0' };
                     serial_write(c);
@@ -226,7 +245,7 @@ void kryfs_list_files(void) {
 
 int kryfs_get_dir_files(const char* path, vfs_file_info_t* out_list, int max_count) {
     uint8_t sector_buf[KRYFS_BLOCK_SIZE];
-    ata_read_sector(0, sector_buf);
+    ata_read_sector(KRYFS_DRIVE, 0, sector_buf);
     kryfs_superblock_t* sb = (kryfs_superblock_t*)sector_buf;
 
     if (sb->magic != KRYFS_MAGIC) return 0;
@@ -240,7 +259,7 @@ int kryfs_get_dir_files(const char* path, vfs_file_info_t* out_list, int max_cou
 
     int count = 0;
     for (uint32_t s = 0; s < total_inode_sectors && count < max_count; s++) {
-        ata_read_sector(inode_sector_start + s, sector_buf);
+        ata_read_sector(KRYFS_DRIVE, inode_sector_start + s, sector_buf);
         kryfs_inode_t* inodes = (kryfs_inode_t*)sector_buf;
 
         for (uint32_t i = 0; i < inodes_per_sector && count < max_count; i++) {
@@ -248,7 +267,6 @@ int kryfs_get_dir_files(const char* path, vfs_file_info_t* out_list, int max_cou
             if (current_idx >= sb->inode_count) break;
 
             if (inodes[i].is_used) {
-                // Aranan dizinle (örn: Users/anil/Desktop/) başlayıp başlamadığını kontrol et
                 int match = 1;
                 for (int j = 0; j < target_len; j++) {
                     if (inodes[i].filename[j] != path[j]) {
@@ -270,7 +288,6 @@ int kryfs_get_dir_files(const char* path, vfs_file_info_t* out_list, int max_cou
                         }
                     }
 
-                    // Sadece doğrudan o dizinin içindeki ilk seviye öğeleri al (alt klasör içindekileri atla)
                     if (internal_slashes == 0 && len > target_len) {
                         const char* base_name = &inodes[i].filename[target_len];
                         int k = 0;

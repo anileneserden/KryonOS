@@ -1,19 +1,20 @@
 #include <ui/desktop.h>
 #include <ui/wm.h>
 #include <ui/cursor.h>
+#include <ui/grid.h> // Grid başlığını eklemeyi unutma
 #include <kernel/drivers/video/fb.h>
 #include <kernel/drivers/video/gfx.h>
 #include <kernel/drivers/input/keyboard_ps2.h>
-#include <kernel/fs/vfs.h>
 #include <arch/x86/io.h>
-#include <kernel/serial.h>
+
+extern uint8_t mouse_buttons;
 
 typedef struct {
     int x, y, w, h;
     bool active;
 } damage_rect_t;
 
-static damage_rect_t screen_damage = {0, 0, 0, 0};
+static damage_rect_t screen_damage = {0, 0, 0, 0, false};
 
 void damage_clear(void) {
     screen_damage.active = false;
@@ -55,38 +56,51 @@ void damage_union_rect(int x, int y, int w, int h) {
 void desktop_redraw(void) {
     if (!screen_damage.active) return;
 
-    // Çizim başlamadan önce varsa eski imleci temizle
+    // 1. Önce eski imleci kaldır (arkasındaki pikselleri geri yükle)
     cursor_prepare_redraw();
 
-    uint32_t sw = fb_get_width();
-    uint32_t sh = fb_get_height();
+    // 2. Masaüstü Arka Planı
+    gfx_fill_rect(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h, 0xFF1E1E1E);
 
-    // 1. Masaüstü Arka Planı (Koyu mavi/gri ton)
-    gfx_fill_rect(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h, 0xFF0000FF);
-    
-    // 1.1 VFS Üzerinden Belirtilen Klasördeki Dosyaları Okuyup Masaüstü İkonları Olarak Çiz
-    vfs_file_info_t files[16];
-    int file_count = vfs_get_directory_files("C:/Users/anil/Desktop/", files, 16);
+    // 3. Grid Çizgileri
+    int screen_w = fb_get_width();
+    int screen_h = fb_get_height();
+    int cell_w = grid_get_cell_width();
+    int cell_h = grid_get_cell_height();
+    uint32_t grid_line_color = 0xFF2A2A2A;
 
-    int icon_x = 30;
-    int icon_y = 30;
-
-    for (int i = 0; i < file_count; i++) {
-        // İkon Arka Plan Kutusu (Dosya simgesi efekti)
-        gfx_fill_rect(icon_x, icon_y, 40, 40, 0xFFE0E0E0);
-        gfx_fill_rect(icon_x + 4, icon_y + 4, 32, 28, 0xFFFFFFFF);
-
-        // Dosya Adı Etiketi
-        gfx_draw_text_utf8(icon_x - 4, icon_y + 45, 0xFFFFFFFF, files[i].name);
-
-        // Sonraki ikon için dikeyde aşağı kaydır
-        icon_y += 70;
+    for (int x = 0; x <= screen_w; x += cell_w) {
+        if (x >= screen_damage.x && x <= screen_damage.x + screen_damage.w) {
+            gfx_fill_rect(x, screen_damage.y, 1, screen_damage.h, grid_line_color);
+        }
     }
 
-    // 2. Açık Pencereleri Çiz
+    for (int y = 0; y <= screen_h; y += cell_h) {
+        if (y >= screen_damage.y && y <= screen_damage.y + screen_damage.w) { // (Küçük düzeltme: screen_damage.w olmalı)
+            gfx_fill_rect(screen_damage.x, y, screen_damage.w, 1, grid_line_color);
+        }
+    }
+
+    // 4. Açık Pencereleri Çiz
     wm_draw_all();
 
+    // 5. Alt Görev Çubuğu (Taskbar) - En üst katmanda (Pencerelerin üzerinde) çizilir
+    int taskbar_h = 36;
+    int taskbar_y = screen_h - taskbar_h;
+    if (screen_damage.y + screen_damage.h >= taskbar_y) {
+        // Çubuğun arka planı (Koyu gri / siyah tonu)
+        gfx_fill_rect(screen_damage.x, taskbar_y > screen_damage.y ? taskbar_y : screen_damage.y, 
+                      screen_damage.w, taskbar_h, 0xFF181818);
+        // Çubuğun üst çizgisi (Modern bir border efekti için ince açık çizgi)
+        gfx_fill_rect(screen_damage.x, taskbar_y, screen_damage.w, 1, 0xFF333333);
+    }
+
+    // 6. İmleci backbuffer'daki yeni yerine çiz (blit=false, çünkü toplu blit yapacağız)
+    cursor_show_internal(false);
+
+    // 7. Hasarlı bölgenin tamamını ekrana aktar (Blit)
     fb_blit_region(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h);
+    
     damage_clear();
 }
 
@@ -96,16 +110,15 @@ void desktop_init(void) {
 
     if (width == 0 || height == 0) return;
 
-    // Window Manager'ı başlat ve örnek pencereler oluştur
-    wm_init();
-    // wm_create_window(300, 200, "KryonOS Dosya Yoneticisi");
-    // wm_create_window(250, 180, "Sistem Ayarlari");
+    // Grid sistemini burada ekran boyutlarıyla başlatıyoruz (örn: 64x64 hücre boyutu)
+    grid_init(width, height, 100, 100);
 
-    // Ekranı hasarlı işaretleyip ilk çizimi tetikle
+    wm_init();
+    wm_create_window(350, 220, "KryonOS Pencere");
+
     damage_union_rect(0, 0, width, height);
     desktop_redraw();
 
-    // İmleci başlat ve konumunu mühürle
     cursor_init();
     cursor_sync_position();
     cursor_show();
@@ -113,5 +126,25 @@ void desktop_init(void) {
 }
 
 void desktop_process_input(void) {
-    // Klavye veya genel masaüstü kısayolları buraya eklenebilir
+    // 1. Önceki imleç konumunu al (Eğer cursor modülün bu veriyi tutuyorsa)
+    int old_x = cursor_get_old_x();
+    int old_y = cursor_get_old_y();
+
+    // 2. Girdi ve pencere olaylarını işle (fare/klavye konumları güncellenir)
+    wm_process_input();
+    // Veya ps2 mouse paketleri burada işleniyorsa imleç yeni konumuna geçer
+
+    int new_x = cursor_get_x();
+    int new_y = cursor_get_y();
+    int cursor_w = cursor_get_width();   // Örn: imleç genişliği (12-16px)
+    int cursor_h = cursor_get_height();  // Örn: imleç yüksekliği
+
+    // 3. Eğer imleç yer değiştirdiyse, eski ve yeni yerini kirli bölge ilan et
+    if (old_x != new_x || old_y != new_y) {
+        damage_union_rect(old_x, old_y, cursor_w, cursor_h); // Eski yerini temizle
+        damage_union_rect(new_x, new_y, cursor_w, cursor_h); // Yeni yerini çiz
+        
+        // Yeniden çizimi tetikle
+        desktop_redraw();
+    }
 }
