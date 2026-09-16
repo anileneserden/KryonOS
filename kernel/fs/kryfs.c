@@ -92,8 +92,9 @@ void kryfs_init(void) {
     kryfs_superblock_t* sb = (kryfs_superblock_t*)sector_buf;
 
     if (sb->magic != KRYFS_MAGIC) {
-        serial_write("UYARI: Gecersiz KRYFS imzasi bulundu, dosya sistemi bicimlendiriliyor...\n");
-        kryfs_format();
+        serial_write("UYARI: Gecersiz KRYFS imzasi bulundu!\n");
+        // İsteğe bağlı olarak burada sadece hata dönebilirsin veya 
+        // host'tan imaj gelmediyse format atabilirsin.
     } else {
         serial_write("KRYFS superblok basariyla dogrulandi!\n");
     }
@@ -315,6 +316,7 @@ fs_driver_t kryfs_get_driver(void) {
 }
 
 void kryos_fs_system_init(void) {
+    // Doğrudan init çağırıyoruz, otomatik formatlama FUSE imajlarını ezmemeli!
     kryfs_init();
     fs_driver_t kryfs_driver = kryfs_get_driver();
     vfs_mount('C', "KryonVolume", kryfs_driver);
