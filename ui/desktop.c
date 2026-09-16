@@ -56,36 +56,49 @@ void damage_union_rect(int x, int y, int w, int h) {
 void desktop_redraw(void) {
     if (!screen_damage.active) return;
 
+    // 1. Önce eski imleci kaldır (arkasındaki pikselleri geri yükle)
     cursor_prepare_redraw();
 
-    // 1. Masaüstü Arka Planı
+    // 2. Masaüstü Arka Planı
     gfx_fill_rect(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h, 0xFF1E1E1E);
 
-    // 2. Ekran Boyunca Grid Çizgileri ve Çerçeve (0,0'dan ekran sınırlarına kadar)
+    // 3. Grid Çizgileri
     int screen_w = fb_get_width();
     int screen_h = fb_get_height();
-    int cell_w = grid_get_cell_width();   // Örn: 64
-    int cell_h = grid_get_cell_height(); // Örn: 64
-    uint32_t grid_line_color = 0xFF2A2A2A; // Şık, koyu gri bir çizgi rengi (istersen beyaz yapabilirsin: 0xFFFFFFFF)
+    int cell_w = grid_get_cell_width();
+    int cell_h = grid_get_cell_height();
+    uint32_t grid_line_color = 0xFF2A2A2A;
 
-    // Dikey çizgileri çiz (0'dan screen_w'ye kadar)
     for (int x = 0; x <= screen_w; x += cell_w) {
         if (x >= screen_damage.x && x <= screen_damage.x + screen_damage.w) {
             gfx_fill_rect(x, screen_damage.y, 1, screen_damage.h, grid_line_color);
         }
     }
 
-    // Yatay çizgileri çiz (0'dan screen_h'ye kadar)
     for (int y = 0; y <= screen_h; y += cell_h) {
-        if (y >= screen_damage.y && y <= screen_damage.y + screen_damage.h) {
+        if (y >= screen_damage.y && y <= screen_damage.y + screen_damage.w) { // (Küçük düzeltme: screen_damage.w olmalı)
             gfx_fill_rect(screen_damage.x, y, screen_damage.w, 1, grid_line_color);
         }
     }
 
-    // 3. Açık Pencereleri Çiz
+    // 4. Açık Pencereleri Çiz
     wm_draw_all();
 
-    // 4. Backbuffer'dan VRAM'e aktar
+    // 5. Alt Görev Çubuğu (Taskbar) - En üst katmanda (Pencerelerin üzerinde) çizilir
+    int taskbar_h = 36;
+    int taskbar_y = screen_h - taskbar_h;
+    if (screen_damage.y + screen_damage.h >= taskbar_y) {
+        // Çubuğun arka planı (Koyu gri / siyah tonu)
+        gfx_fill_rect(screen_damage.x, taskbar_y > screen_damage.y ? taskbar_y : screen_damage.y, 
+                      screen_damage.w, taskbar_h, 0xFF181818);
+        // Çubuğun üst çizgisi (Modern bir border efekti için ince açık çizgi)
+        gfx_fill_rect(screen_damage.x, taskbar_y, screen_damage.w, 1, 0xFF333333);
+    }
+
+    // 6. İmleci backbuffer'daki yeni yerine çiz (blit=false, çünkü toplu blit yapacağız)
+    cursor_show_internal(false);
+
+    // 7. Hasarlı bölgenin tamamını ekrana aktar (Blit)
     fb_blit_region(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h);
     
     damage_clear();
@@ -113,5 +126,25 @@ void desktop_init(void) {
 }
 
 void desktop_process_input(void) {
+    // 1. Önceki imleç konumunu al (Eğer cursor modülün bu veriyi tutuyorsa)
+    int old_x = cursor_get_old_x();
+    int old_y = cursor_get_old_y();
+
+    // 2. Girdi ve pencere olaylarını işle (fare/klavye konumları güncellenir)
     wm_process_input();
+    // Veya ps2 mouse paketleri burada işleniyorsa imleç yeni konumuna geçer
+
+    int new_x = cursor_get_x();
+    int new_y = cursor_get_y();
+    int cursor_w = cursor_get_width();   // Örn: imleç genişliği (12-16px)
+    int cursor_h = cursor_get_height();  // Örn: imleç yüksekliği
+
+    // 3. Eğer imleç yer değiştirdiyse, eski ve yeni yerini kirli bölge ilan et
+    if (old_x != new_x || old_y != new_y) {
+        damage_union_rect(old_x, old_y, cursor_w, cursor_h); // Eski yerini temizle
+        damage_union_rect(new_x, new_y, cursor_w, cursor_h); // Yeni yerini çiz
+        
+        // Yeniden çizimi tetikle
+        desktop_redraw();
+    }
 }

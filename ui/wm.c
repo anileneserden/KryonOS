@@ -272,12 +272,22 @@ void wm_process_input(void) {
             // Masaüstü boşluğuna tıklandıysa odak düşürme
             if (active_window != 0) {
                 cursor_prepare_redraw();
-                active_window = 0;
+                
+                // Tüm pencerelerin alanlarını hasarlı işaretle ki gri başlık çubuğuna dönecekleri anlaşılsın
                 for (int i = 0; i < window_count; i++) {
                     if (window_list[i].width > 0) {
+                        damage_union_rect(window_list[i].x, window_list[i].y, window_list[i].width, window_list[i].height);
                         window_list[i].is_active = false;
                     }
                 }
+                
+                active_window = 0;
+
+                // İmlecin yerini de hasara ekle
+                int32_t cur_x, cur_y;
+                cursor_get_position(&cur_x, &cur_y);
+                damage_union_rect(cur_x, cur_y, CURSOR_WIDTH, CURSOR_HEIGHT);
+
                 desktop_redraw();
                 cursor_sync_position();
                 cursor_show();
@@ -323,6 +333,9 @@ void wm_process_input(void) {
 
                 cursor_prepare_redraw();
 
+                resized_window->is_active = true;
+                active_window = resized_window;
+
                 damage_union_rect(old_x, old_y, old_w, old_h);
                 resized_window->x = new_x;
                 resized_window->y = new_y;
@@ -340,8 +353,37 @@ void wm_process_input(void) {
             }
         }
         else if (dragged_window && dragged_window->is_dragging) {
+            // İmlecin konumuna göre hedef pencere koordinatı
             int new_x = mouse_x - dragged_window->drag_offset_x;
             int new_y = mouse_y - dragged_window->drag_offset_y;
+
+            // Ekran sınırlarını al
+            int screen_w = fb_get_width();
+            int screen_h = fb_get_height();
+
+            // Sınırlandırma: Pencere imleci takip etsin ama başlık çubuğunun 
+            // en azından tutulabilecek bir kısmı (örn: 50 pikseli) her zaman ekranda kalsın.
+            
+            // Sol sınır: Pencerenin sağ kısmı en azından 50 piksel içeride kalsın ki yakalayabilelim
+            if (new_x + dragged_window->width < 50) {
+                new_x = 50 - dragged_window->width;
+            }
+            // Sağ sınır: Pencerenin sol kısmı ekranın sağından çok fazla taşmasın
+            if (new_x > screen_w - 50) {
+                new_x = screen_w - 50;
+            }
+
+            // Üst sınır: Başlık çubuğu yukarıdan tamamen kaybolmasın
+            if (new_y < 0) {
+                new_y = 0;
+            }
+            
+            // Alt sınır: Pencere alt taraftan kaybolmasın, başlık çubuğu kalsın
+            int taskbar_h = 36;
+            
+            if (new_y > screen_h - taskbar_h - WM_TITLEBAR_HEIGHT) {
+                new_y = screen_h - taskbar_h - WM_TITLEBAR_HEIGHT;
+            }
 
             if (new_x != dragged_window->x || new_y != dragged_window->y) {
                 int old_x = dragged_window->x;
@@ -352,14 +394,38 @@ void wm_process_input(void) {
                 
                 cursor_prepare_redraw();
 
+                dragged_window->is_active = true;
+                active_window = dragged_window;
+
                 dragged_window->x = new_x;
                 dragged_window->y = new_y;
 
                 damage_union_rect(old_x, old_y, dragged_window->width, dragged_window->height);
                 damage_union_rect(new_x, new_y, dragged_window->width, dragged_window->height);
+                
                 damage_union_rect(old_cursor_x, old_cursor_y, CURSOR_WIDTH, CURSOR_HEIGHT);
                 damage_union_rect(mouse_x, mouse_y, CURSOR_WIDTH, CURSOR_HEIGHT);
                 
+                desktop_redraw();
+
+                cursor_sync_position();
+                cursor_show();
+            }
+        }
+        else {
+            // ÖNEMLİ KISIM: Sol tuşa basılı ama hiçbir pencereyi sürüklemiyoruz.
+            // Sadece imleç pencerelerin üzerinden geçiyor.
+            int32_t old_cursor_x, old_cursor_y;
+            cursor_get_position(&old_cursor_x, &old_cursor_y);
+
+            if (old_cursor_x != mouse_x || old_cursor_y != mouse_y) {
+                cursor_prepare_redraw();
+
+                // İmlecin eski ve yeni yerini hasarlı ilan et ki arkasındaki 
+                // başlık çubuğu/pencere renkleri bozulmasın, yeniden çizilsin.
+                damage_union_rect(old_cursor_x, old_cursor_y, CURSOR_WIDTH, CURSOR_HEIGHT);
+                damage_union_rect(mouse_x, mouse_y, CURSOR_WIDTH, CURSOR_HEIGHT);
+
                 desktop_redraw();
 
                 cursor_sync_position();
