@@ -180,7 +180,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         ac97_set_master_volume(100);
 
         // KRYFS diskinizdeki bir .wav dosyasını oynatmak için:
-        //wav_play_file("C:/Kryon/Media/startup.wav");
+        wav_play_file("C:/Kryon/Media/startup.wav");
     }
 
     // 6. Ana Olay Döngüsü
