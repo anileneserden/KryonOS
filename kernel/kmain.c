@@ -66,12 +66,12 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     mouse_init(); 
     keyboard_init();
 
-    // --- C:/deneme.txt DOSYASINI OKUMA VE SERIAL'A YAZMA ---
+    // --- C:/Users/anil/Desktop/test.txt DOSYASINI OKUMA VE SERIAL'A YAZMA ---
     uint32_t file_size = 0;
-    char* file_content = (char*)vfs_read_file("C:/deneme.txt", &file_size);
+    char* file_content = (char*)vfs_read_file("C:/Users/anil/Desktop/test.txt", &file_size);
     
     if (file_content && file_size > 0) {
-        serial_write("\n[VFS] C:/deneme.txt basariyla okundu:\n--- BASLANGIC ---\n");
+        serial_write("\n[VFS] C:/Users/anil/Desktop/test.txt basariyla okundu:\n--- BASLANGIC ---\n");
         
         // Karakter karakter veya blok halinde serial porta yazdır
         for (uint32_t i = 0; i < file_size; i++) {
@@ -81,7 +81,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         
         serial_write("\n--- BITIS ---\n\n");
     } else {
-        serial_write("[VFS HATA] C:/deneme.txt okunamadi veya dosya bos!\n");
+        serial_write("[VFS HATA] C:/Users/anil/Desktop/test.txt okunamadi veya dosya bos!\n");
     }
     // --------------------------------------------------------
 
@@ -95,9 +95,9 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     }
 
     app_manager_init();
-    if (!kef_load_and_run("C:/Kryon/System32/test1.kef")) {
+    /*if (!kef_load_and_run("C:/Kryon/System32/test1.kef")) {
         kef_load_and_run("C:/test1.kef");
-    }
+    }*/
     app_create("Not Defteri", 250, 180, 0, sample_app_draw);
 
     fb_swap();
@@ -107,7 +107,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         ac97_set_master_volume(100);
 
         // KRYFS diskinizdeki bir .wav dosyasını oynatmak için:
-        wav_play_file("C:/Kryon/Media/startup.wav");
+        // wav_play_file("C:/Kryon/Media/startup.wav");
     }
 
     // 6. Ana Olay Döngüsü
