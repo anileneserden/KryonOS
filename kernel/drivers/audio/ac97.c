@@ -88,7 +88,7 @@ void ac97_play_sound(uint16_t* buffer, uint32_t length) {
     uint32_t current_offset = 0;
     int bdl_index = 0;
 
-    // BDL tablosunu temizle
+    // BDL tablgosunu temizle
     memset(bdl_list, 0, sizeof(ac97_bdl_entry_t) * 32);
 
     // Veriyi 32768 sample'lık (64 KB) parçalara bölerek BDL tablosuna doldur

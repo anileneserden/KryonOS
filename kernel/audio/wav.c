@@ -44,7 +44,6 @@ bool wav_validate_header(wav_header_t* header) {
 bool wav_play_file(const char* full_path) {
     uint32_t file_size = 0;
 
-    // VFS üzerinden dosyanın tamamını belleğe yüklüyoruz
     uint8_t* file_buffer = (uint8_t*)vfs_read_file(full_path, &file_size);
     if (!file_buffer || file_size < sizeof(wav_header_t)) {
         serial_write("WAV Hata: Dosya okunamadi veya boyutu yetersiz!\n");
@@ -54,44 +53,46 @@ bool wav_play_file(const char* full_path) {
     wav_header_t* header = (wav_header_t*)file_buffer;
 
     if (!wav_validate_header(header)) {
+        serial_write("WAV Hata: Header dogrulamasi basarisiz!\n");
         kfree(file_buffer);
         return false;
     }
 
-    // Dinamik Sample Rate Bilgisi Basma
-    serial_write("WAV: Dosya basariyla dogrulandi. Sample Rate: ");
-    serial_write_num(header->sample_rate);
-    serial_write(" Hz, Kanal: ");
+    serial_write("WAV Bilgi: Format=");
+    serial_write_num(header->audio_format);
+    serial_write(", Kanal=");
     serial_write_num(header->num_channels);
-    serial_write(", Bit: ");
+    serial_write(", SampleRate=");
+    serial_write_num(header->sample_rate);
+    serial_write(", Bits=");
     serial_write_num(header->bits_per_sample);
     serial_write("\n");
 
-    // "data" chunk'ını arayarak dinamik offset bulma
-    // Standart header 44 bayttır ancak metadata içeren dosyalarda offset değişebilir
-    uint32_t data_offset = 12;
-    uint32_t pcm_size = 0;
-
-    while (data_offset < file_size - 8) {
-        if (memcmp(file_buffer + data_offset, "data", 4) == 0) {
-            pcm_size = *(uint32_t*)(file_buffer + data_offset + 4);
-            data_offset += 8; // "data" id (4) + data_size (4)
+    // Dinamik "data" chunk arama
+    uint32_t data_offset = 0;
+    for (uint32_t i = 12; i < file_size - 8; i++) {
+        if (file_buffer[i] == 'd' && file_buffer[i+1] == 'a' && 
+            file_buffer[i+2] == 't' && file_buffer[i+3] == 'a') {
+            data_offset = i + 8; 
             break;
         }
-        // Bir sonraki chunk'a geç (Chunk ID: 4 bayt, Size: 4 bayt + Size kadar veri)
-        uint32_t chunk_size = *(uint32_t*)(file_buffer + data_offset + 4);
-        data_offset += 8 + chunk_size;
     }
 
-    // "data" chunk bulunamadıysa fallback olarak standart header boyutunu al
-    if (pcm_size == 0 || data_offset >= file_size) {
-        data_offset = sizeof(wav_header_t);
-        pcm_size = header->data_size;
+    if (data_offset == 0 || data_offset >= file_size) {
+        serial_write("WAV Hata: 'data' chunk bulunamadi!\n");
+        kfree(file_buffer);
+        return false;
     }
+
+    uint32_t pcm_size = file_size - data_offset;
+    serial_write("WAV Bilgi: Veri baslangic offseti=");
+    serial_write_num(data_offset);
+    serial_write(", PCM Boyutu=");
+    serial_write_num(pcm_size);
+    serial_write("\n");
 
     uint16_t* pcm_data = (uint16_t*)(file_buffer + data_offset);
 
-    // AC'97 kartına frekansı ayarla ve sesi başlat
     ac97_set_sample_rate(header->sample_rate);
     ac97_play_sound(pcm_data, pcm_size);
 

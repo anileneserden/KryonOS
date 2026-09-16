@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define KRYFS_MAGIC 0x4B525953 // "KRYS"
+#define KRYFS_MAGIC 0x4B525946
 #define KRYFS_BLOCK_SIZE 512
 #define KRYFS_MAX_INODES 64
 

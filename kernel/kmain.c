@@ -176,8 +176,8 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     if (ac97_init() == 0) {
         ac97_set_master_volume(100);
 
-        // KRYFS diskinizdeki bir .wav dosyasını oynatmak için:
-        //wav_play_file("C:/Kryon/Media/startup.wav");
+        serial_write("AC97: error.wav oynatilmaya calisiliyor...\n");
+        wav_play_file("C:/Kryon/Media/error.wav");
     }
 
     // 6. Ana Olay Döngüsü
