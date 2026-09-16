@@ -66,6 +66,25 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     mouse_init(); 
     keyboard_init();
 
+    // --- C:/deneme.txt DOSYASINI OKUMA VE SERIAL'A YAZMA ---
+    uint32_t file_size = 0;
+    char* file_content = (char*)vfs_read_file("C:/deneme.txt", &file_size);
+    
+    if (file_content && file_size > 0) {
+        serial_write("\n[VFS] C:/deneme.txt basariyla okundu:\n--- BASLANGIC ---\n");
+        
+        // Karakter karakter veya blok halinde serial porta yazdır
+        for (uint32_t i = 0; i < file_size; i++) {
+            char c[2] = { file_content[i], '\0' };
+            serial_write(c);
+        }
+        
+        serial_write("\n--- BITIS ---\n\n");
+    } else {
+        serial_write("[VFS HATA] C:/deneme.txt okunamadi veya dosya bos!\n");
+    }
+    // --------------------------------------------------------
+
     // 4. Grafik Arayüzünün Başlatılması ve İlk Çizim
     uint32_t width = fb_get_width();
     uint32_t height = fb_get_height();
