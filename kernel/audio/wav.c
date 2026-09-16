@@ -54,11 +54,11 @@ bool wav_play_file(const char* full_path) {
     wav_header_t* header = (wav_header_t*)file_buffer;
 
     if (!wav_validate_header(header)) {
+        serial_write("WAV Hata: Header dogrulamasi basarisiz!\n");
         kfree(file_buffer);
         return false;
     }
 
-    // Dinamik Sample Rate Bilgisi Basma
     serial_write("WAV: Dosya basariyla dogrulandi. Sample Rate: ");
     serial_write_num(header->sample_rate);
     serial_write(" Hz, Kanal: ");
@@ -67,27 +67,22 @@ bool wav_play_file(const char* full_path) {
     serial_write_num(header->bits_per_sample);
     serial_write("\n");
 
-    // "data" chunk'ını arayarak dinamik offset bulma
-    // Standart header 44 bayttır ancak metadata içeren dosyalarda offset değişebilir
-    uint32_t data_offset = 12;
+    // KESİN ÇÖZÜM: Standart WAV offset'i (44. bayt)
+    uint32_t data_offset = 44; 
+    
+    // PCM veri boyutunu dosya boyutundan kesinlikle taştırmayacak şekilde hesapla
     uint32_t pcm_size = 0;
-
-    while (data_offset < file_size - 8) {
-        if (memcmp(file_buffer + data_offset, "data", 4) == 0) {
-            pcm_size = *(uint32_t*)(file_buffer + data_offset + 4);
-            data_offset += 8; // "data" id (4) + data_size (4)
-            break;
-        }
-        // Bir sonraki chunk'a geç (Chunk ID: 4 bayt, Size: 4 bayt + Size kadar veri)
-        uint32_t chunk_size = *(uint32_t*)(file_buffer + data_offset + 4);
-        data_offset += 8 + chunk_size;
+    if (file_size > data_offset) {
+        pcm_size = file_size - data_offset;
+    } else {
+        serial_write("WAV Hata: Dosya boyutu header'dan kucuk!\n");
+        kfree(file_buffer);
+        return false;
     }
 
-    // "data" chunk bulunamadıysa fallback olarak standart header boyutunu al
-    if (pcm_size == 0 || data_offset >= file_size) {
-        data_offset = sizeof(wav_header_t);
-        pcm_size = header->data_size;
-    }
+    serial_write("WAV DEBUG - Guvenli pcm_size: ");
+    serial_write_num(pcm_size);
+    serial_write("\n");
 
     uint16_t* pcm_data = (uint16_t*)(file_buffer + data_offset);
 
