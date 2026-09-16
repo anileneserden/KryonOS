@@ -114,12 +114,7 @@ void desktop_init(void) {
     grid_init(width, height, 100, 100);
 
     wm_init();
-<<<<<<< HEAD
     wm_create_window(350, 220, "KryonOS Pencere");
-=======
-    // wm_create_window(300, 200, "KryonOS Dosya Yoneticisi");
-    // wm_create_window(250, 180, "Sistem Ayarlari");
->>>>>>> 54273fa (kef: fix string offset translation and integrate MediaPlayer application)
 
     damage_union_rect(0, 0, width, height);
     desktop_redraw();
