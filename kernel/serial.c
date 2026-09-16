@@ -35,3 +35,22 @@ void serial_write(const char* str) {
         serial_write_char(*str++);
     }
 }
+
+void serial_write_dec(uint32_t n) {
+    if (n == 0) {
+        serial_write_char('0');
+        return;
+    }
+    
+    char buf[32];
+    int i = 0;
+    
+    while (n > 0) {
+        buf[i++] = '0' + (n % 10);
+        n /= 10;
+    }
+    
+    while (i > 0) {
+        serial_write_char(buf[--i]);
+    }
+}

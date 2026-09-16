@@ -8,7 +8,7 @@ typedef struct block_header {
     struct block_header* next;
 } block_header_t;
 
-#define HEAP_START_ADDRESS 0x600000 // 6MB adresinden baslatalim (Guvenli bolge)
+#define HEAP_START_ADDRESS 0x2000000 // 32MB adresine tasiyalim (Kernel ve diger yapilardan guvenli bir sekilde uzakta)
 #define HEAP_INITIAL_SIZE  (1024 * 1024 * 4) // 4MB baslangic boyutu
 
 static block_header_t* heap_head = (block_header_t*)HEAP_START_ADDRESS;
@@ -22,13 +22,11 @@ void heap_init(uint32_t heap_start, uint32_t heap_size) {
 }
 
 void* kmalloc(size_t size) {
-    // 4 bayt hizalama
     size = (size + 3) & ~3;
 
     block_header_t* current = heap_head;
     while (current) {
         if (current->is_free && current->size >= size) {
-            // Blok fazlasiyla buyukse ikiye bol
             if (current->size > size + sizeof(block_header_t) + 4) {
                 block_header_t* next_block = (block_header_t*)((uint32_t)current + sizeof(block_header_t) + size);
                 next_block->size = current->size - size - sizeof(block_header_t);
@@ -43,7 +41,7 @@ void* kmalloc(size_t size) {
         }
         current = current->next;
     }
-    serial_write("HEAP HATA: kmalloc bellek tahsis edemedi!\n");
+    serial_write("HEAP HATA: kmalloc bellek tahsis edemedi! (Heap dolu veya bozuk)\n");
     return 0;
 }
 

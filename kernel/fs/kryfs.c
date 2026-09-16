@@ -105,6 +105,11 @@ void* kryfs_read_file(const char* filename, uint32_t* out_size) {
         return 0;
     }
 
+    // Sürücü harfini (örn: C:/) yoldan arındır
+    if (filename[1] == ':' && (filename[2] == '/' || filename[2] == '\\')) {
+        filename += 3;
+    }
+
     uint8_t sector_buf[KRYFS_BLOCK_SIZE];
     ata_read_sector(KRYFS_DRIVE, 0, sector_buf);
     kryfs_superblock_t* sb = (kryfs_superblock_t*)sector_buf;
@@ -136,10 +141,18 @@ void* kryfs_read_file(const char* filename, uint32_t* out_size) {
     }
 
     if (!found) {
-        serial_write("KRYFS: Dosya bulunamadi!\n");
+        serial_write("KRYFS: Dosya bulunamadi -> ");
+        serial_write(filename);
+        serial_write("\n");
         if (out_size) *out_size = 0;
         return 0;
     }
+
+    serial_write("[KRYFS DEBUG] Dosya bulundu! Boyut: ");
+    serial_write_dec(target_inode.size);
+    serial_write(" bayt, Ilk Blok: ");
+    serial_write_dec(target_inode.first_block);
+    serial_write("\n");
 
     uint32_t file_size = target_inode.size;
 
@@ -170,7 +183,7 @@ void* kryfs_read_file(const char* filename, uint32_t* out_size) {
 
 void kryfs_list_files(void) {
     uint8_t sector_buf[KRYFS_BLOCK_SIZE];
-    ata_read_sector(KRYFS_DRIVE, 0, sector_buf);
+    ata_read_sector(KRYFS_DRIVE, KRYFS_SUPERBLOCK_SECTOR, sector_buf);
     kryfs_superblock_t* sb = (kryfs_superblock_t*)sector_buf;
 
     if (sb->magic != KRYFS_MAGIC) {
@@ -179,7 +192,7 @@ void kryfs_list_files(void) {
     }
 
     serial_write("\n========================================\n");
-    serial_write(" Sürücü C:\\ [ ");
+    serial_write(" Surucu C:\\ [ ");
     for (int i = 0; i < 31 && sb->volume_name[i] != '\0'; i++) {
         char c[2] = { sb->volume_name[i], '\0' };
         serial_write(c);
@@ -211,27 +224,12 @@ void kryfs_list_files(void) {
                 }
                 name_buf[name_len] = '\0';
 
-                int depth = 0;
-                for (int j = 0; j < name_len; j++) {
-                    if (name_buf[j] == '/') {
-                        depth++;
-                    }
+                // Basit ve şık hiyerarşik tree görünümü
+                serial_write("  |--- ");
+                serial_write(name_buf);
+                if (inodes[i].is_directory) {
+                    serial_write(" <DIR>");
                 }
-
-                if (depth == 0 || (depth == 1 && name_buf[name_len - 1] == '/')) {
-                    serial_write("  |--- ");
-                } else {
-                    for (int d = 0; d < depth; d++) {
-                        serial_write("    ");
-                    }
-                    serial_write(" |-- ");
-                }
-
-                for (int j = 0; j < name_len; j++) {
-                    char c[2] = { name_buf[j], '\0' };
-                    serial_write(c);
-                }
-                
                 serial_write("\n");
             }
         }

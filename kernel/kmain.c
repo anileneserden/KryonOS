@@ -42,22 +42,6 @@ void sample_app_draw(app_t* app) {
     (void)app; // -Wunused-parameter uyarısını önlemek için
 }
 
-// Seri port üzerinden sayıları basabilmek için basit yardımcı fonksiyon
-static void serial_write_dec(uint32_t val) {
-    if (val == 0) {
-        serial_write("0");
-        return;
-    }
-    char buf[12];
-    int i = 10;
-    buf[11] = '\0';
-    while (val > 0 && i >= 0) {
-        buf[i--] = '0' + (val % 10);
-        val /= 10;
-    }
-    serial_write(&buf[i + 1]);
-}
-
 void test_fat32_read(void) {
     uint32_t file_size = 0;
     
@@ -87,6 +71,31 @@ void test_fat32_read(void) {
     // Sürücünüzün read_file implementasyonunda kalloc/kmalloc yapılıyorsa kfree ekleyebilirsiniz.
 }
 
+void test_kryfs_read(void) {
+    uint32_t file_size = 0;
+    
+    // VFS üzerinden KRYFS dosyasını oku
+    char* file_data = (char*) vfs_read_file("C:/Users/anil/Desktop/test.txt", &file_size);
+
+    if (file_data == NULL || file_size == 0) {
+        serial_write("[KRYFS TEST] Hata: C:/Users/anil/Desktop/test.txt acilamadi veya dosya bos!\n");
+        return;
+    }
+
+    serial_write("\n========================================\n");
+    serial_write(" C:\\Users\\anil\\Desktop\\test.txt Icerigi (");
+    serial_write_dec(file_size);
+    serial_write(" byte):\n");
+    serial_write("========================================\n");
+    
+    for (uint32_t i = 0; i < file_size; i++) {
+        char c_str[2] = { file_data[i], '\0' };
+        serial_write(c_str);
+    }
+    
+    serial_write("\n========================================\n\n");
+}
+
 void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     serial_init();
     serial_write("KryonOS baslatildi!\n");
@@ -101,7 +110,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     // 1. Bellek Yönetimi
     pmm_init(mboot);
     vmm_init();
-    heap_init(0x600000, 0x1000000);
+    heap_init(0x2000000, 1024 * 1024 * 16);
 
     // 2. PCI ve Ekran Donanım Sürücüleri
     pci_init();
@@ -111,6 +120,9 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     // 3. Dosya Sistemleri ve Girdi Sürücüleri
     vfs_init();
     kryos_fs_system_init();
+    
+    // 🔹 Buraya C sürücüsünü listeleme fonksiyonunu ekleyebilirsin:
+    vfs_list_drive('C');
 
     if (fat32_init_disk(1, 0)) {
         fs_driver_t fat32_driver = fat32_get_driver();
@@ -120,17 +132,19 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         serial_write("FAT32: Surucu baslatilamadi!\n");
     }
 
-    test_fat32_read();
+    // test_fat32_read();
+
+    test_kryfs_read();
 
     mouse_init(); 
     keyboard_init();
 
-    // --- C:/deneme.txt DOSYASINI OKUMA VE SERIAL'A YAZMA ---
+    // --- C:/Users/anil/Desktop/test.txt DOSYASINI OKUMA VE SERIAL'A YAZMA ---
     uint32_t file_size = 0;
-    char* file_content = (char*)vfs_read_file("C:/deneme.txt", &file_size);
+    char* file_content = (char*)vfs_read_file("C:/Users/anil/Desktop/test.txt", &file_size);
     
     if (file_content && file_size > 0) {
-        serial_write("\n[VFS] C:/deneme.txt basariyla okundu:\n--- BASLANGIC ---\n");
+        serial_write("\n[VFS] C:/Users/anil/Desktop/test.txt basariyla okundu:\n--- BASLANGIC ---\n");
         
         // Karakter karakter veya blok halinde serial porta yazdır
         for (uint32_t i = 0; i < file_size; i++) {
@@ -140,7 +154,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         
         serial_write("\n--- BITIS ---\n\n");
     } else {
-        serial_write("[VFS HATA] C:/deneme.txt okunamadi veya dosya bos!\n");
+        serial_write("[VFS HATA] C:/Users/anil/Desktop/test.txt okunamadi veya dosya bos!\n");
     }
     // --------------------------------------------------------
 
@@ -166,7 +180,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         ac97_set_master_volume(100);
 
         // KRYFS diskinizdeki bir .wav dosyasını oynatmak için:
-        wav_play_file("C:/Kryon/Media/startup.wav");
+        //wav_play_file("C:/Kryon/Media/startup.wav");
     }
 
     // 6. Ana Olay Döngüsü
