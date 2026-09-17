@@ -141,10 +141,10 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
 
     // --- C:/Users/anil/Desktop/test.txt DOSYASINI OKUMA VE SERIAL'A YAZMA ---
     uint32_t file_size = 0;
-    char* file_content = (char*)vfs_read_file("C:/Users/anil/Desktop/test.txt", &file_size);
+    char* file_content = (char*)vfs_read_file("C:/test.txt", &file_size);
     
     if (file_content && file_size > 0) {
-        serial_write("\n[VFS] C:/Users/anil/Desktop/test.txt basariyla okundu:\n--- BASLANGIC ---\n");
+        serial_write("\n[VFS] C:/test.txt basariyla okundu:\n--- BASLANGIC ---\n");
         
         // Karakter karakter veya blok halinde serial porta yazdır
         for (uint32_t i = 0; i < file_size; i++) {
@@ -154,7 +154,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         
         serial_write("\n--- BITIS ---\n\n");
     } else {
-        serial_write("[VFS HATA] C:/Users/anil/Desktop/test.txt okunamadi veya dosya bos!\n");
+        serial_write("[VFS HATA] test.txt okunamadi veya dosya bos!\n");
     }
     // --------------------------------------------------------
 

@@ -24,7 +24,6 @@ void kryfs_format(void) {
     for (int i = 0; i < 31 && name[i] != '\0'; i++) {
         sb->volume_name[i] = name[i];
     }
-    // DRIVE 0 PARAMETRESİ EKLENDİ
     ata_write_sector(KRYFS_DRIVE, KRYFS_SUPERBLOCK_SECTOR, sector_buf);
 
     // --- INODE TABLOSU (Varsayılan Dizinler ve Dosyalar) ---
@@ -71,7 +70,7 @@ void kryfs_format(void) {
     inodes[4].is_used = 1;
     inodes[4].is_directory = 0;
 
-    // Inode tablosunu 1. sektöre yaz (DRIVE 0)
+    // Superblock'un arkasına yazılıyor (Sektör 0 içerisindeki kalan alan)
     ata_write_sector(KRYFS_DRIVE, 1, sector_buf);
 
     // --- TEST DOSYASI İÇERİĞİNİ YAZMA (5. Sektör) ---
@@ -93,8 +92,6 @@ void kryfs_init(void) {
 
     if (sb->magic != KRYFS_MAGIC) {
         serial_write("UYARI: Gecersiz KRYFS imzasi bulundu!\n");
-        // İsteğe bağlı olarak burada sadece hata dönebilirsin veya 
-        // host'tan imaj gelmediyse format atabilirsin.
     } else {
         serial_write("KRYFS superblok basariyla dogrulandi!\n");
     }
@@ -106,7 +103,6 @@ void* kryfs_read_file(const char* filename, uint32_t* out_size) {
         return 0;
     }
 
-    // Sürücü harfini (örn: C:/) yoldan arındır
     if (filename[1] == ':' && (filename[2] == '/' || filename[2] == '\\')) {
         filename += 3;
     }
@@ -120,25 +116,27 @@ void* kryfs_read_file(const char* filename, uint32_t* out_size) {
         return 0;
     }
 
-    uint32_t inode_sector_start = 1;
-    uint32_t inodes_per_sector = KRYFS_BLOCK_SIZE / sizeof(kryfs_inode_t);
-    uint32_t total_inode_sectors = (sb->inode_count + inodes_per_sector - 1) / inodes_per_sector;
-
     kryfs_inode_t target_inode;
     int found = 0;
 
-    for (uint32_t s = 0; s < total_inode_sectors; s++) {
-        ata_read_sector(KRYFS_DRIVE, inode_sector_start + s, sector_buf);
-        kryfs_inode_t* inodes = (kryfs_inode_t*)sector_buf;
+    uint32_t inode_size = sizeof(kryfs_inode_t);
+    uint32_t base_offset = sizeof(kryfs_superblock_t);
 
-        for (uint32_t i = 0; i < inodes_per_sector; i++) {
-            if (inodes[i].is_used && strcmp(inodes[i].filename, filename) == 0) {
-                target_inode = inodes[i];
-                found = 1;
-                break;
-            }
+    for (uint32_t i = 0; i < sb->inode_count; i++) {
+        uint32_t byte_offset = base_offset + (i * inode_size);
+        uint32_t sector_num = byte_offset / KRYFS_BLOCK_SIZE;
+        uint32_t sector_offset = byte_offset % KRYFS_BLOCK_SIZE;
+
+        uint8_t current_sector_buf[KRYFS_BLOCK_SIZE];
+        ata_read_sector(KRYFS_DRIVE, sector_num, current_sector_buf);
+
+        kryfs_inode_t* inode = (kryfs_inode_t*)(current_sector_buf + sector_offset);
+
+        if (inode->is_used && strcmp(inode->filename, filename) == 0) {
+            target_inode = *inode;
+            found = 1;
+            break;
         }
-        if (found) break;
     }
 
     if (!found) {
@@ -201,38 +199,40 @@ void kryfs_list_files(void) {
     serial_write(" ]\n");
     serial_write("========================================\n");
 
-    uint32_t inode_sector_start = 1;
-    uint32_t inodes_per_sector = KRYFS_BLOCK_SIZE / sizeof(kryfs_inode_t);
-    uint32_t total_inode_sectors = (sb->inode_count + inodes_per_sector - 1) / inodes_per_sector;
-
+    uint32_t inode_size = sizeof(kryfs_inode_t);
+    uint32_t base_offset = sizeof(kryfs_superblock_t);
     int file_count = 0;
-    for (uint32_t s = 0; s < total_inode_sectors; s++) {
-        ata_read_sector(KRYFS_DRIVE, inode_sector_start + s, sector_buf);
-        kryfs_inode_t* inodes = (kryfs_inode_t*)sector_buf;
 
-        for (uint32_t i = 0; i < inodes_per_sector; i++) {
-            uint32_t current_idx = s * inodes_per_sector + i;
-            if (current_idx >= sb->inode_count) break;
+    // Bayt offset tabanlı tarama (Çöp / boş inode'lar filtrelendi)
+    for (uint32_t i = 0; i < sb->inode_count; i++) {
+        uint32_t byte_offset = base_offset + (i * inode_size);
+        uint32_t sector_num = byte_offset / KRYFS_BLOCK_SIZE;
+        uint32_t sector_offset = byte_offset % KRYFS_BLOCK_SIZE;
 
-            if (inodes[i].is_used) {
-                file_count++;
-                
-                char name_buf[33];
-                int name_len = 0;
-                for (int j = 0; j < 32 && inodes[i].filename[j] != '\0'; j++) {
-                    name_buf[j] = inodes[i].filename[j];
-                    name_len = j + 1;
-                }
-                name_buf[name_len] = '\0';
+        uint8_t current_sector_buf[KRYFS_BLOCK_SIZE];
+        ata_read_sector(KRYFS_DRIVE, sector_num, current_sector_buf);
 
-                // Basit ve şık hiyerarşik tree görünümü
-                serial_write("  |--- ");
-                serial_write(name_buf);
-                if (inodes[i].is_directory) {
-                    serial_write(" <DIR>");
-                }
-                serial_write("\n");
+        kryfs_inode_t* inode = (kryfs_inode_t*)(current_sector_buf + sector_offset);
+
+        // Inode kullanımda mi VE dosya adı boş değil mi?
+        if (inode->is_used && inode->filename[0] != '\0' && inode->filename[0] != ' ') {
+            file_count++;
+            
+            char name_buf[33];
+            int name_len = 0;
+            for (int j = 0; j < 32 && inode->filename[j] != '\0'; j++) {
+                name_buf[j] = inode->filename[j];
+                name_len = j + 1;
             }
+            name_buf[name_len] = '\0';
+
+            // Hiyerarşik görünüm
+            serial_write("  |--- ");
+            serial_write(name_buf);
+            if (inode->is_directory) {
+                serial_write(" <DIR>");
+            }
+            serial_write("\n");
         }
     }
 
@@ -249,56 +249,57 @@ int kryfs_get_dir_files(const char* path, vfs_file_info_t* out_list, int max_cou
 
     if (sb->magic != KRYFS_MAGIC) return 0;
 
-    uint32_t inode_sector_start = 1;
-    uint32_t inodes_per_sector = KRYFS_BLOCK_SIZE / sizeof(kryfs_inode_t);
-    uint32_t total_inode_sectors = (sb->inode_count + inodes_per_sector - 1) / inodes_per_sector;
-
     int target_len = 0;
     while (path[target_len] != '\0') target_len++;
 
+    uint32_t inode_size = sizeof(kryfs_inode_t);
+    uint32_t base_offset = sizeof(kryfs_superblock_t);
     int count = 0;
-    for (uint32_t s = 0; s < total_inode_sectors && count < max_count; s++) {
-        ata_read_sector(KRYFS_DRIVE, inode_sector_start + s, sector_buf);
-        kryfs_inode_t* inodes = (kryfs_inode_t*)sector_buf;
 
-        for (uint32_t i = 0; i < inodes_per_sector && count < max_count; i++) {
-            uint32_t current_idx = s * inodes_per_sector + i;
-            if (current_idx >= sb->inode_count) break;
+    // Bayt offset tabanlı arama yapılıyor (eski sabit sektör 1 mantığı kaldırıldı)
+    for (uint32_t i = 0; i < sb->inode_count && count < max_count; i++) {
+        uint32_t byte_offset = base_offset + (i * inode_size);
+        uint32_t sector_num = byte_offset / KRYFS_BLOCK_SIZE;
+        uint32_t sector_offset = byte_offset % KRYFS_BLOCK_SIZE;
 
-            if (inodes[i].is_used) {
-                int match = 1;
-                for (int j = 0; j < target_len; j++) {
-                    if (inodes[i].filename[j] != path[j]) {
-                        match = 0;
-                        break;
+        uint8_t current_sector_buf[KRYFS_BLOCK_SIZE];
+        ata_read_sector(KRYFS_DRIVE, sector_num, current_sector_buf);
+
+        kryfs_inode_t* inode = (kryfs_inode_t*)(current_sector_buf + sector_offset);
+
+        if (inode->is_used && inode->filename[0] != '\0') {
+            int match = 1;
+            for (int j = 0; j < target_len; j++) {
+                if (inode->filename[j] != path[j]) {
+                    match = 0;
+                    break;
+                }
+            }
+
+            if (match) {
+                int len = 0;
+                while (inode->filename[len] != '\0') len++;
+
+                int internal_slashes = 0;
+                int end_limit = (inode->filename[len - 1] == '/') ? len - 1 : len;
+                
+                for (int j = target_len; j < end_limit; j++) {
+                    if (inode->filename[j] == '/') {
+                        internal_slashes++;
                     }
                 }
 
-                if (match) {
-                    int len = 0;
-                    while (inodes[i].filename[len] != '\0') len++;
-
-                    int internal_slashes = 0;
-                    int end_limit = (inodes[i].filename[len - 1] == '/') ? len - 1 : len;
-                    
-                    for (int j = target_len; j < end_limit; j++) {
-                        if (inodes[i].filename[j] == '/') {
-                            internal_slashes++;
-                        }
+                if (internal_slashes == 0 && len > target_len) {
+                    const char* base_name = &inode->filename[target_len];
+                    int k = 0;
+                    while (base_name[k] != '\0' && k < 31) {
+                        out_list[count].name[k] = base_name[k];
+                        k++;
                     }
-
-                    if (internal_slashes == 0 && len > target_len) {
-                        const char* base_name = &inodes[i].filename[target_len];
-                        int k = 0;
-                        while (base_name[k] != '\0' && k < 31) {
-                            out_list[count].name[k] = base_name[k];
-                            k++;
-                        }
-                        out_list[count].name[k] = '\0';
-                        out_list[count].size = inodes[i].size;
-                        out_list[count].is_directory = inodes[i].is_directory;
-                        count++;
-                    }
+                    out_list[count].name[k] = '\0';
+                    out_list[count].size = inode->size;
+                    out_list[count].is_directory = inode->is_directory;
+                    count++;
                 }
             }
         }
@@ -316,7 +317,6 @@ fs_driver_t kryfs_get_driver(void) {
 }
 
 void kryos_fs_system_init(void) {
-    // Doğrudan init çağırıyoruz, otomatik formatlama FUSE imajlarını ezmemeli!
     kryfs_init();
     fs_driver_t kryfs_driver = kryfs_get_driver();
     vfs_mount('C', "KryonVolume", kryfs_driver);
