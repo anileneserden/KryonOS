@@ -33,60 +33,6 @@ void sample_app_draw(app_t* app) {
     (void)app; // Avoid the -Wunused-parameter warning
 }
 
-void test_fat32_read(void) {
-    uint32_t file_size = 0;
-    
-    // Use the simple read_file interface provided by the VFS
-    char* file_data = (char*) vfs_read_file("D:/TEST.TXT", &file_size);
-
-    if (file_data == NULL || file_size == 0) {
-        serial_write("[FAT32 TEST] Error: D:/TEST.TXT could not be opened or is empty!\n");
-        return;
-    }
-
-    serial_write("\n========================================\n");
-    serial_write(" D:\\TEST.TXT Contents (");
-    serial_write_dec(file_size);
-    serial_write(" byte):\n");
-    serial_write("========================================\n");
-    
-    // Limit output to 100 bytes to prevent overflow, or print the entire file
-    uint32_t print_bytes = file_size > 100 ? 100 : file_size;
-    for (uint32_t i = 0; i < print_bytes; i++) {
-        char c_str[2] = { file_data[i], '\0' };
-        serial_write(c_str);
-    }
-    
-    serial_write("\n========================================\n\n");
-
-    // If the driver's read_file implementation uses kalloc/kmalloc, kfree can be added here.
-}
-
-void test_kryfs_read(void) {
-    uint32_t file_size = 0;
-    
-    // Read the KRYFS file through the VFS
-    char* file_data = (char*) vfs_read_file("C:/Users/anil/Desktop/test.txt", &file_size);
-
-    if (file_data == NULL || file_size == 0) {
-        serial_write("[KRYFS TEST] Error: C:/Users/anil/Desktop/test.txt could not be opened or is empty!\n");
-        return;
-    }
-
-    serial_write("\n========================================\n");
-    serial_write(" C:\\Users\\anil\\Desktop\\test.txt Contents (");
-    serial_write_dec(file_size);
-    serial_write(" byte):\n");
-    serial_write("========================================\n");
-    
-    for (uint32_t i = 0; i < file_size; i++) {
-        char c_str[2] = { file_data[i], '\0' };
-        serial_write(c_str);
-    }
-    
-    serial_write("\n========================================\n\n");
-}
-
 void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     serial_init();
     serial_write("KryonOS started!\n");
@@ -113,20 +59,15 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     vfs_init();
     kryos_fs_system_init();
     
-    // Add the C drive listing function here:
-    vfs_list_drive('C');
 
     if (fat32_init_disk(1, 0)) {
         fs_driver_t fat32_driver = fat32_get_driver();
         vfs_mount('D', "FAT32_VOL", fat32_driver);
-        vfs_list_drive('D');
     } else {
         serial_write("FAT32: Driver could not be started!\n");
     }
 
-    // test_fat32_read();
 
-    test_kryfs_read();
 
     if (!uhci_mouse_active()) {
         mouse_init();
@@ -134,25 +75,6 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         serial_write("USB mouse active; PS/2 mouse initialization skipped.\n");
     }
     keyboard_init();
-
-    // --- READ C:/Users/anil/Desktop/test.txt AND WRITE IT TO SERIAL ---
-    uint32_t file_size = 0;
-    char* file_content = (char*)vfs_read_file("C:/Users/anil/Desktop/test.txt", &file_size);
-    
-    if (file_content && file_size > 0) {
-        serial_write("\n[VFS] C:/Users/anil/Desktop/test.txt read successfully:\n--- BEGIN ---\n");
-        
-        // Write to the serial port character by character or in blocks
-        for (uint32_t i = 0; i < file_size; i++) {
-            char c[2] = { file_content[i], '\0' };
-            serial_write(c);
-        }
-        
-        serial_write("\n--- END ---\n\n");
-    } else {
-        serial_write("[VFS ERROR] C:/Users/anil/Desktop/test.txt could not be read or is empty!\n");
-    }
-    // --------------------------------------------------------
 
     // 4. Initialize the graphical interface and perform the first draw
     uint32_t width = fb_get_width();

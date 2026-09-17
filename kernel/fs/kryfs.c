@@ -148,11 +148,6 @@ void* kryfs_read_file(const char* filename, uint32_t* out_size) {
         return 0;
     }
 
-    serial_write("[KRYFS DEBUG] File found! Size: ");
-    serial_write_dec(target_inode.size);
-    serial_write(" bytes, First Block: ");
-    serial_write_dec(target_inode.first_block);
-    serial_write("\n");
 
     uint32_t file_size = target_inode.size;
 
