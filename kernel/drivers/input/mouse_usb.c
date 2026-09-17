@@ -4,7 +4,7 @@
 #include <kernel/serial.h>
 
 static uint8_t report_logged = 0;
-static uint8_t absolute_mode = 1;
+static uint8_t absolute_mode = 0;
 
 void usb_mouse_set_absolute_mode(uint8_t new_absolute_mode) {
     absolute_mode = new_absolute_mode;

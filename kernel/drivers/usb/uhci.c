@@ -34,6 +34,9 @@
 #define TD_STAT_LOW_SPEED    (1 << 26) // Low-speed device
 #define TD_STAT_SPD          (1 << 29) // Short Packet Detect
 
+// UHCI link pointer flags
+#define UHCI_LINK_DEPTH_FIRST (1 << 2)
+
 // TD Token Packet Identifiers (PID)
 #define USB_PID_SETUP        0x2D
 #define USB_PID_IN           0x69
@@ -98,12 +101,13 @@ static uint8_t usb_mouse_ready = 0;
 
 static void uhci_dispatch_control_transfer(void) {
     control_qh.head_link = 1;
-    control_qh.element_link = virt_to_phys(&setup_td);
+    control_qh.element_link = virt_to_phys(&setup_td) | UHCI_LINK_DEPTH_FIRST;
 
     uint32_t qh_phys = virt_to_phys(&control_qh) | 0x02;
     for (int i = 0; i < FRAME_LIST_COUNT; i++) {
         frame_list[i] = qh_phys;
     }
+
 }
 
 static void uhci_set_address(uint8_t port_index, uint8_t new_address) {
@@ -118,7 +122,7 @@ static void uhci_set_address(uint8_t port_index, uint8_t new_address) {
     setup_pkt.wLength       = 0x0000;
 
     // 2. Configure SETUP TD (Address 0)
-    setup_td.link   = virt_to_phys(&status_td);
+    setup_td.link   = virt_to_phys(&status_td) | UHCI_LINK_DEPTH_FIRST;
     setup_td.status = TD_STAT_ACTIVED | uhci_td_speed_flags | (3 << 27); // Active + 3 errors
     setup_td.token  = (7 << 21) | (0 << 19) | (0 << 15) | (0 << 8) | USB_PID_SETUP;
     setup_td.buffer = virt_to_phys(&setup_pkt);
@@ -172,13 +176,13 @@ static int uhci_get_device_descriptor(void) {
     setup_pkt.wLength       = 0x0008; // İlk aşamada 8 bytes istiyoruz
 
     // 2. Setup TD (MaxLen = 7 [8 bytes], Toggle = 0 [DATA0], Endpoint = 0, Addr = 0)
-    setup_td.link   = virt_to_phys(&descriptor_in_tds[0]);
+    setup_td.link   = virt_to_phys(&descriptor_in_tds[0]) | UHCI_LINK_DEPTH_FIRST;
     setup_td.status = TD_STAT_ACTIVED | uhci_td_speed_flags | (3 << 27);
     setup_td.token  = (7 << 21) | (0 << 19) | (0 << 15) | (0 << 8) | USB_PID_SETUP;
     setup_td.buffer = virt_to_phys(&setup_pkt);
 
     // 3. In TD (MaxLen = 7 [8 bytes], Toggle = 1 [DATA1], Endpoint = 0, Addr = 0)
-    descriptor_in_tds[0].link   = virt_to_phys(&status_td);
+    descriptor_in_tds[0].link   = virt_to_phys(&status_td) | UHCI_LINK_DEPTH_FIRST;
     descriptor_in_tds[0].status = TD_STAT_ACTIVED | TD_STAT_SPD | uhci_td_speed_flags | (3 << 27);
     descriptor_in_tds[0].token  = (7 << 21) | (1 << 19) | (0 << 15) | (0 << 8) | USB_PID_IN;
     descriptor_in_tds[0].buffer = virt_to_phys(device_descriptor);
@@ -191,7 +195,7 @@ static int uhci_get_device_descriptor(void) {
 
     // 5. Queue Head
     control_qh.head_link    = 1;
-    control_qh.element_link = virt_to_phys(&setup_td);
+    control_qh.element_link = virt_to_phys(&setup_td) | UHCI_LINK_DEPTH_FIRST;
 
     // 6. Frame List'e bağla
     uint32_t qh_phys = virt_to_phys(&control_qh) | 0x02;
@@ -239,7 +243,7 @@ static int uhci_get_full_device_descriptor(uint8_t address, uint8_t max_packet_s
     setup_pkt.wIndex = 0;
     setup_pkt.wLength = sizeof(device_descriptor);
 
-    setup_td.link = virt_to_phys(&descriptor_in_tds[0]);
+    setup_td.link = virt_to_phys(&descriptor_in_tds[0]) | UHCI_LINK_DEPTH_FIRST;
     setup_td.status = TD_STAT_ACTIVED | uhci_td_speed_flags | (3 << 27);
     setup_td.token = (7 << 21) | (0 << 19) | (address << 8) | USB_PID_SETUP;
     setup_td.buffer = virt_to_phys(&setup_pkt);
@@ -247,8 +251,8 @@ static int uhci_get_full_device_descriptor(uint8_t address, uint8_t max_packet_s
     for (uint8_t i = 0; i < packet_count; i++) {
         uint8_t packet_length = bytes_left > max_packet_size ? max_packet_size : bytes_left;
         descriptor_in_tds[i].link = (i + 1 < packet_count)
-            ? virt_to_phys(&descriptor_in_tds[i + 1])
-            : virt_to_phys(&status_td);
+            ? virt_to_phys(&descriptor_in_tds[i + 1]) | UHCI_LINK_DEPTH_FIRST
+            : virt_to_phys(&status_td) | UHCI_LINK_DEPTH_FIRST;
         descriptor_in_tds[i].status = TD_STAT_ACTIVED | TD_STAT_SPD | uhci_td_speed_flags | (3 << 27);
         descriptor_in_tds[i].token = ((uint32_t)(packet_length - 1) << 21)
             | (((uint32_t)(i & 1) ^ 1) << 19)
@@ -307,13 +311,13 @@ static int uhci_get_config_descriptor(uint8_t address, uint8_t max_packet_size) 
     setup_pkt.wIndex = 0;
     setup_pkt.wLength = 9;
 
-    setup_td.link = virt_to_phys(&descriptor_in_tds[0]);
+    setup_td.link = virt_to_phys(&descriptor_in_tds[0]) | UHCI_LINK_DEPTH_FIRST;
     setup_td.status = TD_STAT_ACTIVED | uhci_td_speed_flags | (3 << 27);
     setup_td.token = (7 << 21) | ((uint32_t)address << 8) | USB_PID_SETUP;
     setup_td.buffer = virt_to_phys(&setup_pkt);
 
     uint8_t first_length = max_packet_size < 9 ? max_packet_size : 9;
-    descriptor_in_tds[0].link = virt_to_phys(&descriptor_in_tds[1]);
+    descriptor_in_tds[0].link = virt_to_phys(&descriptor_in_tds[1]) | UHCI_LINK_DEPTH_FIRST;
     descriptor_in_tds[0].status = TD_STAT_ACTIVED | TD_STAT_SPD
         | uhci_td_speed_flags | (3 << 27);
     descriptor_in_tds[0].token = ((uint32_t)(first_length - 1) << 21)
@@ -321,7 +325,7 @@ static int uhci_get_config_descriptor(uint8_t address, uint8_t max_packet_size) 
     descriptor_in_tds[0].buffer = virt_to_phys(config_descriptor);
 
     uint8_t second_length = 9 - first_length;
-    descriptor_in_tds[1].link = virt_to_phys(&status_td);
+    descriptor_in_tds[1].link = virt_to_phys(&status_td) | UHCI_LINK_DEPTH_FIRST;
     descriptor_in_tds[1].status = TD_STAT_ACTIVED | TD_STAT_SPD
         | uhci_td_speed_flags | (3 << 27);
     descriptor_in_tds[1].token = ((uint32_t)(second_length - 1) << 21)
@@ -377,7 +381,7 @@ static int uhci_get_full_config_descriptor(uint8_t address, uint8_t max_packet_s
     setup_pkt.wIndex = 0;
     setup_pkt.wLength = total_length;
 
-    setup_td.link = virt_to_phys(&descriptor_in_tds[0]);
+    setup_td.link = virt_to_phys(&descriptor_in_tds[0]) | UHCI_LINK_DEPTH_FIRST;
     setup_td.status = TD_STAT_ACTIVED | uhci_td_speed_flags | (3 << 27);
     setup_td.token = (7 << 21) | ((uint32_t)address << 8) | USB_PID_SETUP;
     setup_td.buffer = virt_to_phys(&setup_pkt);
@@ -387,7 +391,8 @@ static int uhci_get_full_config_descriptor(uint8_t address, uint8_t max_packet_s
         uint8_t packet_length = (uint16_t)(total_length - offset) > max_packet_size
             ? max_packet_size : (uint8_t)(total_length - offset);
         descriptor_in_tds[i].link = (i + 1 < packet_count)
-            ? virt_to_phys(&descriptor_in_tds[i + 1]) : virt_to_phys(&status_td);
+            ? virt_to_phys(&descriptor_in_tds[i + 1]) | UHCI_LINK_DEPTH_FIRST
+            : virt_to_phys(&status_td) | UHCI_LINK_DEPTH_FIRST;
         descriptor_in_tds[i].status = TD_STAT_ACTIVED | TD_STAT_SPD
             | uhci_td_speed_flags | (3 << 27);
         descriptor_in_tds[i].token = ((uint32_t)(packet_length - 1) << 21)
@@ -458,7 +463,7 @@ static int uhci_set_configuration(uint8_t address, uint8_t configuration_value) 
     setup_pkt.wIndex = 0;
     setup_pkt.wLength = 0;
 
-    setup_td.link = virt_to_phys(&status_td);
+    setup_td.link = virt_to_phys(&status_td) | UHCI_LINK_DEPTH_FIRST;
     setup_td.status = TD_STAT_ACTIVED | uhci_td_speed_flags | (3 << 27);
     setup_td.token = (7 << 21) | ((uint32_t)address << 8) | USB_PID_SETUP;
     setup_td.buffer = virt_to_phys(&setup_pkt);
@@ -485,9 +490,15 @@ static int uhci_set_configuration(uint8_t address, uint8_t configuration_value) 
 }
 
 static void uhci_start_mouse_interrupt(uint8_t address) {
+    if (usb_interrupt_max_packet == 0 || usb_interrupt_max_packet > 8) {
+        serial_write("UHCI: Unsupported mouse interrupt packet size.\n");
+        return;
+    }
+
     for (int i = 0; i < USB_MOUSE_TD_COUNT; i++) {
         int next = (i + 1) % USB_MOUSE_TD_COUNT;
-        mouse_interrupt_tds[i].link = virt_to_phys(&mouse_interrupt_tds[next]);
+        mouse_interrupt_tds[i].link = virt_to_phys(&mouse_interrupt_tds[next])
+            | UHCI_LINK_DEPTH_FIRST;
         mouse_interrupt_tds[i].status = TD_STAT_ACTIVED | TD_STAT_IOC
             | uhci_td_speed_flags | (3 << 27);
         mouse_interrupt_tds[i].token = ((uint32_t)(usb_interrupt_max_packet - 1) << 21)
@@ -498,7 +509,8 @@ static void uhci_start_mouse_interrupt(uint8_t address) {
     }
 
     mouse_interrupt_qh.head_link = 1;
-    mouse_interrupt_qh.element_link = virt_to_phys(&mouse_interrupt_tds[0]);
+    mouse_interrupt_qh.element_link = virt_to_phys(&mouse_interrupt_tds[0])
+        | UHCI_LINK_DEPTH_FIRST;
 
     usb_mouse_ready = 1;
     uint32_t qh_phys = virt_to_phys(&mouse_interrupt_qh) | 0x02;
@@ -514,7 +526,7 @@ uint8_t uhci_poll(void) {
     for (int i = 0; i < USB_MOUSE_TD_COUNT; i++) {
         if (!(mouse_interrupt_tds[i].status & TD_STAT_ACTIVED)) {
             usb_mouse_process_report(mouse_interrupt_buffers[i],
-                                     sizeof(mouse_interrupt_buffers[i]));
+                                     (uint8_t)usb_interrupt_max_packet);
             mouse_interrupt_tds[i].status = TD_STAT_ACTIVED | TD_STAT_IOC
                 | uhci_td_speed_flags | (3 << 27);
             return 1;
