@@ -5,6 +5,7 @@
 #include <stdbool.h>
 
 void desktop_init(void);
+void desktop_process_input(void);
 
 void damage_clear(void);
 void damage_union_rect(int x, int y, int w, int h);

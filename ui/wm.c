@@ -31,6 +31,8 @@ static int window_count = 0;
 static window_t* active_window = 0;
 static window_t* dragged_window = 0;
 static window_t* resized_window = 0;
+static window_t* hovered_window = 0;
+static uint8_t hovered_close_button = 0;
 static int resize_direction = RESIZE_NONE;
 static uint8_t prev_buttons = 0;
 
@@ -39,6 +41,8 @@ void wm_init(void) {
     active_window = 0;
     dragged_window = 0;
     resized_window = 0;
+    hovered_window = 0;
+    hovered_close_button = 0;
     resize_direction = RESIZE_NONE;
     prev_buttons = 0;
     for (int i = 0; i < MAX_WINDOWS; i++) {
@@ -105,11 +109,16 @@ void wm_close_window(window_t* win) {
 void wm_draw_window(window_t* win) {
     if (!win || win->width == 0) return;
 
+    bool title_hovered = hovered_window == win;
+    bool close_hovered = title_hovered && hovered_close_button;
+
     // 1. Window body
     gfx_fill_rect(win->x, win->y, win->width, win->height, 0xFF303030);
 
     // 2. Title bar
-    uint32_t title_color = win->is_active ? 0xFF007ACC : 0xFF505050;
+    uint32_t title_color = title_hovered
+        ? (win->is_active ? 0xFF1088D0 : 0xFF666666)
+        : (win->is_active ? 0xFF007ACC : 0xFF505050);
     gfx_fill_rect(win->x, win->y, win->width, 24, title_color);
 
     // 3. Title text
@@ -118,7 +127,7 @@ void wm_draw_window(window_t* win) {
     // 4. Close [X] button (top-right corner)
     int btn_x = win->x + win->width - 22;
     int btn_y = win->y + 3;
-    gfx_fill_rect(btn_x, btn_y, 18, 18, 0xFFE81123);
+    gfx_fill_rect(btn_x, btn_y, 18, 18, close_hovered ? 0xFFFF5A5F : 0xFFE81123);
     gfx_draw_text_utf8(btn_x + 5, btn_y + 2, 0xFFFFFFFF, "X");
 }
 
@@ -202,7 +211,40 @@ static window_t* wm_bring_to_front(window_t* win) {
     return active_window;
 }
 
+static void wm_update_hover_state(void) {
+    window_t* new_hovered_window = wm_find_at(mouse_x, mouse_y);
+    uint8_t new_hovered_close = 0;
+
+    if (new_hovered_window
+        && mouse_y >= new_hovered_window->y
+        && mouse_y < new_hovered_window->y + WM_TITLEBAR_HEIGHT) {
+        int close_x = new_hovered_window->x + new_hovered_window->width - 22;
+        int close_y = new_hovered_window->y + 3;
+        new_hovered_close = mouse_x >= close_x && mouse_x <= close_x + 18
+            && mouse_y >= close_y && mouse_y <= close_y + 18;
+    } else {
+        new_hovered_window = 0;
+    }
+
+    if (new_hovered_window == hovered_window
+        && new_hovered_close == hovered_close_button) return;
+
+    if (hovered_window) {
+        damage_union_rect(hovered_window->x, hovered_window->y,
+                          hovered_window->width, WM_TITLEBAR_HEIGHT);
+    }
+    if (new_hovered_window) {
+        damage_union_rect(new_hovered_window->x, new_hovered_window->y,
+                          new_hovered_window->width, WM_TITLEBAR_HEIGHT);
+    }
+
+    hovered_window = new_hovered_window;
+    hovered_close_button = new_hovered_close;
+}
+
 void wm_process_input(void) {
+    wm_update_hover_state();
+
     uint8_t left_pressed = mouse_buttons & 0x01;
     uint8_t prev_left = prev_buttons & 0x01;
 

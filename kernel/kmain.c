@@ -181,16 +181,19 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
 
     // 6. Main event loop
     while (1) {
-        uhci_poll();
+        uint8_t input_updated = uhci_poll();
         if (inb_port(0x64) & 1) {
+            input_updated = 1;
             uint8_t status = inb_port(0x64);
             if (status & 0x20) {
                 mouse_handler();
-                wm_process_input();
             } else {
                 keyboard_handler();
             }
-            desktop_process_input(); 
+        }
+
+        if (input_updated) {
+            desktop_process_input();
             app_manager_update_all();
         }
 

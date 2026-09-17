@@ -414,7 +414,11 @@ static int uhci_get_full_config_descriptor(uint8_t address, uint8_t max_packet_s
         return 0;
     }
 
+    usb_interrupt_endpoint = 0;
+    usb_interrupt_max_packet = 0;
+
     uint16_t descriptor_offset = 0;
+    uint8_t hid_interface_found = 0;
     while (descriptor_offset + 2 <= total_length) {
         uint8_t length = config_descriptor[descriptor_offset];
         uint8_t type = config_descriptor[descriptor_offset + 1];
@@ -422,19 +426,22 @@ static int uhci_get_full_config_descriptor(uint8_t address, uint8_t max_packet_s
 
         if (type == 0x04 && length >= 9 && config_descriptor[descriptor_offset + 5] == 0x03) {
             serial_write("UHCI: HID interface found.\n");
+            hid_interface_found = 1;
             usb_mouse_set_absolute_mode(!(
                 config_descriptor[descriptor_offset + 6] == 0x01
                 && config_descriptor[descriptor_offset + 7] == 0x02));
-        } else if (type == 0x05 && length >= 7
+        } else if (hid_interface_found && type == 0x05 && length >= 7
                    && (config_descriptor[descriptor_offset + 2] & 0x80)
                    && (config_descriptor[descriptor_offset + 3] & 0x03) == 0x03) {
-            usb_interrupt_endpoint = config_descriptor[descriptor_offset + 2];
-            usb_interrupt_max_packet = (uint16_t)config_descriptor[descriptor_offset + 4]
+            uint8_t endpoint = config_descriptor[descriptor_offset + 2];
+            uint16_t max_packet = (uint16_t)config_descriptor[descriptor_offset + 4]
                 | ((uint16_t)config_descriptor[descriptor_offset + 5] << 8);
+            usb_interrupt_endpoint = endpoint;
+            usb_interrupt_max_packet = max_packet;
             serial_write("UHCI: Interrupt IN endpoint found: 0x");
-            serial_write_dec(usb_interrupt_endpoint);
+            serial_write_dec(endpoint);
             serial_write(" MaxPacket: ");
-            serial_write_dec(usb_interrupt_max_packet);
+            serial_write_dec(max_packet);
             serial_write("\n");
         }
         descriptor_offset += length;
@@ -492,25 +499,27 @@ static void uhci_start_mouse_interrupt(uint8_t address) {
     mouse_interrupt_qh.head_link = 1;
     mouse_interrupt_qh.element_link = virt_to_phys(&mouse_interrupt_tds[0]);
 
+    usb_mouse_ready = 1;
     uint32_t qh_phys = virt_to_phys(&mouse_interrupt_qh) | 0x02;
     for (int i = 0; i < FRAME_LIST_COUNT; i++) {
         frame_list[i] = qh_phys;
     }
-    usb_mouse_ready = 1;
     serial_write("UHCI: USB mouse interrupt polling started.\n");
 }
 
-void uhci_poll(void) {
-    if (!usb_mouse_ready) return;
+uint8_t uhci_poll(void) {
+    if (!usb_mouse_ready) return 0;
 
     for (int i = 0; i < USB_MOUSE_TD_COUNT; i++) {
-        if (mouse_interrupt_tds[i].status & TD_STAT_ACTIVED) continue;
-
-        usb_mouse_process_report(mouse_interrupt_buffers[i],
-                                 sizeof(mouse_interrupt_buffers[i]));
-        mouse_interrupt_tds[i].status = TD_STAT_ACTIVED | TD_STAT_IOC
-            | uhci_td_speed_flags | (3 << 27);
+        if (!(mouse_interrupt_tds[i].status & TD_STAT_ACTIVED)) {
+            usb_mouse_process_report(mouse_interrupt_buffers[i],
+                                     sizeof(mouse_interrupt_buffers[i]));
+            mouse_interrupt_tds[i].status = TD_STAT_ACTIVED | TD_STAT_IOC
+                | uhci_td_speed_flags | (3 << 27);
+            return 1;
+        }
     }
+    return 0;
 }
 
 uint8_t uhci_mouse_active(void) {
@@ -588,7 +597,9 @@ static void uhci_check_ports(void) {
                         if (uhci_get_full_config_descriptor(device_address, max_packet_size,
                                                             total_length)) {
                             if (uhci_set_configuration(device_address, config_descriptor[5])) {
-                                uhci_start_mouse_interrupt(device_address);
+                                if (usb_interrupt_endpoint != 0) {
+                                    uhci_start_mouse_interrupt(device_address);
+                                }
                             }
                         }
                     }

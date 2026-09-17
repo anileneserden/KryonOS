@@ -88,5 +88,5 @@ run: iso
        -drive format=raw,file=/home/anil/KryonOS/main/disk-fat32.img,index=1,media=disk \
        -audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
        -device piix3-usb-uhci,id=uhci \
-       -device usb-tablet,bus=uhci.0 \
+    -device usb-mouse,bus=uhci.0 \
        -serial stdio -vga std -display sdl,gl=on

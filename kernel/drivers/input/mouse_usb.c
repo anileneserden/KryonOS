@@ -24,7 +24,7 @@ void usb_mouse_process_report(const uint8_t* report, uint8_t length) {
         int32_t width = (int32_t)fb_get_width();
         int32_t height = (int32_t)fb_get_height();
         mouse_x += (int8_t)report[1];
-        mouse_y -= (int8_t)report[2];
+        mouse_y += (int8_t)report[2];
         if (mouse_x < 0) mouse_x = 0;
         if (mouse_y < 0) mouse_y = 0;
         if (width > 0 && mouse_x >= width) mouse_x = width - 1;

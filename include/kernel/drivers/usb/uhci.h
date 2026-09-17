@@ -18,7 +18,7 @@ typedef struct {
 } __attribute__((packed)) uhci_qh_t;
 
 void uhci_init(void);
-void uhci_poll(void);
+uint8_t uhci_poll(void);
 uint8_t uhci_mouse_active(void);
 
 #endif
