@@ -5,24 +5,6 @@
 #include <kernel/serial.h>
 #include <kernel/string.h>
 
-// Helper function to easily output numerical values ​​to the serial port.
-static void serial_write_num(uint32_t num) {
-    char buf[12];
-    int i = 10;
-    buf[11] = '\0';
-
-    if (num == 0) {
-        serial_write("0");
-        return;
-    }
-
-    while (num > 0 && i >= 0) {
-        buf[i--] = '0' + (num % 10);
-        num /= 10;
-    }
-    serial_write(&buf[i + 1]);
-}
-
 bool wav_validate_header(wav_header_t* header) {
     if (!header) return false;
 
