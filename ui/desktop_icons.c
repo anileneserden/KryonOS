@@ -27,7 +27,7 @@ void desktop_icons_draw(int32_t mx, int32_t my, bool click_started) {
     vfs_file_info_t files[16];
     int file_count = vfs_get_directory_files("C:/Users/anil/Desktop/", files, 16);
 
-    // Eğer yeni bir tıklama başladıysa ikon seçimini ve çift tıklamayı kontrol et
+    // If a new click started, handle icon selection and double-click detection
     if (click_started) {
         int clicked_index = -1;
         int check_x = 30;
@@ -52,25 +52,25 @@ void desktop_icons_draw(int32_t mx, int32_t my, bool click_started) {
             if (clicked_index == last_clicked_index && (global_tick_counter - last_click_tick) < 45) {
                 const char* filename = files[clicked_index].name;
                 
-                // Uzantı kontrolü için basit bir nokta arama
+                // Find a dot to perform a simple extension check
                 const char *ext = NULL;
                 for (const char *p = filename; *p != '\0'; p++) {
                     if (*p == '.') ext = p;
                 }
 
-                serial_write("cift tiklama algilandi: ikon ");
+                serial_write("Double-click detected: icon ");
                 serial_write(filename);
 
                 if (ext) {
-                    // Örneğin .txt dosyaları için notepad handler'ı
+                    // For example, use the notepad handler for .txt files
                     if (ext[1] == 't' && ext[2] == 'x' && ext[3] == 't' && ext[4] == '\0') {
-                        serial_write(" -> Tip: Metin Belgesi (Notepad Handler)");
+                        serial_write(" -> Type: Text Document (Notepad Handler)");
                     } else {
-                        serial_write(" -> Tip: Bilinmeyen Uzantı");
+                        serial_write(" -> Type: Unknown Extension");
                     }
                 } else {
-                    // Uzantısız veya .kef gibi doğrudan çekirdek/çalıştırılabilir dosyalar
-                    serial_write(" -> Tip: KEF / Çekirdek Modülü / Çalıştırılabilir");
+                    // Files without an extension or direct kernel/executable files such as .kef
+                    serial_write(" -> Type: KEF / Kernel Module / Executable");
                 }
                 serial_write("\n");
 
@@ -104,11 +104,11 @@ void desktop_icons_draw(int32_t mx, int32_t my, bool click_started) {
             gfx_fill_rect_alpha(render_x, render_y, box_w, box_h, 0x00FFFFFF, 85);
         }
 
-        // İkon kutusu ve simge çizimi
+        // Draw the icon box and icon
         gfx_fill_rect(icon_x, icon_y, 40, 40, 0xFFE0E0E0);
         gfx_fill_rect(icon_x + 4, icon_y + 4, 32, 28, 0xFFFFFFFF);
 
-        // Dosya adı etiketi
+        // File name label
         gfx_draw_text_utf8(icon_x - 4, icon_y + 45, 0xFFFFFFFF, files[i].name);
 
         icon_y += 70;

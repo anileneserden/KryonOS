@@ -9,10 +9,10 @@
 
 void cursor_init(void);
 void cursor_update_and_redraw(void);
-void cursor_hide(void); // Pencere/ekran çiziminden önce imleci silmek için
-void cursor_prepare_redraw(void); // İmleci back-buffer'a geri yükler, VRAM'e kopyalamaz
+void cursor_hide(void); // Remove the cursor before drawing windows or the screen
+void cursor_prepare_redraw(void); // Restore the cursor area to the back buffer without copying to VRAM
 void cursor_get_position(int32_t* x, int32_t* y);
-void cursor_show(void); // Çizim bittikten sonra imleci tekrar çizmek için
+void cursor_show(void); // Draw the cursor again after drawing is complete
 void cursor_refresh_background(void);
 void cursor_sync_position(void);
 void cursor_show_internal(bool blit);

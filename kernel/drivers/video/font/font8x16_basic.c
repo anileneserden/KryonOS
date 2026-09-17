@@ -8,20 +8,20 @@ static inline uint8_t row8(uint8_t ch, int r8) {
     return (r8 < 0 || r8 > 7) ? 0 : g[r8];
 }
 
-// Overlay bitmask'leri (bit7 soldaki piksel)
+// Overlay bitmasks (bit 7 is the leftmost pixel)
 #define BREVE_ROW0 0x18  //   **
 #define BREVE_ROW1 0x24  //  *  *
-#define UMLAUT     0x24  //  *  *  (iki nokta)
-#define CEDIL_ROW  0x18  //   **  (çengel)
+#define UMLAUT     0x24  //  *  *  (colon)
+#define CEDIL_ROW  0x18  //   **  (hook)
 
 uint8_t font8x16_basic_row(uint8_t ch, int row) {
     if (row < 0) row = 0;
     if (row > 15) row = 15;
 
-    // Temel 2x ölçeklenmiş harf
+    // Basic 2x scaled letters
     uint8_t base = row8(ch, row >> 1);
 
-    // --- ğ (0xF0): Orijinal g bozulmaz, üst üste breve eklenir ---
+    // --- ğ (0xF0): The original g is not altered, breve letters are added consecutively ---
     if (ch == 0xF0) {
         uint8_t line = row8('g', row >> 1);
         if (row == 0) line |= BREVE_ROW0;
@@ -29,7 +29,7 @@ uint8_t font8x16_basic_row(uint8_t ch, int row) {
         return line;
     }
 
-    // --- Ğ (0xD0): Orijinal G bozulmaz, üst üste breve eklenir ---
+    // --- Ğ (0xD0): The original G is not altered, breve letters are added consecutively ---
     if (ch == 0xD0) {
         uint8_t line = row8('G', row >> 1);
         if (row == 0) line |= BREVE_ROW0;
@@ -37,15 +37,15 @@ uint8_t font8x16_basic_row(uint8_t ch, int row) {
         return line;
     }
 
-    // --- ü (0xFC): Orijinal u bozulmaz, üst üste nokta eklenir ---
+    // --- ü (0xFC): The original u is not altered, dots are added consecutively ---
     if (ch == 0xFC) {
         uint8_t line = row8('u', row >> 1);
         if (row == 0 || row == 1) line |= UMLAUT;
         return line;
     }
 
-    // --- Ü (0xDC): Orijinal U bozulmaz, üst üste nokta eklenir ---
-    // (U harfinin üst orta kısmı boş olduğu için 0x24 noktaları çakışmaz)
+    // --- Ü (0xDC): The original U is not altered, dots are added consecutively ---
+    // (Since the upper-middle part of the letter U is empty, the 0x24 dots do not overlap)
     if (ch == 0xDC) {
         uint8_t line = row8('U', row >> 1);
         if (row == 0 || row == 1) line |= UMLAUT;
@@ -84,17 +84,17 @@ uint8_t font8x16_basic_row(uint8_t ch, int row) {
         return line;
     }
 
-    // --- İ (0xDD): I harfi boyutunda, üstüne nokta eklenmiş hali ---
+    // --- İ (0xDD): I-sized glyph with a dot added above ---
     if (ch == 0xDD) {
         uint8_t line = row8('I', row >> 1);
-        if (row == 0 || row == 1) line |= 0x18; // Üst merkeze nokta
+        if (row == 0 || row == 1) line |= 0x18; // Add a centered dot above
         return line;
     }
 
-    // --- ı (0xFD): Küçük dotless ı (i harfinin üst noktasız hali) ---
+    // --- ı (0xFD): Lowercase dotless ı (i without the upper dot) ---
     if (ch == 0xFD) {
         uint8_t line = row8('i', row >> 1);
-        if (row <= 2) line = 0; // Üstteki noktayı temizle
+        if (row <= 2) line = 0; // Clear the upper dot
         return line;
     }
 

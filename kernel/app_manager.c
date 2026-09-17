@@ -1,5 +1,5 @@
 #include <kernel/app.h>
-#include <kernel/mem/heap.h> // kmalloc için
+#include <kernel/mem/heap.h> // For kmalloc
 #include <kernel/serial.h>
 
 static app_t* app_list[MAX_APPS];
@@ -10,13 +10,13 @@ void app_manager_init(void) {
     for (int i = 0; i < MAX_APPS; i++) {
         app_list[i] = 0;
     }
-    serial_write("App Manager baslatildi.\n");
+    serial_write("App Manager initialized.\n");
 }
 
 app_t* app_create(const char* name, int width, int height, void (*init)(app_t*), void (*draw)(app_t*)) {
     if (app_count >= MAX_APPS) return 0;
 
-    // kmalloc kullanıyoruz (heap aktif)
+    // Use kmalloc (the heap is active)
     app_t* app = (app_t*)kmalloc(sizeof(app_t));
     if (!app) return 0;
 
@@ -29,7 +29,7 @@ app_t* app_create(const char* name, int width, int height, void (*init)(app_t*),
     }
     app->name[i] = '\0';
 
-    // Pencereyi oluştur ve uygulamaya bağla
+    // Create the window and attach it to the application
     app->window = wm_create_window(width, height, app->name);
     
     app->init = init;

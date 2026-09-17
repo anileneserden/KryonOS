@@ -11,12 +11,12 @@ static bool cursor_visible = true;
 extern void fb_blit_region(uint32_t x, uint32_t y, uint32_t width, uint32_t height);
 
 void cursor_init(void) {
-    // Fare sürücüsünün o anki gerçek konumunu doğrudan baz al
+    // Use the mouse driver's current position directly
     old_mouse_x = mouse_x;
     old_mouse_y = mouse_y;
     cursor_visible = true;
     
-    // Açılışta imlecin altındaki arka planı güvenli bir şekilde kaydet
+    // Safely save the background beneath the cursor at startup
     for (int y = 0; y < CURSOR_HEIGHT; y++) {
         for (int x = 0; x < CURSOR_WIDTH; x++) {
             int px = old_mouse_x + x;
@@ -33,7 +33,7 @@ void cursor_get_position(int32_t* x, int32_t* y) {
     if (y) *y = old_mouse_y;
 }
 
-// Ekran/pencere çizilmeden önce imleci back-buffer'dan kaldırır.
+// Remove the cursor from the back buffer before drawing the screen or windows.
 void cursor_prepare_redraw(void) {
     if (!cursor_visible) return;
 
@@ -49,7 +49,7 @@ void cursor_prepare_redraw(void) {
     cursor_visible = false;
 }
 
-// İmleci back-buffer'dan kaldırıp eski alanı hemen ekrana aktarır.
+// Remove the cursor from the back buffer and immediately blit its old area.
 void cursor_hide(void) {
     if (!cursor_visible) return;
 
@@ -58,11 +58,11 @@ void cursor_hide(void) {
 }
 
 void cursor_show_internal(bool blit) {
-    // Koordinatları güncel fare konumuna eşitle
+    // Synchronize the coordinates with the current mouse position
     old_mouse_x = mouse_x;
     old_mouse_y = mouse_y;
 
-    // Yeni konumun arka planını kaydet
+    // Save the background at the new position
     for (int y = 0; y < CURSOR_HEIGHT; y++) {
         for (int x = 0; x < CURSOR_WIDTH; x++) {
             int px = old_mouse_x + x;
@@ -73,13 +73,13 @@ void cursor_show_internal(bool blit) {
         }
     }
 
-    // Yeni konuma imleci çiz
+    // Draw the cursor at the new position
     for (int y = 0; y < CURSOR_HEIGHT; y++) {
         for (int x = 0; x < CURSOR_WIDTH; x++) {
             int px = old_mouse_x + x;
             int py = old_mouse_y + y;
             if (px >= 0 && (uint32_t)px < fb_get_width() && py >= 0 && (uint32_t)py < fb_get_height()) {
-                fb_putpixel(px, py, 0xFFFFFFFF); // Beyaz imleç
+                fb_putpixel(px, py, 0xFFFFFFFF); // White cursor
             }
         }
     }
@@ -96,7 +96,7 @@ void cursor_show(void) {
     cursor_show_internal(true);
 }
 
-extern uint8_t mouse_buttons; // mouse_ps2.c'den gelen buton durumu
+extern uint8_t mouse_buttons; // Button state from mouse_ps2.c
 static uint8_t old_mouse_buttons = 0;
 extern void damage_union_rect(int x, int y, int w, int h);
 extern void desktop_redraw(void);
@@ -112,21 +112,21 @@ void cursor_update_and_redraw(void) {
     old_mouse_buttons = mouse_buttons;
 
     if (position_changed) {
-        // 1. İmlecin eski yerini hasarlı (kirli) bölge ilan et ki arkası temizlensin
+        // 1. Mark the cursor's old area as damaged so its background is restored
         damage_union_rect(old_mouse_x, old_mouse_y, CURSOR_WIDTH, CURSOR_HEIGHT);
         
-        // 2. İmlecin yeni yerini de hasarlı bölge ilan et ki yeni konuma çizilsin
+        // 2. Mark the cursor's new area as damaged so it is drawn there
         damage_union_rect(mouse_x, mouse_y, CURSOR_WIDTH, CURSOR_HEIGHT);
     } else if (buttons_changed) {
-        // Sadece tıklandıysa (örn: pencere başlığına basıldıysa) imlecin olduğu alanı tazele
+        // Refresh the cursor area only when a click occurs (for example, on a window title bar)
         damage_union_rect(old_mouse_x, old_mouse_y, CURSOR_WIDTH, CURSOR_HEIGHT);
     }
 
-    // 3. Tüm çizim ve blit işlemlerini tek bir merkezden (desktop_redraw) yönet
+    // 3. Manage all drawing and blit operations through one central function (desktop_redraw)
     desktop_redraw();
 }
 
-// İmlecin altındaki arka planı o anki ekrandan yeniden okuyarak günceller (hayalet görüntüleri önler)
+// Refresh the background beneath the cursor from the current screen (prevents ghosting)
 void cursor_refresh_background(void) {
     for (int y = 0; y < CURSOR_HEIGHT; y++) {
         for (int x = 0; x < CURSOR_WIDTH; x++) {

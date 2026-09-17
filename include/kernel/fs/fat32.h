@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <kernel/fs/vfs.h>
 
-// FAT32 BIOS Parameter Block (BPB) ve Extended BPB yapısı
+// FAT32 BIOS Parameter Block (BPB) and Extended BPB structure
 typedef struct {
     uint8_t  boot_jump[3];
     uint8_t  oem_name[8];
@@ -38,23 +38,23 @@ typedef struct {
     uint8_t  file_system_type[8];
 } __attribute__((packed)) fat32_bpb_t;
 
-// Standard 32-Byte FAT Directory Entry Yapısı
+// Standard 32-byte FAT directory entry structure
 typedef struct {
-    uint8_t  name[11];       // 8 bayt dosya adı, 3 bayt uzantı (8.3 formatı)
-    uint8_t  attr;           // Dosya öznitelikleri (0x10 = Dizin, 0x20 = Arşiv/Dosya)
+    uint8_t  name[11];       // 8-byte filename, 3-byte extension (8.3 format)
+    uint8_t  attr;           // File attributes (0x10 = directory, 0x20 = archive/file)
     uint8_t  nt_reserved;
     uint8_t  creation_time_tenths;
     uint16_t creation_time;
     uint16_t creation_date;
     uint16_t last_access_date;
-    uint16_t first_cluster_high; // İlk kümenin yüksek 16 biti
+    uint16_t first_cluster_high; // High 16 bits of the first cluster
     uint16_t write_time;
     uint16_t write_date;
-    uint16_t first_cluster_low;  // İlk kümenin düşük 16 biti
-    uint32_t file_size;          // Bayt cinsinden dosya boyutu
+    uint16_t first_cluster_low;  // Low 16 bits of the first cluster
+    uint32_t file_size;          // File size in bytes
 } __attribute__((packed)) fat32_dir_entry_t;
 
-// Fonksiyon Prototipleri
+// Function prototypes
 fs_driver_t fat32_get_driver(void);
 bool fat32_init_disk(uint8_t drive, uint32_t lba_start);
 

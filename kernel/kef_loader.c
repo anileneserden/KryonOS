@@ -20,7 +20,7 @@ bool kef_load_and_run(const char* path) {
     uint8_t* file = (uint8_t*)vfs_read_file(path, &file_size);
 
     if (!file || file_size < sizeof(kef_header_t)) {
-        serial_write("KEF: dosya okunamadi veya cok kucuk.\n");
+        serial_write("KEF: file could not be read or is too small.\n");
         return false;
     }
 
@@ -33,22 +33,22 @@ bool kef_load_and_run(const char* path) {
         header->payload_size > file_size - header->header_size ||
         header->entry_offset >= header->payload_size ||
         header->payload_size > KEF_MAX_SIZE) {
-        serial_write("KEF: gecersiz veya desteklenmeyen baslik.\n");
+        serial_write("KEF: invalid or unsupported header.\n");
         return false;
     }
 
     uint8_t* payload = (uint8_t*)kmalloc(header->payload_size);
     if (!payload) {
-        serial_write("KEF: payload icin bellek ayrilamadi.\n");
+        serial_write("KEF: could not allocate memory for the payload.\n");
         return false;
     }
 
     memcpy(payload, file + header->header_size, header->payload_size);
 
     kef_install_api();
-    serial_write("KEF: dosya yuklendi, entry cagriliyor.\n");
+    serial_write("KEF: file loaded, calling entry point.\n");
     kef_entry_t entry = (kef_entry_t)(payload + header->entry_offset);
     (void)entry();
-    serial_write("KEF: uygulama geri dondu.\n");
+    serial_write("KEF: application returned.\n");
     return true;
 }

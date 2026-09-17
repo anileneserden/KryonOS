@@ -8,11 +8,11 @@ LDFLAGS = -T linker.ld -nostdlib
 BUILD = build
 TARGET = $(BUILD)/kryonos.bin
 
-# --- Disk İmajı Tanımlamaları ---
+# --- Disk Image Definitions ---
 DISK_KRYFS ?= $(HOME)/KryonOS/main/disk-kryfs.img
 DISK_FAT32 ?= $(HOME)/KryonOS/main/disk-fat32.img
 
-# --- Kaynak Dosyalar ---
+# --- Source Files ---
 SRC_S = \
     boot/boot.S \
     boot/paging.S
@@ -46,7 +46,7 @@ SRC_C = \
     ui/window.c \
     ui/wm.c
 
-# Kaynak yollarını build/ altındaki nesne dosyalarına (object) dönüştür
+# Convert source paths to object files under build/
 OBJS = $(SRC_S:%.S=$(BUILD)/%.o) \
         $(SRC_C:%.c=$(BUILD)/%.o)
 
@@ -56,12 +56,12 @@ $(TARGET): $(OBJS) linker.ld
 	@mkdir -p $(dir $@)
 	$(LD) $(LDFLAGS) -o $(TARGET) $(OBJS)
 
-# C dosyaları için hiyerarşik derleme kuralı
+# Hierarchical build rule for C files
 $(BUILD)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Assembly dosyaları için hiyerarşik derleme kuralı
+# Hierarchical build rule for assembly files
 $(BUILD)/%.o: %.S
 	@mkdir -p $(dir $@)
 	$(AS) $< -o $@

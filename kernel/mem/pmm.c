@@ -2,7 +2,7 @@
 #include <kernel/kef.h>
 #include <kernel/serial.h>
 
-// Bitmap'i çekirdekten ve ilk alanlardan çok güvenli bir uzakta (4MB) başlatıyoruz
+// Start the bitmap well away from the kernel and initial regions (4MB)
 static uint32_t* memory_map = (uint32_t*)0x400000; 
 static uint32_t total_blocks = 0;
 static uint32_t used_blocks = 0;
@@ -17,19 +17,19 @@ static inline void mmap_unset(int bit) {
 
 void pmm_init(multiboot_info_t* mboot) {
     (void)mboot;
-    serial_write("PMM: Fiziksel Bellek Yoneticisi baslatiliyor...\n");
+    serial_write("PMM: Physical Memory Manager starting...\n");
 
     // 32MB RAM kabul edelim
     total_blocks = (32 * 1024 * 1024) / PAGE_SIZE;
     used_blocks = total_blocks;
 
-    // Bitmap'i tamamen dolu (rezerve) olarak başlat
+    // Initialize the bitmap as completely full (reserved)
     for (uint32_t i = 0; i < (total_blocks / 32); i++) {
         memory_map[i] = 0xFFFFFFFF;
     }
 
-    // 5MB (0x500000) adresinden sonrasını serbest bırakıyoruz
-    // İlk 5MB; çekirdek, bootloader, framebuffer ve PMM bitmap alanı için güvenle rezerve kalır.
+    // Free memory after address 5MB (0x500000)
+    // Keep the first 5MB reserved for the kernel, bootloader, framebuffer, and PMM bitmap.
     uint32_t start_free_block = 0x500000 / PAGE_SIZE; 
     uint32_t end_free_block = total_blocks;
 
@@ -45,7 +45,7 @@ void pmm_init(multiboot_info_t* mboot) {
         used_blocks++;
     }
 
-    serial_write("PMM: Bellek haritasi basariyla olusturuldu (Guvenli Mod v2).\n");
+    serial_write("PMM: Memory map created successfully (Safe Mode v2).\n");
 }
 
 void* pmm_alloc_block(void) {

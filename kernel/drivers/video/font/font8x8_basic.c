@@ -2,9 +2,9 @@
 #include <kernel/drivers/video/font/font8x8_basic.h>
 
 /*
- * Çok basit bir 8x8 font tablosu.
- * Tam değil ama test için yeterli: rakamlar, bazı harfler vs.
- * Tanımlanmayan karakterler boş (hepsi 0) olacak.
+ * A very simple 8x8 font table.
+ * Not complete, but sufficient for testing: digits, some letters, etc.
+ * Undefined characters will be blank (all zeros).
  */
 
 const uint8_t font8x8_basic[256][8] = {
@@ -39,7 +39,7 @@ const uint8_t font8x8_basic[256][8] = {
         0x66, // **  ** 
         0x66, // **  ** 
         0x3E, //  ***** 
-        0x18  //   **    <- alt kısmı daha net
+        0x18  //   **
     },
     ['H'] = { 0x66,0x66,0x66,0x7E,0x66,0x66,0x66,0x00 },
     ['I'] = { 0x3C,0x18,0x18,0x18,0x18,0x18,0x3C,0x00 },
@@ -99,7 +99,7 @@ const uint8_t font8x8_basic[256][8] = {
     ['y'] = { 0x00,0x00,0x66,0x66,0x66,0x3E,0x06,0x3C }, // y
     ['z'] = { 0x00,0x00,0x7E,0x0C,0x18,0x30,0x7E,0x00 }, // z
 
-    // ñ  (U+00F1)  -> tek-byte latin1/cp1252: 0xF1
+    // ñ  (U+00F1)  -> single-byte Latin-1/cp1252: 0xF1
     [0xF1] = { 0x00,0x00,0x36,0x00,0x7C,0x66,0x66,0x66 }, // ñ
 
     ['.'] = { 0x00,0x00,0x00,0x00,0x00,0x18,0x18,0x00 },
@@ -228,13 +228,13 @@ const uint8_t font8x8_basic[256][8] = {
     // ÷ (U+00F7) -> 0xF8
     [0xF8] = {
         0x00,
-        0x18, // nokta
-        0x18, // nokta
+        0x18, // dot
+        0x18, // dot
         0x00,
-        0x7E, // çizgi
+        0x7E, // line
         0x00,
-        0x18, // nokta
-        0x18  // nokta
+        0x18, // dot
+        0x18  // dot
     },
 
     ['~'] = {

@@ -16,7 +16,7 @@ void gfx_fill_rect(int x, int y, int width, int height, uint32_t color) {
     }
 }
 
-// Gerçek RGBA Alpha Blending destekli dikdörtgen çizim fonksiyonu
+// Rectangle drawing function with true RGBA alpha blending
 void gfx_fill_rect_alpha(int x, int y, int w, int h, uint32_t color, uint8_t alpha) {
     uint32_t sw = fb_get_width();
     uint32_t sh = fb_get_height();
@@ -35,7 +35,7 @@ void gfx_fill_rect_alpha(int x, int y, int w, int h, uint32_t color, uint8_t alp
             uint8_t bg_g = (bg_color >> 8) & 0xFF;
             uint8_t bg_b = bg_color & 0xFF;
 
-            // Alpha harmanlama formülü: Result = (Source * Alpha + Background * (255 - Alpha)) / 255
+            // Alpha blending formula: Result = (Source * Alpha + Background * (255 - Alpha)) / 255
             uint8_t res_r = (r * alpha + bg_r * (255 - alpha)) / 255;
             uint8_t res_g = (g * alpha + bg_g * (255 - alpha)) / 255;
             uint8_t res_b = (b * alpha + bg_b * (255 - alpha)) / 255;
@@ -49,16 +49,16 @@ void gfx_fill_rect_alpha(int x, int y, int w, int h, uint32_t color, uint8_t alp
 void gfx_draw_rect(int x, int y, int width, int height, uint32_t color) {
     if (width <= 0 || height <= 0) return;
 
-    // Üst ve Alt Kenar çizgileri
+    // Top and bottom edge lines
     for (int cx = 0; cx < width; cx++) {
-        gfx_draw_pixel(x + cx, y, color);               // Üst kenar
-        gfx_draw_pixel(x + cx, y + height - 1, color);  // Alt kenar
+        gfx_draw_pixel(x + cx, y, color);               // Top edge
+        gfx_draw_pixel(x + cx, y + height - 1, color);  // Bottom edge
     }
 
-    // Sol ve Sağ Kenar çizgileri (köşeler dahil)
+    // Left and right edge lines (including corners)
     for (int cy = 0; cy < height; cy++) {
-        gfx_draw_pixel(x, y + cy, color);               // Sol kenar
-        gfx_draw_pixel(x + width - 1, y + cy, color);   // Sağ kenar
+        gfx_draw_pixel(x, y + cy, color);               // Left edge
+        gfx_draw_pixel(x + width - 1, y + cy, color);   // Right edge
     }
 }
 
@@ -67,7 +67,7 @@ void gfx_fill_rounded_rect(int x, int y, int width, int height, int radius, uint
         for (int cx = 0; cx < width; cx++) {
             int draw_pixel = 1;
 
-            // Sol-Üst Köşe
+            // Top-left corner
             if (cx < radius && cy < radius) {
                 int dx = radius - cx;
                 int dy = radius - cy;
@@ -75,7 +75,7 @@ void gfx_fill_rounded_rect(int x, int y, int width, int height, int radius, uint
                     draw_pixel = 0;
                 }
             }
-            // Sağ-Üst Köşe
+            // Top-right corner
             else if (cx >= width - radius && cy < radius) {
                 int dx = cx - (width - radius - 1);
                 int dy = radius - cy;
@@ -83,7 +83,7 @@ void gfx_fill_rounded_rect(int x, int y, int width, int height, int radius, uint
                     draw_pixel = 0;
                 }
             }
-            // Sol-Alt Köşe
+            // Bottom-left corner
             else if (cx < radius && cy >= height - radius) {
                 int dx = radius - cx;
                 int dy = cy - (height - radius - 1);
@@ -91,7 +91,7 @@ void gfx_fill_rounded_rect(int x, int y, int width, int height, int radius, uint
                     draw_pixel = 0;
                 }
             }
-            // Sağ-Alt Köşe
+            // Bottom-right corner
             else if (cx >= width - radius && cy >= height - radius) {
                 int dx = cx - (width - radius - 1);
                 int dy = cy - (height - radius - 1);
@@ -127,7 +127,7 @@ void gfx_draw_text(int x, int y, uint32_t color, const char* s) {
     }
 }
 
-/* Basit UTF-8 kod çözücü yardımcı fonksiyonu */
+/* Simple UTF-8 decoder helper function */
 static uint32_t utf8_next(const char** s_ptr) {
     const uint8_t* s = (const uint8_t*)*s_ptr;
     if (!s || !*s) return 0;
@@ -152,7 +152,7 @@ static uint32_t utf8_next(const char** s_ptr) {
         return '?';
     }
 
-    // Devam baytlarını işle
+    // Process continuation bytes
     for (int i = 1; i < bytes; i++) {
         if ((s[i] & 0xC0) != 0x80) break;
         cp = (cp << 6) | (s[i] & 0x3F);

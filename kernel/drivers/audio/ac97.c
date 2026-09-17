@@ -32,11 +32,11 @@ static ac97_bdl_entry_t* bdl_list = 0;
 static int16_t* pcm_buffer = 0;
 
 int ac97_init(void) {
-    serial_write("AC97: Surucu baslatiliyor...\n");
+    serial_write("AC97: Starting driver...\n");
 
     pci_device_t* dev = pci_get_device(AC97_VENDOR_ID, AC97_DEVICE_ID);
     if (!dev) {
-        serial_write("AC97: PCI uzerinde AC97 cihazı bulunamadi!\n");
+        serial_write("AC97: AC97 device not found on PCI bus!\n");
         return -1;
     }
 
@@ -52,15 +52,15 @@ int ac97_init(void) {
     for (volatile int i = 0; i < 10000; i++);
     ac97_outl(ac97_dev.nabmbar + AC97_GLOB_CNT, 0x00000000);
 
-    // Ses Seviyelerini Aç
+    // Enable audio levels
     ac97_outw(ac97_dev.nambar + AC97_MASTER_VOL, 0x0000);
     ac97_outw(ac97_dev.nambar + AC97_PCM_OUT_VOL, 0x0000);
 
-    // Tampon Ayırma
+    // Allocate buffers
     bdl_list = (ac97_bdl_entry_t*)kmalloc(sizeof(ac97_bdl_entry_t) * 32);
     pcm_buffer = (int16_t*)kmalloc(48000 * sizeof(int16_t) * 2);
 
-    serial_write("AC97: Surucu basariyla kuruldu ve hazir.\n");
+    serial_write("AC97: Driver initialized and ready.\n");
     return 0;
 }
 
@@ -79,27 +79,27 @@ void ac97_set_sample_rate(uint32_t hz) {
 void ac97_play_sound(uint16_t* buffer, uint32_t length) {
     if (!ac97_dev.found || !bdl_list || !buffer || length == 0) return;
 
-    // AC'97 DMA Kontrolcüsünü durdur
+    // Stop the AC'97 DMA controller
     ac97_outb(ac97_dev.nabmbar + AC97_PO_CR, 0x00);
 
-    // 16-bit stereo/mono için toplam sample (word) sayısı
+    // Total sample (word) count for 16-bit stereo/mono
     uint32_t total_samples = length / 2;
     uint32_t remaining_samples = total_samples;
     uint32_t current_offset = 0;
     int bdl_index = 0;
 
-    // BDL tablgosunu temizle
+    // Clear the BDL table
     memset(bdl_list, 0, sizeof(ac97_bdl_entry_t) * 32);
 
-    // Veriyi 32768 sample'lık (64 KB) parçalara bölerek BDL tablosuna doldur
+    // Split the data into 32768-sample (64 KB) chunks and fill the BDL table
     while (remaining_samples > 0 && bdl_index < 32) {
         uint32_t chunk_samples = (remaining_samples > 32768) ? 32768 : remaining_samples;
 
-        // VMM mimarinde identity-mapping kullanıldığı için buffer adresi doğrudan fiziksel adrestir.
+        // Because the VMM uses identity mapping, the buffer address is directly physical.
         bdl_list[bdl_index].ptr = (uint32_t)(buffer + current_offset);
         bdl_list[bdl_index].samples = (uint16_t)chunk_samples;
         
-        // Varsayılan bayrak 0 (Devam ediyor)
+        // Default flags are 0 (continue)
         bdl_list[bdl_index].flags = 0;
 
         remaining_samples -= chunk_samples;
@@ -109,20 +109,20 @@ void ac97_play_sound(uint16_t* buffer, uint32_t length) {
 
     if (bdl_index == 0) return;
 
-    // Son BDL elemanına Interrupt On Completion (IOC) bayrağını koy
+    // Set the Interrupt On Completion (IOC) flag on the last BDL entry
     bdl_list[bdl_index - 1].flags = 0x8000;
 
-    // BDL Adresini yaz
+    // Write the BDL address
     ac97_outl(ac97_dev.nabmbar + AC97_PO_BDBAR, (uint32_t)bdl_list);
 
-    // Son geçerli indeks değerini (LVI) bildir (0-indexed olduğu için bdl_index - 1)
+    // Set the last valid index (LVI) (bdl_index - 1 because it is zero-indexed)
     ac97_outb(ac97_dev.nabmbar + AC97_PO_LVI, (uint8_t)(bdl_index - 1));
 
-    // Transferi başlat (Run/Pause bitini set et)
+    // Start the transfer (set the Run/Pause bit)
     ac97_outb(ac97_dev.nabmbar + AC97_PO_CR, AC97_CR_RPBM);
 
-    serial_write("AC97: Ses calmaya basladi (BDL parca sayisi: ");
-    // basit bir log bildirimi
+    serial_write("AC97: Playing sound (BDL chunk count: ");
+    serial_write_num(bdl_index);
     serial_write("OK)\n");
 }
 

@@ -3,11 +3,11 @@
 
 #include <stdint.h>
 
-// PCI I/O Portları
+// PCI I/O ports
 #define PCI_CONFIG_ADDRESS 0xCF8
 #define PCI_CONFIG_DATA    0xCFC
 
-// PCI Command Register Bit Tanımları
+// PCI command register bit definitions
 #define PCI_COMMAND_IO     0x01 // I/O Space Enable
 #define PCI_COMMAND_MEMORY 0x02 // Memory Space Enable
 #define PCI_COMMAND_MASTER 0x04 // Bus Master Enable
@@ -15,7 +15,7 @@
 // PCI Header Tipi
 #define PCI_HEADER_TYPE_MULTIFUNCTION 0x80
 
-// PCI Cihaz Yapısı
+// PCI device structure
 typedef struct {
     uint8_t  bus;
     uint8_t  slot;

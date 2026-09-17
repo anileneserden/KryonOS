@@ -105,17 +105,17 @@ void wm_close_window(window_t* win) {
 void wm_draw_window(window_t* win) {
     if (!win || win->width == 0) return;
 
-    // 1. Pencere Gövdesi
+    // 1. Window body
     gfx_fill_rect(win->x, win->y, win->width, win->height, 0xFF303030);
 
-    // 2. Başlık Çubuğu
+    // 2. Title bar
     uint32_t title_color = win->is_active ? 0xFF007ACC : 0xFF505050;
     gfx_fill_rect(win->x, win->y, win->width, 24, title_color);
 
-    // 3. Başlık Metni
+    // 3. Title text
     gfx_draw_text_utf8(win->x + 8, win->y + 6, 0xFFFFFFFF, win->title);
 
-    // 4. Kapat [X] Butonu (Sağ üst köşe)
+    // 4. Close [X] button (top-right corner)
     int btn_x = win->x + win->width - 22;
     int btn_y = win->y + 3;
     gfx_fill_rect(btn_x, btn_y, 18, 18, 0xFFE81123);
@@ -151,7 +151,7 @@ static int get_resize_direction(window_t* win, int x, int y) {
     int top = win->y;
     int bottom = win->y + win->height;
 
-    // Kenar ve köşe kontrolü için tolerans payı
+    // Tolerance for edge and corner detection
     if (x >= left - RESIZE_BORDER && x <= right + RESIZE_BORDER &&
         y >= top - RESIZE_BORDER && y <= bottom + RESIZE_BORDER) {
         
@@ -206,7 +206,7 @@ void wm_process_input(void) {
     uint8_t left_pressed = mouse_buttons & 0x01;
     uint8_t prev_left = prev_buttons & 0x01;
 
-    // 1. Sol tuş bırakıldıysa (Release), sürükleme veya boyutlandırma kesinlikle bitmelidir!
+    // 1. If the left button was released, dragging or resizing must end.
     if (!left_pressed) {
         if (dragged_window || resized_window) {
             cursor_prepare_redraw();
@@ -225,10 +225,10 @@ void wm_process_input(void) {
             cursor_show();
         }
         prev_buttons = mouse_buttons;
-        return; // Tuş basılı değilse başka pencere hareketi işlenemez
+        return; // No other window movement can be processed while the button is not pressed
     }
 
-    // 2. Sol tuş basılı ve yeni tıklandıysa (Click Start / Focus / Drag Start)
+    // 2. If the left button is pressed and was just clicked (click/focus/drag start)
     if (left_pressed && !prev_left) {
         window_t* target = wm_find_at(mouse_x, mouse_y);
         if (target) {
@@ -239,7 +239,7 @@ void wm_process_input(void) {
 
             cursor_prepare_redraw();
 
-            // [X] Kapat Butonu
+            // [X] Close button
             if (mouse_x >= btn_x && mouse_x <= btn_x + 18 &&
                 mouse_y >= btn_y && mouse_y <= btn_y + 18) {
                 wm_close_window(target);
@@ -249,13 +249,13 @@ void wm_process_input(void) {
                 return;
             }
 
-            // Boyutlandırma (Resize) Kontrolü
+            // Resize check
             int dir = get_resize_direction(target, mouse_x, mouse_y);
             if (dir != RESIZE_NONE) {
                 resized_window = target;
                 resize_direction = dir;
             } else {
-                // Sadece başlık çubuğuna tıklandıysa sürüklemeyi başlat
+                // Start dragging only when the title bar was clicked
                 if (mouse_y >= target->y && mouse_y < target->y + WM_TITLEBAR_HEIGHT) {
                     dragged_window = front_win;
                     dragged_window->is_dragging = true;
@@ -269,11 +269,11 @@ void wm_process_input(void) {
             cursor_show();
         } 
         else {
-            // Masaüstü boşluğuna tıklandıysa odak düşürme
+            // Remove focus when the desktop background is clicked
             if (active_window != 0) {
                 cursor_prepare_redraw();
                 
-                // Tüm pencerelerin alanlarını hasarlı işaretle ki gri başlık çubuğuna dönecekleri anlaşılsın
+                // Mark all window areas as damaged so their title bars return to gray
                 for (int i = 0; i < window_count; i++) {
                     if (window_list[i].width > 0) {
                         damage_union_rect(window_list[i].x, window_list[i].y, window_list[i].width, window_list[i].height);
@@ -283,7 +283,7 @@ void wm_process_input(void) {
                 
                 active_window = 0;
 
-                // İmlecin yerini de hasara ekle
+                // Include the cursor position in the damaged area
                 int32_t cur_x, cur_y;
                 cursor_get_position(&cur_x, &cur_y);
                 damage_union_rect(cur_x, cur_y, CURSOR_WIDTH, CURSOR_HEIGHT);
@@ -294,7 +294,7 @@ void wm_process_input(void) {
             }
         }
     }
-    // 3. Sol tuş basilidir ve fare hareket ediyordur (Dragging veya Resizing devam ediyor)
+    // 3. The left button is held and the mouse is moving (dragging or resizing continues)
     else if (left_pressed && prev_left) {
         if (resized_window && resize_direction != RESIZE_NONE) {
             int old_x = resized_window->x;
@@ -353,32 +353,32 @@ void wm_process_input(void) {
             }
         }
         else if (dragged_window && dragged_window->is_dragging) {
-            // İmlecin konumuna göre hedef pencere koordinatı
+            // Target window coordinates based on the cursor position
             int new_x = mouse_x - dragged_window->drag_offset_x;
             int new_y = mouse_y - dragged_window->drag_offset_y;
 
-            // Ekran sınırlarını al
+            // Get the screen boundaries
             int screen_w = fb_get_width();
             int screen_h = fb_get_height();
 
-            // Sınırlandırma: Pencere imleci takip etsin ama başlık çubuğunun 
-            // en azından tutulabilecek bir kısmı (örn: 50 pikseli) her zaman ekranda kalsın.
+            // Constrain the window to follow the cursor while keeping part of the title bar
+            // (for example, 50 pixels) visible and reachable on screen.
             
-            // Sol sınır: Pencerenin sağ kısmı en azından 50 piksel içeride kalsın ki yakalayabilelim
+            // Left boundary: keep at least 50 pixels of the window's right side visible
             if (new_x + dragged_window->width < 50) {
                 new_x = 50 - dragged_window->width;
             }
-            // Sağ sınır: Pencerenin sol kısmı ekranın sağından çok fazla taşmasın
+            // Right boundary: keep the window's left side from extending too far past the screen
             if (new_x > screen_w - 50) {
                 new_x = screen_w - 50;
             }
 
-            // Üst sınır: Başlık çubuğu yukarıdan tamamen kaybolmasın
+            // Top boundary: keep the title bar from disappearing above the screen
             if (new_y < 0) {
                 new_y = 0;
             }
             
-            // Alt sınır: Pencere alt taraftan kaybolmasın, başlık çubuğu kalsın
+            // Bottom boundary: keep the title bar visible above the taskbar
             int taskbar_h = 36;
             
             if (new_y > screen_h - taskbar_h - WM_TITLEBAR_HEIGHT) {
@@ -413,16 +413,16 @@ void wm_process_input(void) {
             }
         }
         else {
-            // ÖNEMLİ KISIM: Sol tuşa basılı ama hiçbir pencereyi sürüklemiyoruz.
-            // Sadece imleç pencerelerin üzerinden geçiyor.
+            // IMPORTANT: The left button is held, but no window is being dragged.
+            // The cursor is only passing over the windows.
             int32_t old_cursor_x, old_cursor_y;
             cursor_get_position(&old_cursor_x, &old_cursor_y);
 
             if (old_cursor_x != mouse_x || old_cursor_y != mouse_y) {
                 cursor_prepare_redraw();
 
-                // İmlecin eski ve yeni yerini hasarlı ilan et ki arkasındaki 
-                // başlık çubuğu/pencere renkleri bozulmasın, yeniden çizilsin.
+                // Mark the cursor's old and new positions as damaged so the underlying
+                // title bar/window colors are redrawn correctly.
                 damage_union_rect(old_cursor_x, old_cursor_y, CURSOR_WIDTH, CURSOR_HEIGHT);
                 damage_union_rect(mouse_x, mouse_y, CURSOR_WIDTH, CURSOR_HEIGHT);
 

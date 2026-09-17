@@ -2,19 +2,19 @@
 #include <kernel/serial.h>
 #include <kernel/string.h>
 
-// A-Z arası sürücü tablosu (26 harf)
+// Drive table for A-Z (26 letters)
 static vfs_mount_t mount_table[26];
 
 void vfs_init(void) {
     for (int i = 0; i < 26; i++) {
         mount_table[i].is_mounted = false;
     }
-    serial_write("VFS (Virtual File System) katmani baslatildi.\n");
+    serial_write("VFS (Virtual File System) layer initialized.\n");
 }
 
 bool vfs_mount(char drive_letter, const char* volume_name, fs_driver_t driver) {
     if (drive_letter >= 'a' && drive_letter <= 'z') {
-        drive_letter -= 32; // Büyük harfe çevir
+        drive_letter -= 32; // Convert to uppercase
     }
 
     int index = drive_letter - 'A';
@@ -31,7 +31,7 @@ bool vfs_mount(char drive_letter, const char* volume_name, fs_driver_t driver) {
     }
     mount_table[index].volume_name[i] = '\0';
 
-    serial_write("VFS: Surucu basariyla baglandi -> ");
+    serial_write("VFS: Driver mounted successfully -> ");
     char dl_str[2] = { drive_letter, '\0' };
     serial_write(dl_str);
     serial_write(":\\\n");
@@ -39,13 +39,13 @@ bool vfs_mount(char drive_letter, const char* volume_name, fs_driver_t driver) {
     return true;
 }
 
-// "C:/dosya.txt" veya "C:\dosya.txt" yolundan harfi ve dosya adını ayırır
+// Split the drive letter and filename from a path such as "C:/file.txt" or "C:\\file.txt"
 static bool parse_path(const char* full_path, char* out_drive, const char** out_filename) {
     if (!full_path || full_path[0] == '\0') return false;
 
     if (full_path[1] == ':' && (full_path[2] == '/' || full_path[2] == '\\')) {
         *out_drive = full_path[0];
-        *out_filename = full_path + 3; // Harf ve ayırıcıyı atla
+        *out_filename = full_path + 3; // Skip the drive letter and separator
         return true;
     }
     return false;
@@ -56,7 +56,7 @@ void* vfs_read_file(const char* full_path, uint32_t* out_size) {
     const char* filename;
 
     if (!parse_path(full_path, &drive, &filename)) {
-        serial_write("VFS Hata: Gecersiz yol formati! (Ornek: C:/dosya.txt)\n");
+        serial_write("VFS Error: Invalid path format! (Example: C:/file.txt)\n");
         if (out_size) *out_size = 0;
         return 0;
     }
@@ -65,7 +65,7 @@ void* vfs_read_file(const char* full_path, uint32_t* out_size) {
     int index = drive - 'A';
 
     if (!mount_table[index].is_mounted) {
-        serial_write("VFS Hata: Surucu takili degil!\n");
+        serial_write("VFS Error: Driver is not mounted!\n");
         if (out_size) *out_size = 0;
         return 0;
     }
@@ -78,12 +78,12 @@ void vfs_list_drive(char drive_letter) {
     int index = drive_letter - 'A';
 
     if (!mount_table[index].is_mounted) {
-        serial_write("VFS: Surucu takili degil.\n");
+        serial_write("VFS: Driver is not mounted.\n");
         return;
     }
 
     serial_write("\n========================================\n");
-    serial_write(" Surucu ");
+    serial_write(" Drive ");
     char dl[2] = { mount_table[index].drive_letter, '\0' };
     serial_write(dl);
     serial_write(":\\ [ ");
@@ -102,7 +102,7 @@ int vfs_get_directory_files(const char* full_path, vfs_file_info_t* out_list, in
     const char* rel_path;
 
     if (!parse_path(full_path, &drive, &rel_path)) {
-        serial_write("VFS Hata: Gecersiz yol formati!\n");
+        serial_write("VFS Error: Invalid path format!\n");
         return 0;
     }
 
@@ -110,7 +110,7 @@ int vfs_get_directory_files(const char* full_path, vfs_file_info_t* out_list, in
     int index = drive - 'A';
 
     if (!mount_table[index].is_mounted) {
-        serial_write("VFS Hata: Surucu takili degil!\n");
+        serial_write("VFS Error: Driver is not mounted!\n");
         return 0;
     }
 
