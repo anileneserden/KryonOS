@@ -491,6 +491,7 @@ static void uhci_start_mouse_interrupt(uint8_t address) {
         mouse_interrupt_tds[i].status = TD_STAT_ACTIVED | TD_STAT_IOC
             | uhci_td_speed_flags | (3 << 27);
         mouse_interrupt_tds[i].token = ((uint32_t)(usb_interrupt_max_packet - 1) << 21)
+            | ((uint32_t)(i & 1) << 19)
             | ((uint32_t)(usb_interrupt_endpoint & 0x0F) << 15)
             | ((uint32_t)address << 8) | USB_PID_IN;
         mouse_interrupt_tds[i].buffer = virt_to_phys(mouse_interrupt_buffers[i]);
