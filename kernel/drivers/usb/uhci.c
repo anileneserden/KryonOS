@@ -26,6 +26,16 @@
 #define PORTSC_RESET     (1 << 9) // Port Reset
 #define PORTSC_POW       (1 << 12)// Port Power
 
+// TD Status Bits
+#define TD_STAT_ACTIVED      (1 << 23) // Active bit
+#define TD_STAT_IOC          (1 << 24) // Interrupt on Completion
+#define TD_STAT_SPD          (1 << 29) // Short Packet Detect
+
+// TD Token Packet Identifiers (PID)
+#define USB_PID_SETUP        0x2D
+#define USB_PID_IN           0x69
+#define USB_PID_OUT          0xE1
+
 // Frame List Size (1024 32-bit pointers)
 #define FRAME_LIST_COUNT 1024
 
@@ -33,6 +43,15 @@ static uint16_t uhci_io_base = 0;
 
 // 4KB aligned Frame List
 static uint32_t __attribute__((aligned(4096))) frame_list[FRAME_LIST_COUNT];
+
+// Setup packet structure for USB control transfers
+typedef struct {
+    uint8_t  bmRequestType;
+    uint8_t  bRequest;
+    uint16_t wValue;
+    uint16_t wIndex;
+    uint16_t wLength;
+} __attribute__((packed)) usb_setup_packet_t;
 
 // UHCI I/O Helpers
 static inline void uhci_outw(uint16_t port, uint16_t val) {
@@ -47,6 +66,69 @@ static inline uint16_t uhci_inw(uint16_t port) {
     uint16_t ret;
     __asm__ volatile ("inw %1, %0" : "=a"(ret) : "Nd"(port));
     return ret;
+}
+
+// Virtual to Physical address conversion helper for DMA
+static inline uint32_t virt_to_phys(volatile void* virt_addr) {
+    // KryonOS uses full 4GB identity mapping (VMM large pages), 
+    // so virtual and physical addresses are identical, but wrapped for safety.
+    return (uint32_t)virt_addr;
+}
+
+// Global aligned DMA buffers and descriptors for UHCI control transfers
+static uhci_qh_t control_qh __attribute__((aligned(16)));
+static uhci_td_t setup_td __attribute__((aligned(16))) ;
+static uhci_td_t status_td __attribute__((aligned(16)));
+static usb_setup_packet_t setup_pkt __attribute__((aligned(4)));
+
+// Set Address implementation with QH and TD chaining for UHCI control transfer
+static void uhci_set_address(uint8_t port_index, uint8_t new_address) {
+    serial_write("UHCI: Setting USB device address to 1...\n");
+
+    // 1. Prepare the 8-byte setup packet for SET_ADDRESS
+    setup_pkt.bmRequestType = 0x00; // Host-to-device, Standard, Recipient: Device
+    setup_pkt.bRequest      = 0x05; // SET_ADDRESS
+    setup_pkt.wValue        = new_address; // New device address (1)
+    setup_pkt.wIndex        = 0x0000;
+    setup_pkt.wLength       = 0x0000;
+
+    // 2. Configure SETUP TD
+    setup_td.link   = virt_to_phys(&status_td);
+    setup_td.status = TD_STAT_ACTIVED | (3 << 27); // Active bit set + 3 max errors
+    setup_td.token  = (7 << 21) | (1 << 26) | (0 << 19) | (0 << 15) | (0 << 8) | USB_PID_SETUP;
+    setup_td.buffer = virt_to_phys(&setup_pkt);
+
+    // 3. Configure STATUS TD
+    status_td.link   = 1; // Terminate (T = 1)
+    status_td.status = TD_STAT_ACTIVED | TD_STAT_IOC | (3 << 27);
+    status_td.token  = (0x7FF << 21) | (1 << 26) | (1 << 19) | (0 << 15) | (0 << 8) | USB_PID_IN;
+    status_td.buffer = 0;
+
+    // 4. Configure Queue Head (QH)
+    control_qh.head_link    = 1; // Terminate
+    control_qh.element_link = virt_to_phys(&setup_td);
+
+    // 5. Submit the Queue Head to frame list indexes
+    for (int i = 0; i < FRAME_LIST_COUNT; i++) {
+        frame_list[i] = virt_to_phys(&control_qh) | 0x02; // Bit 1 set = QH pointer
+    }
+    
+    serial_write("UHCI: SET_ADDRESS Queue Head and descriptors dispatched.\n");
+
+    // 6. Wait for transfer completion with a larger/safe polling loop and yield/delay
+    int timeout = 400000;
+    while ((setup_td.status & TD_STAT_ACTIVED) && (timeout > 0)) {
+        timeout--;
+        // Küçük bir IO gecikmesi koyarak donanımın nefes almasını sağlayalım
+        __asm__ volatile("nop");
+    }
+
+    if (!(setup_td.status & TD_STAT_ACTIVED)) {
+        serial_write("UHCI: SET_ADDRESS completed successfully! Device is now at address 1.\n");
+    } else {
+        // Hangi aşamada kaldığını görmek için statüsü yazdıralım
+        serial_write("UHCI: Warning: SET_ADDRESS timed out or failed.\n");
+    }
 }
 
 static void uhci_check_ports(void) {
@@ -70,8 +152,6 @@ static void uhci_check_ports(void) {
             serial_write("UHCI: Device connected! Resetting port...\n");
             
             // In UHCI, CSC (bit 1) and PEC (bit 3) are W1C (Write 1 to Clear). 
-            // When writing to PORTSC, we must write 1 to clear change bits if they are set, 
-            // otherwise they might interfere with state changes.
             uint16_t reset_val = PORTSC_POW | PORTSC_RESET;
             if (status & PORTSC_CSC) reset_val |= PORTSC_CSC;
             if (status & PORTSC_PEC) reset_val |= PORTSC_PEC;
@@ -100,6 +180,9 @@ static void uhci_check_ports(void) {
 
             if (status & PORTSC_PORT_EN) {
                 serial_write("UHCI: Port successfully enabled and device ready!\n");
+                
+                // Trigger address assignment for the connected device (assigning address 1)
+                uhci_set_address(i, 1);
             } else {
                 serial_write("UHCI: Port reset failed or device unsupported.\n");
             }
@@ -112,7 +195,7 @@ static void uhci_check_ports(void) {
 void uhci_init(void) {
     serial_write("UHCI: Initializing driver...\n");
 
-    // Search for UHCI controller on the PCI bus using the new helper function
+    // Search for UHCI controller on the PCI bus using the helper function
     pci_device_t* dev = pci_get_device_by_class(0x0C, 0x03, 0x00);
 
     if (!dev) {
@@ -146,7 +229,8 @@ void uhci_init(void) {
     for (int i = 0; i < FRAME_LIST_COUNT; i++) {
         frame_list[i] = 1; // Terminate bit (T = 1)
     }
-    uhci_outl(uhci_io_base + UHCI_FRBASEADD, (uint32_t)frame_list);
+    // Provide physical address of frame_list to the controller
+    uhci_outl(uhci_io_base + UHCI_FRBASEADD, virt_to_phys(frame_list));
     uhci_outw(uhci_io_base + UHCI_FRNUM, 0);
 
     // 3. Start the Controller (Run/Stop)

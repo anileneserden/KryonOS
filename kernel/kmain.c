@@ -23,16 +23,6 @@
 #include <kernel/kef.h>
 #include <arch/x86/io.h>
 
-// Windows XP startup melody notes (Hz, ms)
-static note_t win_xp_tune[] = {
-    {311, 200}, // D#4
-    {466, 200}, // A#4
-    {392, 200}, // G4
-    {622, 350}, // D#5
-    {466, 300}, // A#4
-    {622, 600}  // D#5
-};
-
 static inline uint8_t inb_port(uint16_t port) {
     uint8_t ret;
     __asm__ volatile ("inb %1, %0" : "=a"(ret) : "Nd"(port));
@@ -181,8 +171,8 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     if (ac97_init() == 0) {
         ac97_set_master_volume(100);
 
-        serial_write("AC97: Attempting to play error.wav...\n");
-        wav_play_file("C:/Kryon/Media/error.wav");
+        serial_write("AC97: Attempting to play startup.wav...\n");
+        wav_play_file("C:/Kryon/Media/startup.wav");
     }
 
     // 6. Main event loop
