@@ -13,6 +13,7 @@
 #include <kernel/drivers/input/mouse_ps2.h>
 #include <kernel/drivers/input/keyboard_ps2.h>
 #include <kernel/drivers/pci.h>
+#include <kernel/drivers/usb/uhci.h>
 #include <ui/cursor.h>
 #include <ui/desktop.h>
 #include <kernel/mem/heap.h>
@@ -114,6 +115,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
 
     // 2. PCI and display hardware drivers
     pci_init();
+    uhci_init();
     fb_init(mboot);
     ata_init();
 

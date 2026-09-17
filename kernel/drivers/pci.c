@@ -76,6 +76,18 @@ pci_device_t* pci_get_device(uint16_t vendor_id, uint16_t device_id) {
     return 0;
 }
 
+// Find PCI device by class, subclass, and prog_if
+pci_device_t* pci_get_device_by_class(uint8_t class_code, uint8_t subclass, uint8_t prog_if) {
+    for (uint32_t i = 0; i < pci_device_count; i++) {
+        if (pci_devices[i].class_code == class_code && 
+            pci_devices[i].subclass == subclass && 
+            pci_devices[i].prog_if == prog_if) {
+            return &pci_devices[i];
+        }
+    }
+    return 0;
+}
+
 // --- PCI Bus Scan ---
 
 static void pci_check_function(uint8_t bus, uint8_t slot, uint8_t func) {

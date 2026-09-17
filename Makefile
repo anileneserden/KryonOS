@@ -28,6 +28,7 @@ SRC_C = \
     kernel/drivers/input/keyboard_ps2.c \
     kernel/drivers/input/mouse_ps2.c \
     kernel/drivers/storage/ata.c \
+    kernel/drivers/usb/uhci.c \
     kernel/drivers/video/font/font8x8_basic.c \
     kernel/drivers/video/font/font8x16_basic.c \
     kernel/drivers/video/fb.c \
@@ -82,7 +83,9 @@ iso: $(TARGET)
 
 run: iso
 	qemu-system-i386 -cdrom kryonos.iso \
-		-drive format=raw,file=$(DISK_KRYFS),index=0,media=disk \
-		-drive format=raw,file=$(DISK_FAT32),index=1,media=disk \
-		-audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
-		-serial stdio -vga std -display sdl,gl=on
+       -drive format=raw,file=/home/anil/KryonOS/main/disk-kryfs.img,index=0,media=disk \
+       -drive format=raw,file=/home/anil/KryonOS/main/disk-fat32.img,index=1,media=disk \
+       -audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
+       -device piix3-usb-uhci,id=uhci \
+       -device usb-mouse,bus=uhci.0 \
+       -serial stdio -vga std -display sdl,gl=on
