@@ -21,7 +21,7 @@
 #define ATA_SR_DRQ          0x08    // Data request ready
 
 static void ata_poll(void) {
-    // 4 kez okuyarak 400ns gecikme (status bsy bitinin oturması için)
+    // 400ns delay by reading 4 times (to allow the status BSY bit to settle)
     for (int i = 0; i < 4; i++) {
         inb(ATA_PRIMARY_IO + ATA_REG_STATUS);
     }
@@ -30,23 +30,23 @@ static void ata_poll(void) {
 }
 
 void ata_init(void) {
-    serial_write("ATA PIO surucusu baslatiliyor...\n");
+    serial_write("ATA PIO driver starting...\n");
     
-    // Master sürücüyü seç ve bekle
+    // Select the master drive and wait
     outb(ATA_PRIMARY_IO + ATA_REG_HDDEVSEL, 0xA0);
     for (int i = 0; i < 4; i++) {
         inb(ATA_PRIMARY_IO + ATA_REG_STATUS);
     }
     while (inb(ATA_PRIMARY_IO + ATA_REG_STATUS) & ATA_SR_BSY);
 
-    // Slave sürücüyü seç ve bekle
+    // Select the slave drive and wait
     outb(ATA_PRIMARY_IO + ATA_REG_HDDEVSEL, 0xB0);
     for (int i = 0; i < 4; i++) {
         inb(ATA_PRIMARY_IO + ATA_REG_STATUS);
     }
     while (inb(ATA_PRIMARY_IO + ATA_REG_STATUS) & ATA_SR_BSY);
 
-    serial_write("ATA PIO surucusu hazir (Master & Slave destekli).\n");
+    serial_write("ATA PIO driver ready (Master & Slave supported).\n");
 }
 
 void ata_read_sector(uint8_t drive, uint32_t lba, uint8_t* buf) {
@@ -55,7 +55,7 @@ void ata_read_sector(uint8_t drive, uint32_t lba, uint8_t* buf) {
     
     outb(ATA_PRIMARY_IO + ATA_REG_HDDEVSEL, dev_head);
     outb(ATA_PRIMARY_IO + ATA_REG_ERROR, 0x00);
-    outb(ATA_PRIMARY_IO + ATA_REG_SECCOUNT, 1); // 1 sektör oku
+    outb(ATA_PRIMARY_IO + ATA_REG_SECCOUNT, 1); // Read 1 sector
     outb(ATA_PRIMARY_IO + ATA_REG_LBA_LOW, (uint8_t) lba);
     outb(ATA_PRIMARY_IO + ATA_REG_LBA_MID, (uint8_t)(lba >> 8));
     outb(ATA_PRIMARY_IO + ATA_REG_LBA_HIGH, (uint8_t)(lba >> 16));
@@ -63,7 +63,7 @@ void ata_read_sector(uint8_t drive, uint32_t lba, uint8_t* buf) {
 
     ata_poll();
 
-    // 512 bayt = 128 adet 32-bit (4 bayt) veri
+    // 512 bytes = 128 pieces of 32-bit (4-byte) data
     insl(ATA_PRIMARY_IO + ATA_REG_DATA, buf, 128);
 }
 
@@ -72,7 +72,7 @@ void ata_write_sector(uint8_t drive, uint32_t lba, const uint8_t* buf) {
 
     outb(ATA_PRIMARY_IO + ATA_REG_HDDEVSEL, dev_head);
     outb(ATA_PRIMARY_IO + ATA_REG_ERROR, 0x00);
-    outb(ATA_PRIMARY_IO + ATA_REG_SECCOUNT, 1); // 1 sektör yaz
+    outb(ATA_PRIMARY_IO + ATA_REG_SECCOUNT, 1); // Write 1 sector
     outb(ATA_PRIMARY_IO + ATA_REG_LBA_LOW, (uint8_t) lba);
     outb(ATA_PRIMARY_IO + ATA_REG_LBA_MID, (uint8_t)(lba >> 8));
     outb(ATA_PRIMARY_IO + ATA_REG_LBA_HIGH, (uint8_t)(lba >> 16));
@@ -83,14 +83,14 @@ void ata_write_sector(uint8_t drive, uint32_t lba, const uint8_t* buf) {
     outsl(ATA_PRIMARY_IO + ATA_REG_DATA, buf, 128);
 }
 
-// Birden fazla sektörü sırayla okuma kolaylığı sağlar
+// Provides the convenience of reading multiple sectors sequentially.
 void ata_read_sectors(uint8_t drive, uint32_t lba, uint8_t count, uint8_t* buf) {
     for (uint8_t i = 0; i < count; i++) {
         ata_read_sector(drive, lba + i, buf + (i * 512));
     }
 }
 
-// Birden fazla sektörü sırayla yazma kolaylığı sağlar
+// Provides the convenience of listing multiple sectors in sequence
 void ata_write_sectors(uint8_t drive, uint32_t lba, uint8_t count, const uint8_t* buf) {
     for (uint8_t i = 0; i < count; i++) {
         ata_write_sector(drive, lba + i, buf + (i * 512));

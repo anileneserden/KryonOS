@@ -1,15 +1,6 @@
 // kernel/serial.c
 #include <kernel/serial.h>
-
-static inline void outb(uint16_t port, uint8_t val) {
-    __asm__ volatile ("outb %0, %1" : : "a"(val), "Nd"(port));
-}
-
-static inline uint8_t inb(uint16_t port) {
-    uint8_t ret;
-    __asm__ volatile ("inb %1, %0" : "=a"(ret) : "Nd"(port));
-    return ret;
-}
+#include <arch/x86/io.h>
 
 void serial_init(void) {
     outb(SERIAL_COM1_PORT + 1, 0x00);    // Disable interrupts
@@ -53,4 +44,8 @@ void serial_write_dec(uint32_t n) {
     while (i > 0) {
         serial_write_char(buf[--i]);
     }
+}
+
+void serial_write_num(uint32_t n) {
+    serial_write_dec(n);
 }

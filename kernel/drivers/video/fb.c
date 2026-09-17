@@ -10,7 +10,7 @@ static uint32_t fb_pitch = 0;
 
 void fb_init(multiboot_info_t* mboot) {
     if (!(mboot->flags & (1 << 12))) {
-        serial_write("HATA (fb): Framebuffer bilgisi bulunamadi!\n");
+        serial_write("ERROR (fb): Framebuffer information not found!\n");
         return;
     }
 
@@ -19,17 +19,17 @@ void fb_init(multiboot_info_t* mboot) {
     fb_height = mboot->framebuffer_height;
     fb_pitch = mboot->framebuffer_pitch;
 
-    // Çözünürlüğe uygun back-buffer boyutunu heap üzerinden dinamik olarak tahsis et
+    // Dynamically allocate a resolution-appropriate back-buffer through the heap
     uint32_t total_bytes = fb_height * fb_pitch;
     back_buffer = (uint32_t*)kmalloc(total_bytes);
 
     if (back_buffer) {
-        serial_write("Back-buffer heap uzerinden basariyla olusturuldu.\n");
+        serial_write("Back-buffer created successfully through the heap.\n");
     } else {
-        serial_write("HATA (fb): Back-buffer icin yeterli heap alani bulunamadi!\n");
+        serial_write("ERROR (fb): Not enough heap space for the back-buffer!\n");
     }
 
-    serial_write("Framebuffer basariyla baslatildi.\n");
+    serial_write("Framebuffer initialized successfully.\n");
 }
 
 void fb_putpixel(uint32_t x, uint32_t y, uint32_t color) {
@@ -89,7 +89,7 @@ void fb_swap(void) {
     }
 }
 
-// Sadece belirtilen dikdörtgen alanı back_buffer'dan gerçek VRAM'e kopyalayan fonksiyon
+// Copy only the specified rectangle from the back buffer to physical VRAM
 void fb_blit_region(uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
     if (!fb_address || !back_buffer) return;
     if (x >= fb_width || y >= fb_height) return;

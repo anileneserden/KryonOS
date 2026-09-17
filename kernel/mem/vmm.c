@@ -8,9 +8,9 @@ extern void load_page_directory(uint32_t* pd);
 extern void enable_paging(void);
 
 void vmm_init(void) {
-    serial_write("VMM: Sanal Bellek Yoneticisi (4MB Buyuk Sayfalar) baslatiliyor...\n");
+    serial_write("VMM: Virtual Memory Manager (4MB large pages) starting...\n");
 
-    // 1. Adim: CR4 register'inda PSE (Page Size Extension - 4MB sayfa destegi) bitini aktif et (Bit 4)
+    // 1. Step: enable the PSE (Page Size Extension - 4MB page support) bit in CR4 (bit 4)
     __asm__ volatile(
         "mov %%cr4, %%eax\n\t"
         "or $0x10, %%eax\n\t"
@@ -18,18 +18,18 @@ void vmm_init(void) {
         ::: "eax"
     );
 
-    // PMM'den Page Directory için 1 blok (4KB) ayır
+    // Allocate one block (4KB) from the PMM for the page directory
     kernel_page_directory = (uint32_t*)pmm_alloc_block();
     
-    // 2. Adim: Tum 4GB adres uzayini 4MB'lik buyuk sayfalarla identity-map yap 
+    // 2. Step: identity-map the entire 4GB address space with 4MB large pages
     for (int i = 0; i < 1024; i++) {
-        uint32_t physical_addr = i * 0x400000; // Her giris 4MB temsil eder
+        uint32_t physical_addr = i * 0x400000; // Each entry represents 4MB
         
-        // Temel bayraklar: Present (1) | Write (2) | Page Size - 4MB (0x80)
+        // Base flags: Present (1) | Write (2) | Page Size - 4MB (0x80)
         uint32_t flags = PAGE_PRESENT | PAGE_WRITE | 0x80;
         
-        // PMM 32MB RAM kabul ettigi icin, 32MB otesindeki tum alanlar (MMIO, Framebuffer vb.) 
-        // önbelleksiz (Uncacheable) olmalidir. PCD (Page-level Cache Disable) biti = 0x10
+        // Since the PMM assumes 32MB of RAM, all regions beyond 32MB (MMIO, framebuffer, etc.)
+        // must be uncacheable. PCD (Page-level Cache Disable) bit = 0x10
         if (physical_addr >= 32 * 1024 * 1024) {
             flags |= 0x10; 
         }
@@ -37,11 +37,11 @@ void vmm_init(void) {
         kernel_page_directory[i] = physical_addr | flags;
     }
 
-    // Sayfa dizinini CR3'e yükle ve paging'i aktif et
+    // Load the page directory into CR3 and enable paging
     vmm_switch_directory(kernel_page_directory);
     enable_paging();
 
-    serial_write("VMM: Tum 4GB adres uzayi basariyla haritalandirildi ve paging aktiflestirildi.\n");
+    serial_write("VMM: Entire 4GB address space mapped successfully and paging enabled.\n");
 }
 
 void vmm_switch_directory(uint32_t* pd) {

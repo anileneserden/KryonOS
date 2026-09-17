@@ -38,7 +38,7 @@ void grid_get_position(int index, int *out_x, int *out_y) {
         return;
     }
 
-    // Windows tarzı: Yukarıdan aşağıya doldurup sütun kaydırma (column-major)
+    // Windows-style: fill from top to bottom and shift columns (column-major)
     int col = index / s_rows;
     int row = index % s_rows;
 

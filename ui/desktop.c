@@ -1,7 +1,7 @@
 #include <ui/desktop.h>
 #include <ui/wm.h>
 #include <ui/cursor.h>
-#include <ui/grid.h> // Grid başlığını eklemeyi unutma
+#include <ui/grid.h> // Grid header
 #include <kernel/drivers/video/fb.h>
 #include <kernel/drivers/video/gfx.h>
 #include <kernel/drivers/input/keyboard_ps2.h>
@@ -56,13 +56,13 @@ void damage_union_rect(int x, int y, int w, int h) {
 void desktop_redraw(void) {
     if (!screen_damage.active) return;
 
-    // 1. Önce eski imleci kaldır (arkasındaki pikselleri geri yükle)
+    // 1. Remove the old cursor first (restore the pixels beneath it)
     cursor_prepare_redraw();
 
-    // 2. Masaüstü Arka Planı
+    // 2. Desktop background
     gfx_fill_rect(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h, 0xFF1E1E1E);
 
-    // 3. Grid Çizgileri
+    // 3. Grid lines
     int screen_w = fb_get_width();
     int screen_h = fb_get_height();
     int cell_w = grid_get_cell_width();
@@ -76,29 +76,29 @@ void desktop_redraw(void) {
     }
 
     for (int y = 0; y <= screen_h; y += cell_h) {
-        if (y >= screen_damage.y && y <= screen_damage.y + screen_damage.w) { // (Küçük düzeltme: screen_damage.w olmalı)
+        if (y >= screen_damage.y && y <= screen_damage.y + screen_damage.w) { // (Small correction: should be screen_damage.w)
             gfx_fill_rect(screen_damage.x, y, screen_damage.w, 1, grid_line_color);
         }
     }
 
-    // 4. Açık Pencereleri Çiz
+    // 4. Draw open windows
     wm_draw_all();
 
-    // 5. Alt Görev Çubuğu (Taskbar) - En üst katmanda (Pencerelerin üzerinde) çizilir
+    // 5. Bottom taskbar - draw it on the topmost layer (above windows)
     int taskbar_h = 36;
     int taskbar_y = screen_h - taskbar_h;
     if (screen_damage.y + screen_damage.h >= taskbar_y) {
-        // Çubuğun arka planı (Koyu gri / siyah tonu)
+        // Taskbar background (dark gray / black tone)
         gfx_fill_rect(screen_damage.x, taskbar_y > screen_damage.y ? taskbar_y : screen_damage.y, 
                       screen_damage.w, taskbar_h, 0xFF181818);
-        // Çubuğun üst çizgisi (Modern bir border efekti için ince açık çizgi)
+        // Taskbar top border (a thin light line for a modern border effect)
         gfx_fill_rect(screen_damage.x, taskbar_y, screen_damage.w, 1, 0xFF333333);
     }
 
-    // 6. İmleci backbuffer'daki yeni yerine çiz (blit=false, çünkü toplu blit yapacağız)
+    // 6. Draw the cursor at its new back-buffer position (blit=false because we perform one combined blit)
     cursor_show_internal(false);
 
-    // 7. Hasarlı bölgenin tamamını ekrana aktar (Blit)
+    // 7. Blit the entire damaged region to the screen
     fb_blit_region(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h);
     
     damage_clear();
@@ -110,7 +110,7 @@ void desktop_init(void) {
 
     if (width == 0 || height == 0) return;
 
-    // Grid sistemini burada ekran boyutlarıyla başlatıyoruz (örn: 64x64 hücre boyutu)
+    // Initialize the grid here using the screen dimensions (for example, 64x64 cells)
     grid_init(width, height, 100, 100);
 
     wm_init();
@@ -126,25 +126,25 @@ void desktop_init(void) {
 }
 
 void desktop_process_input(void) {
-    // 1. Önceki imleç konumunu al (Eğer cursor modülün bu veriyi tutuyorsa)
+    // 1. Get the previous cursor position (if the cursor module stores it)
     int old_x = cursor_get_old_x();
     int old_y = cursor_get_old_y();
 
-    // 2. Girdi ve pencere olaylarını işle (fare/klavye konumları güncellenir)
+    // 2. Process input and window events (mouse/keyboard positions are updated)
     wm_process_input();
-    // Veya ps2 mouse paketleri burada işleniyorsa imleç yeni konumuna geçer
+    // Otherwise, the cursor moves here if PS/2 mouse packets are processed here
 
     int new_x = cursor_get_x();
     int new_y = cursor_get_y();
-    int cursor_w = cursor_get_width();   // Örn: imleç genişliği (12-16px)
-    int cursor_h = cursor_get_height();  // Örn: imleç yüksekliği
+    int cursor_w = cursor_get_width();   // For example: cursor width (12-16px)
+    int cursor_h = cursor_get_height();  // For example: cursor height
 
-    // 3. Eğer imleç yer değiştirdiyse, eski ve yeni yerini kirli bölge ilan et
+    // 3. If the cursor moved, mark its old and new positions as damaged
     if (old_x != new_x || old_y != new_y) {
-        damage_union_rect(old_x, old_y, cursor_w, cursor_h); // Eski yerini temizle
-        damage_union_rect(new_x, new_y, cursor_w, cursor_h); // Yeni yerini çiz
+        damage_union_rect(old_x, old_y, cursor_w, cursor_h); // Clear the old position
+        damage_union_rect(new_x, new_y, cursor_w, cursor_h); // Draw the new position
         
-        // Yeniden çizimi tetikle
+        // Trigger a redraw
         desktop_redraw();
     }
 }

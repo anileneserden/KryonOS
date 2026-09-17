@@ -56,7 +56,7 @@ static void print_hex(uint8_t val) {
 }
 
 void keyboard_init(void) {
-    serial_write("PS/2 Klavye surucusu baslatildi.\n");
+    serial_write("Starting PS/2 keyboard driver...\n");
 }
 
 void keyboard_handler(void) {
@@ -79,11 +79,11 @@ void keyboard_handler(void) {
     }
 
     if (scancode & 0x80) {
-        return; // Tuş bırakma
+        return; // Key release
     }
 
     if (scancode < 128) {
-        last_scancode = scancode; // Son basılan tuşu sakla
+        last_scancode = scancode; // Save the last key pressed
         if (keyboard_debug_mode) {
             print_hex(scancode);
         } else if (keyboard_log_enabled) {

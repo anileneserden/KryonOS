@@ -8,17 +8,17 @@ typedef struct block_header {
     struct block_header* next;
 } block_header_t;
 
-#define HEAP_START_ADDRESS 0x2000000 // 32MB adresine tasiyalim (Kernel ve diger yapilardan guvenli bir sekilde uzakta)
-#define HEAP_INITIAL_SIZE  (1024 * 1024 * 4) // 4MB baslangic boyutu
+#define HEAP_START_ADDRESS 0x2000000 // Place at 32MB (safely away from the kernel and other structures)
+#define HEAP_INITIAL_SIZE  (1024 * 1024 * 4) // Initial size: 4MB
 
 static block_header_t* heap_head = (block_header_t*)HEAP_START_ADDRESS;
 
 void heap_init(uint32_t heap_start, uint32_t heap_size) {
     heap_head = (block_header_t*)heap_start;
-    heap_head->size = heap_size - sizeof(block_header_t); // Sabit yerine gelen parametreyi kullan
+    heap_head->size = heap_size - sizeof(block_header_t); // Use the supplied parameter instead of a constant
     heap_head->is_free = 1;
     heap_head->next = 0;
-    serial_write("HEAP: Dinamik bellek yoneticisi (Heap) baslatildi.\n");
+    serial_write("HEAP: Dynamic memory manager initialized.\n");
 }
 
 void* kmalloc(size_t size) {
@@ -41,7 +41,7 @@ void* kmalloc(size_t size) {
         }
         current = current->next;
     }
-    serial_write("HEAP HATA: kmalloc bellek tahsis edemedi! (Heap dolu veya bozuk)\n");
+    serial_write("HEAP ERROR: kmalloc could not allocate memory! (Heap full or corrupted)\n");
     return 0;
 }
 
@@ -51,7 +51,7 @@ void kfree(void* ptr) {
     block_header_t* header = (block_header_t*)((uint32_t)ptr - sizeof(block_header_t));
     header->is_free = 1;
 
-    // Bitisik bos bloklari birlestir (Coalescing)
+    // Merge adjacent free blocks (coalescing)
     block_header_t* current = heap_head;
     while (current && current->next) {
         if (current->is_free && current->next->is_free) {

@@ -10,7 +10,7 @@ typedef struct app {
     char name[32];
     window_t* window;
     
-    // Yaşam döngüsü fonksiyon işaretçileri
+    // Lifecycle function pointers
     void (*init)(struct app* self);
     void (*update)(struct app* self);
     void (*draw)(struct app* self);

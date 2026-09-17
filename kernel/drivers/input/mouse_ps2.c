@@ -65,7 +65,7 @@ void mouse_handler(void) {
                     mouse_x += dx;
                     mouse_y -= dy; 
 
-                    // Dinamik ekran sınırları (Ekrana göre otomatik ayarlanır)
+                    // Dynamic screen boundaries (adjusted automatically to the screen)
                     int32_t max_x = (int32_t)fb_get_width() - 1;
                     int32_t max_y = (int32_t)fb_get_height() - 1;
 
@@ -80,7 +80,7 @@ void mouse_handler(void) {
 }
 
 void mouse_init(void) {
-    serial_write("PS/2 Fare surucusu baslatiliyor...\n");
+    serial_write("Starting PS/2 mouse driver...\n");
 
     uint8_t status;
 
@@ -103,5 +103,5 @@ void mouse_init(void) {
     mouse_write(0xF4);
     mouse_read(); 
 
-    serial_write("PS/2 Fare basariyla yapilandirildi.\n");
+    serial_write("PS/2 Mouse initialized and ready.\n");
 }

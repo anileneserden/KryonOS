@@ -5,36 +5,18 @@
 #include <kernel/serial.h>
 #include <kernel/string.h>
 
-// Sayısal değerleri seri porta kolayca basmak için yardımcı fonksiyon
-static void serial_write_num(uint32_t num) {
-    char buf[12];
-    int i = 10;
-    buf[11] = '\0';
-
-    if (num == 0) {
-        serial_write("0");
-        return;
-    }
-
-    while (num > 0 && i >= 0) {
-        buf[i--] = '0' + (num % 10);
-        num /= 10;
-    }
-    serial_write(&buf[i + 1]);
-}
-
 bool wav_validate_header(wav_header_t* header) {
     if (!header) return false;
 
     if (memcmp(header->riff_id, "RIFF", 4) != 0 ||
         memcmp(header->wave_id, "WAVE", 4) != 0 ||
         memcmp(header->fmt_id, "fmt ", 4) != 0) {
-        serial_write("WAV Hata: Gecersiz RIFF/WAVE baslik imzasi!\n");
+        serial_write("WAV Error: Invalid RIFF/WAVE header signature!\n");
         return false;
     }
     
     if (header->audio_format != 1) {
-        serial_write("WAV Hata: Sadece uncompressed PCM format destekleniyor!\n");
+        serial_write("WAV Error: Only uncompressed PCM format is supported!\n");
         return false;
     }
 
@@ -46,21 +28,21 @@ bool wav_play_file(const char* full_path) {
 
     uint8_t* file_buffer = (uint8_t*)vfs_read_file(full_path, &file_size);
     if (!file_buffer || file_size < sizeof(wav_header_t)) {
-        serial_write("WAV Hata: Dosya okunamadi veya boyutu yetersiz!\n");
+        serial_write("WAV Error: Failed to read file or file size is insufficient!\n");
         return false;
     }
 
     wav_header_t* header = (wav_header_t*)file_buffer;
 
     if (!wav_validate_header(header)) {
-        serial_write("WAV Hata: Header dogrulamasi basarisiz!\n");
+        serial_write("WAV Error: Header validation failed!\n");
         kfree(file_buffer);
         return false;
     }
 
-    serial_write("WAV Bilgi: Format=");
+    serial_write("WAV Info: Format=");
     serial_write_num(header->audio_format);
-    serial_write(", Kanal=");
+    serial_write(", Channels=");
     serial_write_num(header->num_channels);
     serial_write(", SampleRate=");
     serial_write_num(header->sample_rate);
@@ -68,7 +50,7 @@ bool wav_play_file(const char* full_path) {
     serial_write_num(header->bits_per_sample);
     serial_write("\n");
 
-    // Dinamik "data" chunk arama
+    // Search for the "data" chunk dynamically
     uint32_t data_offset = 0;
     for (uint32_t i = 12; i < file_size - 8; i++) {
         if (file_buffer[i] == 'd' && file_buffer[i+1] == 'a' && 
@@ -79,15 +61,15 @@ bool wav_play_file(const char* full_path) {
     }
 
     if (data_offset == 0 || data_offset >= file_size) {
-        serial_write("WAV Hata: 'data' chunk bulunamadi!\n");
+        serial_write("WAV Error: 'data' chunk not found!\n");
         kfree(file_buffer);
         return false;
     }
 
     uint32_t pcm_size = file_size - data_offset;
-    serial_write("WAV Bilgi: Veri baslangic offseti=");
+    serial_write("WAV Info: Data start offset=");
     serial_write_num(data_offset);
-    serial_write(", PCM Boyutu=");
+    serial_write(", PCM Size=");
     serial_write_num(pcm_size);
     serial_write("\n");
 

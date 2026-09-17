@@ -14,7 +14,7 @@ uint32_t fb_get_height(void);
 void fb_swap(void);
 void fb_blit_region(uint32_t x, uint32_t y, uint32_t width, uint32_t height);
 
-// Yeni eklenen getter fonksiyonları
+// Newly added getter functions
 volatile uint32_t* fb_get_address(void);
 uint32_t fb_get_pitch(void);
 

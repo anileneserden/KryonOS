@@ -5,29 +5,29 @@
 #include <kernel/string.h>
 
 static fat32_bpb_t bpb;
-static uint8_t current_drive = 1; // Varsayılan olarak Slave (Drive 1)
+static uint8_t current_drive = 1; // Slave by default (Drive 1)
 static uint32_t fat_partition_lba = 0;
 static uint32_t fat_start_sector = 0;
 static uint32_t data_start_sector = 0;
 static bool is_fat32_initialized = false;
 
-// Küme (Cluster) numarasını LBA sektor adresine çevirir
+// Convert a cluster number to an LBA sector address
 static uint32_t cluster_to_lba(uint32_t cluster) {
     return data_start_sector + ((cluster - 2) * bpb.sectors_per_cluster);
 }
 
-// 8.3 dosya adı formatını VFS standart adına dönüştürür ("TEST    TXT" -> "TEST.TXT")
+// Convert the 8.3 filename format to the VFS standard ("TEST    TXT" -> "TEST.TXT")
 static void format_fat_name(const uint8_t* fat_name, char* out_name) {
     int pos = 0;
     
-    // Dosya adı kısmını al (ilk 8 bayt)
+    // Get the filename portion (the first 8 bytes)
     for (int i = 0; i < 8; i++) {
         if (fat_name[i] != ' ') {
             out_name[pos++] = fat_name[i];
         }
     }
     
-    // Uzantı var mı kontrol et (son 3 bayt)
+    // Check for an extension (the last 3 bytes)
     if (fat_name[8] != ' ') {
         out_name[pos++] = '.';
         for (int i = 8; i < 11; i++) {
@@ -39,20 +39,20 @@ static void format_fat_name(const uint8_t* fat_name, char* out_name) {
     out_name[pos] = '\0';
 }
 
-// FAT32 Bölümünü Başlatır (Drive 0: Master, Drive 1: Slave)
+// Initialize the FAT32 partition (Drive 0: Master, Drive 1: Slave)
 bool fat32_init_disk(uint8_t drive, uint32_t lba_start) {
     current_drive = drive;
     fat_partition_lba = lba_start;
     
-    // Boot Sektorunu (BPB) Oku (512 Bayt)
+    // Read the boot sector (BPB) (512 bytes)
     uint8_t sector_buffer[512];
     ata_read_sectors(current_drive, fat_partition_lba, 1, sector_buffer);
     
     memcpy(&bpb, sector_buffer, sizeof(fat32_bpb_t));
 
-    // FAT32 Doğrulama
+    // Validate FAT32
     if (bpb.bytes_per_sector != 512 || bpb.sectors_per_cluster == 0) {
-        serial_write("FAT32 Hata: Gecersiz BPB veya desteklenmeyen sektor boyutu!\n");
+        serial_write("FAT32 Error: Invalid BPB or unsupported sector size!\n");
         return false;
     }
 
@@ -61,18 +61,18 @@ bool fat32_init_disk(uint8_t drive, uint32_t lba_start) {
     data_start_sector = fat_start_sector + fat_size;
 
     is_fat32_initialized = true;
-    serial_write("FAT32: Surucu basariyla yuklendi.\n");
+    serial_write("FAT32: Driver loaded successfully.\n");
     return true;
 }
 
-// VFS İçin: Dosya Okuma
+// VFS: file reading
 static void* fat32_read_file(const char* path, uint32_t* out_size) {
     if (!is_fat32_initialized) {
         if (out_size) *out_size = 0;
         return NULL;
     }
 
-    // Kök Dizin Sektorunu Oku
+    // Read the root directory sector
     uint32_t root_lba = cluster_to_lba(bpb.root_cluster);
     uint8_t buffer[512];
     ata_read_sectors(current_drive, root_lba, 1, buffer);
@@ -81,9 +81,9 @@ static void* fat32_read_file(const char* path, uint32_t* out_size) {
     int max_entries = 512 / sizeof(fat32_dir_entry_t);
 
     for (int i = 0; i < max_entries; i++) {
-        if (entries[i].name[0] == 0x00) break; // Başka girdi yok
-        if (entries[i].name[0] == 0xE5) continue; // Silinmiş dosya
-        if (entries[i].attr & 0x10) continue; // Dizinleri atla
+        if (entries[i].name[0] == 0x00) break; // No more entries
+        if (entries[i].name[0] == 0xE5) continue; // Deleted file
+        if (entries[i].attr & 0x10) continue; // Skip directories
 
         char formatted_name[13];
         format_fat_name(entries[i].name, formatted_name);
@@ -92,7 +92,7 @@ static void* fat32_read_file(const char* path, uint32_t* out_size) {
             uint32_t file_size = entries[i].file_size;
             uint32_t first_cluster = ((uint32_t)entries[i].first_cluster_high << 16) | entries[i].first_cluster_low;
             
-            // Dosyayı Heap belleğine yükle
+            // Load the file into heap memory
             void* file_data = kmalloc(file_size);
             if (!file_data) {
                 if (out_size) *out_size = 0;
@@ -113,7 +113,7 @@ static void* fat32_read_file(const char* path, uint32_t* out_size) {
     return NULL;
 }
 
-// VFS İçin: Dizin Listeleme (Konsol Çıktısı)
+// VFS: directory listing (console output)
 static void fat32_list_dir(void) {
     if (!is_fat32_initialized) return;
 
@@ -140,7 +140,7 @@ static void fat32_list_dir(void) {
     }
 }
 
-// VFS İçin: Dizin Dosyalarını VFS Yapısına Doldurma
+// VFS: populate the directory files in the VFS structure
 static int fat32_get_dir_files(const char* path, vfs_file_info_t* out_list, int max_count) {
     if (!is_fat32_initialized || !out_list) return 0;
 
@@ -166,7 +166,7 @@ static int fat32_get_dir_files(const char* path, vfs_file_info_t* out_list, int 
     return count;
 }
 
-// VFS 'fs_driver_t' Arayüz Bağlantısı
+// VFS fs_driver_t interface binding
 fs_driver_t fat32_get_driver(void) {
     fs_driver_t driver;
     driver.read_file = fat32_read_file;

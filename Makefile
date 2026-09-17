@@ -8,11 +8,11 @@ LDFLAGS = -T linker.ld -nostdlib
 BUILD = build
 TARGET = $(BUILD)/kryonos.bin
 
-# --- Disk İmajı Tanımlamaları ---
+# --- Disk Image Definitions ---
 DISK_KRYFS ?= $(HOME)/KryonOS/main/disk-kryfs.img
 DISK_FAT32 ?= $(HOME)/KryonOS/main/disk-fat32.img
 
-# --- Kaynak Dosyalar ---
+# --- Source Files ---
 SRC_S = \
     boot/boot.S \
     boot/paging.S
@@ -27,7 +27,9 @@ SRC_C = \
     kernel/drivers/audio/ac97.c \
     kernel/drivers/input/keyboard_ps2.c \
     kernel/drivers/input/mouse_ps2.c \
+    kernel/drivers/input/mouse_usb.c \
     kernel/drivers/storage/ata.c \
+    kernel/drivers/usb/uhci.c \
     kernel/drivers/video/font/font8x8_basic.c \
     kernel/drivers/video/font/font8x16_basic.c \
     kernel/drivers/video/fb.c \
@@ -46,7 +48,7 @@ SRC_C = \
     ui/window.c \
     ui/wm.c
 
-# Kaynak yollarını build/ altındaki nesne dosyalarına (object) dönüştür
+# Convert source paths to object files under build/
 OBJS = $(SRC_S:%.S=$(BUILD)/%.o) \
         $(SRC_C:%.c=$(BUILD)/%.o)
 
@@ -56,12 +58,12 @@ $(TARGET): $(OBJS) linker.ld
 	@mkdir -p $(dir $@)
 	$(LD) $(LDFLAGS) -o $(TARGET) $(OBJS)
 
-# C dosyaları için hiyerarşik derleme kuralı
+# Hierarchical build rule for C files
 $(BUILD)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Assembly dosyaları için hiyerarşik derleme kuralı
+# Hierarchical build rule for assembly files
 $(BUILD)/%.o: %.S
 	@mkdir -p $(dir $@)
 	$(AS) $< -o $@
@@ -82,7 +84,9 @@ iso: $(TARGET)
 
 run: iso
 	qemu-system-i386 -cdrom kryonos.iso \
-		-drive format=raw,file=$(DISK_KRYFS),index=0,media=disk \
-		-drive format=raw,file=$(DISK_FAT32),index=1,media=disk \
-		-audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
-		-serial stdio -vga std -display sdl,gl=on
+       -drive format=raw,file=/home/anil/KryonOS/main/disk-kryfs.img,index=0,media=disk \
+       -drive format=raw,file=/home/anil/KryonOS/main/disk-fat32.img,index=1,media=disk \
+       -audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
+       -device piix3-usb-uhci,id=uhci \
+    -device usb-mouse,bus=uhci.0 \
+       -serial stdio -vga std -display sdl,gl=on
