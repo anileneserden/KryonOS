@@ -78,11 +78,14 @@ static inline uint32_t virt_to_phys(volatile void* virt_addr) {
 // Global aligned DMA buffers and descriptors for UHCI control transfers
 static uhci_qh_t control_qh __attribute__((aligned(16)));
 static uhci_td_t setup_td __attribute__((aligned(16))) ;
+static uhci_td_t in_td __attribute__((aligned(16)));
 static uhci_td_t status_td __attribute__((aligned(16)));
 static usb_setup_packet_t setup_pkt __attribute__((aligned(4)));
 
-// Set Address implementation with QH and TD chaining for UHCI control transfer
+static uint8_t device_descriptor[18] __attribute__((aligned(16)));
+
 static void uhci_set_address(uint8_t port_index, uint8_t new_address) {
+    (void)port_index;
     serial_write("UHCI: Setting USB device address to 1...\n");
 
     // 1. Prepare the 8-byte setup packet for SET_ADDRESS
@@ -92,42 +95,116 @@ static void uhci_set_address(uint8_t port_index, uint8_t new_address) {
     setup_pkt.wIndex        = 0x0000;
     setup_pkt.wLength       = 0x0000;
 
-    // 2. Configure SETUP TD
+    // 2. Configure SETUP TD (Address 0)
     setup_td.link   = virt_to_phys(&status_td);
-    setup_td.status = TD_STAT_ACTIVED | (3 << 27); // Active bit set + 3 max errors
+    setup_td.status = TD_STAT_ACTIVED | (3 << 27); // Active + 3 errors
     setup_td.token  = (7 << 21) | (1 << 26) | (0 << 19) | (0 << 15) | (0 << 8) | USB_PID_SETUP;
     setup_td.buffer = virt_to_phys(&setup_pkt);
 
-    // 3. Configure STATUS TD
+    // 3. Configure STATUS TD (Control Write -> OUT packet)
+    // DİKKAT: Cihaz setup'ı alır almaz adresini değiştirdiği için status aşaması new_address (1) üzerinden gitmelidir!
     status_td.link   = 1; // Terminate (T = 1)
     status_td.status = TD_STAT_ACTIVED | TD_STAT_IOC | (3 << 27);
-    status_td.token  = (0x7FF << 21) | (1 << 26) | (1 << 19) | (0 << 15) | (0 << 8) | USB_PID_IN;
+    status_td.token  = (0x7FF << 21) | (1 << 26) | (1 << 19) | (0 << 15) | (new_address << 8) | USB_PID_OUT; // <-- Adres alanı new_address (1) yapıldı
     status_td.buffer = 0;
 
     // 4. Configure Queue Head (QH)
     control_qh.head_link    = 1; // Terminate
     control_qh.element_link = virt_to_phys(&setup_td);
 
-    // 5. Submit the Queue Head to frame list indexes
+    // 5. Point frame list to QH (Clear all entries first or assign safely)
+    uint32_t qh_phys = virt_to_phys(&control_qh) | 0x02; // Bit 1 = Queue Head pointer
     for (int i = 0; i < FRAME_LIST_COUNT; i++) {
-        frame_list[i] = virt_to_phys(&control_qh) | 0x02; // Bit 1 set = QH pointer
+        frame_list[i] = qh_phys;
     }
     
     serial_write("UHCI: SET_ADDRESS Queue Head and descriptors dispatched.\n");
 
-    // 6. Wait for transfer completion with a larger/safe polling loop and yield/delay
-    int timeout = 400000;
-    while ((setup_td.status & TD_STAT_ACTIVED) && (timeout > 0)) {
+    // 6. Wait for transfer completion with a safer timeout loop
+    int timeout = 800000; // Süreyi biraz artırıp esnetelim
+    while ((status_td.status & TD_STAT_ACTIVED) && (timeout > 0)) {
         timeout--;
-        // Küçük bir IO gecikmesi koyarak donanımın nefes almasını sağlayalım
         __asm__ volatile("nop");
     }
 
-    if (!(setup_td.status & TD_STAT_ACTIVED)) {
+    if (!(status_td.status & TD_STAT_ACTIVED)) {
         serial_write("UHCI: SET_ADDRESS completed successfully! Device is now at address 1.\n");
     } else {
-        // Hangi aşamada kaldığını görmek için statüsü yazdıralım
         serial_write("UHCI: Warning: SET_ADDRESS timed out or failed.\n");
+        
+        // Status değerini ve hata bayraklarını inceleyelim
+        uint32_t st = status_td.status;
+        serial_write("  -> SET_ADDRESS: STATUS TD active. Status reg: ");
+        
+        // Basit bir hex yazdırma yardımı (veya mevcut hex fonksiyonun varsa kullanabilirsin)
+        // Stalled bit kontrolü (Bit 26)
+        if (st & (1 << 26)) serial_write(" [STALLED] ");
+        if (st & (1 << 25)) serial_write(" [Data Buffer Error] ");
+        if (st & (1 << 24)) serial_write(" [Babble] ");
+        if (st & (1 << 23)) serial_write(" [CRC/Time-out Error] ");
+        serial_write("\n");
+    }
+}
+
+static void uhci_get_device_descriptor(void) {
+    serial_write("UHCI: Requesting Device Descriptor (8-byte chunk for Address 0)...\n");
+
+    // 1. Setup Paketi (Get Descriptor: Device Type, Length 8)
+    setup_pkt.bmRequestType = 0x80; // Device-to-host, Standard, Recipient: Device
+    setup_pkt.bRequest      = 0x06; // GET_DESCRIPTOR
+    setup_pkt.wValue        = 0x0100; // Descriptor Type: Device (1), Index: 0
+    setup_pkt.wIndex        = 0x0000;
+    setup_pkt.wLength       = 0x0008; // İlk aşamada 8 bytes istiyoruz
+
+    // 2. Setup TD (MaxLen = 7 [8 bytes], Toggle = 0 [DATA0], Endpoint = 0, Addr = 0)
+    setup_td.link   = virt_to_phys(&in_td);
+    setup_td.status = TD_STAT_ACTIVED | (3 << 27);
+    setup_td.token  = (7 << 21) | (0 << 19) | (0 << 15) | (0 << 8) | USB_PID_SETUP;
+    setup_td.buffer = virt_to_phys(&setup_pkt);
+
+    // 3. In TD (MaxLen = 7 [8 bytes], Toggle = 1 [DATA1], Endpoint = 0, Addr = 0)
+    in_td.link   = virt_to_phys(&status_td);
+    in_td.status = TD_STAT_ACTIVED | TD_STAT_SPD | (3 << 27);
+    in_td.token  = (7 << 21) | (1 << 19) | (0 << 15) | (0 << 8) | USB_PID_IN;
+    in_td.buffer = virt_to_phys(device_descriptor);
+
+    // 4. Status TD (MaxLen = 0x7FF [0 bytes], Toggle = 1 [DATA1], Endpoint = 0, Addr = 0)
+    status_td.link   = 1; // Terminate
+    status_td.status = TD_STAT_ACTIVED | TD_STAT_IOC | (3 << 27);
+    status_td.token  = (0x7FF << 21) | (1 << 19) | (0 << 15) | (0 << 8) | USB_PID_OUT;
+    status_td.buffer = 0;
+
+    // 5. Queue Head
+    control_qh.head_link    = 1;
+    control_qh.element_link = virt_to_phys(&setup_td);
+
+    // 6. Frame List'e bağla
+    uint32_t qh_phys = virt_to_phys(&control_qh) | 0x02;
+    for (int i = 0; i < FRAME_LIST_COUNT; i++) {
+        frame_list[i] = qh_phys;
+    }
+
+    // 7. Bekleme döngüsü
+    int timeout = 2000000;
+    while ((status_td.status & TD_STAT_ACTIVED) && (timeout > 0)) {
+        timeout--;
+        __asm__ volatile("nop");
+    }
+
+    if (!(status_td.status & TD_STAT_ACTIVED)) {
+        serial_write("UHCI: Device Descriptor (8 bytes) fetched successfully on Address 0!\n");
+        
+        // Cihazın bMaxPacketSize0 değerini görmek için (genellikle 7. bayttır):
+        uint8_t max_packet_size = device_descriptor[7];
+        serial_write("  -> MaxPacketSize0: ");
+        // Eğer basit bir sayı yazdırma fonksiyonun yoksa en azından başarılı olduğunu anlıyoruz
+    } else {
+        serial_write("UHCI: Warning: Get Device Descriptor on Address 0 timed out or failed.\n");
+        uint32_t in_st = in_td.status;
+        serial_write("  -> IN_TD Status: ");
+        if (in_st & (1 << 26)) serial_write("[STALLED] ");
+        if (in_st & (1 << 23)) serial_write("[Timeout] ");
+        serial_write("\n");
     }
 }
 
@@ -181,8 +258,12 @@ static void uhci_check_ports(void) {
             if (status & PORTSC_PORT_EN) {
                 serial_write("UHCI: Port successfully enabled and device ready!\n");
                 
-                // Trigger address assignment for the connected device (assigning address 1)
-                uhci_set_address(i, 1);
+                // Gecikmeyi biraz uzatalım ki cihaz tamamen kendine gelsin
+                for (volatile int d = 0; d < 800000; d++) {
+                    __asm__ volatile("nop");
+                }
+                
+                uhci_get_device_descriptor();
             } else {
                 serial_write("UHCI: Port reset failed or device unsupported.\n");
             }

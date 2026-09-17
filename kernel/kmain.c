@@ -172,7 +172,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         ac97_set_master_volume(100);
 
         serial_write("AC97: Attempting to play startup.wav...\n");
-        wav_play_file("C:/Kryon/Media/startup.wav");
+        //wav_play_file("C:/Kryon/Media/startup.wav");
     }
 
     // 6. Main event loop
