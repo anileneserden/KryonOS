@@ -1,6 +1,7 @@
 #include <kernel/drivers/usb/uhci.h>
 #include <kernel/drivers/pci.h>
 #include <kernel/serial.h>
+#include <kernel/drivers/input/mouse_usb.h>
 #include <arch/x86/io.h>
 
 // UHCI I/O Register Offsets
@@ -23,12 +24,14 @@
 #define PORTSC_CSC       (1 << 1) // Connect Status Change
 #define PORTSC_PORT_EN   (1 << 2) // Port Enable
 #define PORTSC_PEC       (1 << 3) // Port Enable Change
+#define PORTSC_LSDA      (1 << 4) // Low-speed device attached
 #define PORTSC_RESET     (1 << 9) // Port Reset
 #define PORTSC_POW       (1 << 12)// Port Power
 
 // TD Status Bits
 #define TD_STAT_ACTIVED      (1 << 23) // Active bit
 #define TD_STAT_IOC          (1 << 24) // Interrupt on Completion
+#define TD_STAT_LOW_SPEED    (1 << 26) // Low-speed device
 #define TD_STAT_SPD          (1 << 29) // Short Packet Detect
 
 // TD Token Packet Identifiers (PID)
@@ -40,6 +43,7 @@
 #define FRAME_LIST_COUNT 1024
 
 static uint16_t uhci_io_base = 0;
+static uint32_t uhci_td_speed_flags = 0;
 
 // 4KB aligned Frame List
 static uint32_t __attribute__((aligned(4096))) frame_list[FRAME_LIST_COUNT];
@@ -78,15 +82,33 @@ static inline uint32_t virt_to_phys(volatile void* virt_addr) {
 // Global aligned DMA buffers and descriptors for UHCI control transfers
 static uhci_qh_t control_qh __attribute__((aligned(16)));
 static uhci_td_t setup_td __attribute__((aligned(16))) ;
-static uhci_td_t in_td __attribute__((aligned(16)));
+static uhci_td_t descriptor_in_tds[8] __attribute__((aligned(16)));
 static uhci_td_t status_td __attribute__((aligned(16)));
 static usb_setup_packet_t setup_pkt __attribute__((aligned(4)));
 
 static uint8_t device_descriptor[18] __attribute__((aligned(16)));
+static uint8_t config_descriptor[64] __attribute__((aligned(16)));
+static uint8_t usb_interrupt_endpoint = 0;
+static uint16_t usb_interrupt_max_packet = 0;
+static uhci_qh_t mouse_interrupt_qh __attribute__((aligned(16)));
+#define USB_MOUSE_TD_COUNT 8
+static uhci_td_t mouse_interrupt_tds[USB_MOUSE_TD_COUNT] __attribute__((aligned(16)));
+static uint8_t mouse_interrupt_buffers[USB_MOUSE_TD_COUNT][8] __attribute__((aligned(16)));
+static uint8_t usb_mouse_ready = 0;
+
+static void uhci_dispatch_control_transfer(void) {
+    control_qh.head_link = 1;
+    control_qh.element_link = virt_to_phys(&setup_td);
+
+    uint32_t qh_phys = virt_to_phys(&control_qh) | 0x02;
+    for (int i = 0; i < FRAME_LIST_COUNT; i++) {
+        frame_list[i] = qh_phys;
+    }
+}
 
 static void uhci_set_address(uint8_t port_index, uint8_t new_address) {
     (void)port_index;
-    serial_write("UHCI: Setting USB device address to 1...\n");
+    serial_write("UHCI: Setting USB device address...\n");
 
     // 1. Prepare the 8-byte setup packet for SET_ADDRESS
     setup_pkt.bmRequestType = 0x00; // Host-to-device, Standard, Recipient: Device
@@ -97,26 +119,19 @@ static void uhci_set_address(uint8_t port_index, uint8_t new_address) {
 
     // 2. Configure SETUP TD (Address 0)
     setup_td.link   = virt_to_phys(&status_td);
-    setup_td.status = TD_STAT_ACTIVED | (3 << 27); // Active + 3 errors
-    setup_td.token  = (7 << 21) | (1 << 26) | (0 << 19) | (0 << 15) | (0 << 8) | USB_PID_SETUP;
+    setup_td.status = TD_STAT_ACTIVED | uhci_td_speed_flags | (3 << 27); // Active + 3 errors
+    setup_td.token  = (7 << 21) | (0 << 19) | (0 << 15) | (0 << 8) | USB_PID_SETUP;
     setup_td.buffer = virt_to_phys(&setup_pkt);
 
-    // 3. Configure STATUS TD (Control Write -> OUT packet)
-    // DİKKAT: Cihaz setup'ı alır almaz adresini değiştirdiği için status aşaması new_address (1) üzerinden gitmelidir!
+    // 3. Configure STATUS TD (control-write status is an IN packet)
+    // The device changes address only after the status stage completes.
     status_td.link   = 1; // Terminate (T = 1)
-    status_td.status = TD_STAT_ACTIVED | TD_STAT_IOC | (3 << 27);
-    status_td.token  = (0x7FF << 21) | (1 << 26) | (1 << 19) | (0 << 15) | (new_address << 8) | USB_PID_OUT; // <-- Adres alanı new_address (1) yapıldı
+    status_td.status = TD_STAT_ACTIVED | TD_STAT_IOC | uhci_td_speed_flags | (3 << 27);
+    status_td.token  = (0x7FF << 21) | (1 << 19) | (0 << 15) | (0 << 8) | USB_PID_IN;
     status_td.buffer = 0;
 
-    // 4. Configure Queue Head (QH)
-    control_qh.head_link    = 1; // Terminate
-    control_qh.element_link = virt_to_phys(&setup_td);
-
-    // 5. Point frame list to QH (Clear all entries first or assign safely)
-    uint32_t qh_phys = virt_to_phys(&control_qh) | 0x02; // Bit 1 = Queue Head pointer
-    for (int i = 0; i < FRAME_LIST_COUNT; i++) {
-        frame_list[i] = qh_phys;
-    }
+    // 4. Configure Queue Head and dispatch the transfer.
+    uhci_dispatch_control_transfer();
     
     serial_write("UHCI: SET_ADDRESS Queue Head and descriptors dispatched.\n");
 
@@ -128,7 +143,7 @@ static void uhci_set_address(uint8_t port_index, uint8_t new_address) {
     }
 
     if (!(status_td.status & TD_STAT_ACTIVED)) {
-        serial_write("UHCI: SET_ADDRESS completed successfully! Device is now at address 1.\n");
+        serial_write("UHCI: SET_ADDRESS completed successfully.\n");
     } else {
         serial_write("UHCI: Warning: SET_ADDRESS timed out or failed.\n");
         
@@ -146,7 +161,7 @@ static void uhci_set_address(uint8_t port_index, uint8_t new_address) {
     }
 }
 
-static void uhci_get_device_descriptor(void) {
+static int uhci_get_device_descriptor(void) {
     serial_write("UHCI: Requesting Device Descriptor (8-byte chunk for Address 0)...\n");
 
     // 1. Setup Paketi (Get Descriptor: Device Type, Length 8)
@@ -157,20 +172,20 @@ static void uhci_get_device_descriptor(void) {
     setup_pkt.wLength       = 0x0008; // İlk aşamada 8 bytes istiyoruz
 
     // 2. Setup TD (MaxLen = 7 [8 bytes], Toggle = 0 [DATA0], Endpoint = 0, Addr = 0)
-    setup_td.link   = virt_to_phys(&in_td);
-    setup_td.status = TD_STAT_ACTIVED | (3 << 27);
+    setup_td.link   = virt_to_phys(&descriptor_in_tds[0]);
+    setup_td.status = TD_STAT_ACTIVED | uhci_td_speed_flags | (3 << 27);
     setup_td.token  = (7 << 21) | (0 << 19) | (0 << 15) | (0 << 8) | USB_PID_SETUP;
     setup_td.buffer = virt_to_phys(&setup_pkt);
 
     // 3. In TD (MaxLen = 7 [8 bytes], Toggle = 1 [DATA1], Endpoint = 0, Addr = 0)
-    in_td.link   = virt_to_phys(&status_td);
-    in_td.status = TD_STAT_ACTIVED | TD_STAT_SPD | (3 << 27);
-    in_td.token  = (7 << 21) | (1 << 19) | (0 << 15) | (0 << 8) | USB_PID_IN;
-    in_td.buffer = virt_to_phys(device_descriptor);
+    descriptor_in_tds[0].link   = virt_to_phys(&status_td);
+    descriptor_in_tds[0].status = TD_STAT_ACTIVED | TD_STAT_SPD | uhci_td_speed_flags | (3 << 27);
+    descriptor_in_tds[0].token  = (7 << 21) | (1 << 19) | (0 << 15) | (0 << 8) | USB_PID_IN;
+    descriptor_in_tds[0].buffer = virt_to_phys(device_descriptor);
 
     // 4. Status TD (MaxLen = 0x7FF [0 bytes], Toggle = 1 [DATA1], Endpoint = 0, Addr = 0)
     status_td.link   = 1; // Terminate
-    status_td.status = TD_STAT_ACTIVED | TD_STAT_IOC | (3 << 27);
+    status_td.status = TD_STAT_ACTIVED | TD_STAT_IOC | uhci_td_speed_flags | (3 << 27);
     status_td.token  = (0x7FF << 21) | (1 << 19) | (0 << 15) | (0 << 8) | USB_PID_OUT;
     status_td.buffer = 0;
 
@@ -197,15 +212,309 @@ static void uhci_get_device_descriptor(void) {
         // Cihazın bMaxPacketSize0 değerini görmek için (genellikle 7. bayttır):
         uint8_t max_packet_size = device_descriptor[7];
         serial_write("  -> MaxPacketSize0: ");
-        // Eğer basit bir sayı yazdırma fonksiyonun yoksa en azından başarılı olduğunu anlıyoruz
+        serial_write_dec(max_packet_size);
+        serial_write("\n");
+        return 1;
     } else {
         serial_write("UHCI: Warning: Get Device Descriptor on Address 0 timed out or failed.\n");
-        uint32_t in_st = in_td.status;
+        uint32_t in_st = descriptor_in_tds[0].status;
         serial_write("  -> IN_TD Status: ");
         if (in_st & (1 << 26)) serial_write("[STALLED] ");
         if (in_st & (1 << 23)) serial_write("[Timeout] ");
         serial_write("\n");
+        return 0;
     }
+}
+
+static int uhci_get_full_device_descriptor(uint8_t address, uint8_t max_packet_size) {
+    uint8_t packet_count = max_packet_size >= 18 ? 1 : 3;
+    uint8_t bytes_left = sizeof(device_descriptor);
+    uint8_t offset = 0;
+
+    serial_write("UHCI: Requesting full Device Descriptor...\n");
+
+    setup_pkt.bmRequestType = 0x80;
+    setup_pkt.bRequest = 0x06;
+    setup_pkt.wValue = 0x0100;
+    setup_pkt.wIndex = 0;
+    setup_pkt.wLength = sizeof(device_descriptor);
+
+    setup_td.link = virt_to_phys(&descriptor_in_tds[0]);
+    setup_td.status = TD_STAT_ACTIVED | uhci_td_speed_flags | (3 << 27);
+    setup_td.token = (7 << 21) | (0 << 19) | (address << 8) | USB_PID_SETUP;
+    setup_td.buffer = virt_to_phys(&setup_pkt);
+
+    for (uint8_t i = 0; i < packet_count; i++) {
+        uint8_t packet_length = bytes_left > max_packet_size ? max_packet_size : bytes_left;
+        descriptor_in_tds[i].link = (i + 1 < packet_count)
+            ? virt_to_phys(&descriptor_in_tds[i + 1])
+            : virt_to_phys(&status_td);
+        descriptor_in_tds[i].status = TD_STAT_ACTIVED | TD_STAT_SPD | uhci_td_speed_flags | (3 << 27);
+        descriptor_in_tds[i].token = ((uint32_t)(packet_length - 1) << 21)
+            | (((uint32_t)(i & 1) ^ 1) << 19)
+            | ((uint32_t)address << 8) | USB_PID_IN;
+        descriptor_in_tds[i].buffer = virt_to_phys(&device_descriptor[offset]);
+        offset += packet_length;
+        bytes_left -= packet_length;
+    }
+
+    status_td.link = 1;
+    status_td.status = TD_STAT_ACTIVED | TD_STAT_IOC | uhci_td_speed_flags | (3 << 27);
+    status_td.token = (0x7FF << 21) | (1 << 19) | ((uint32_t)address << 8) | USB_PID_OUT;
+    status_td.buffer = 0;
+
+    uhci_dispatch_control_transfer();
+
+    int timeout = 2000000;
+    while ((status_td.status & TD_STAT_ACTIVED) && timeout > 0) {
+        timeout--;
+        __asm__ volatile("nop");
+    }
+
+    if (status_td.status & TD_STAT_ACTIVED) {
+        serial_write("UHCI: Full Device Descriptor timed out.\n");
+        serial_write("  -> SETUP TD: 0x");
+        serial_write_num(setup_td.status);
+        serial_write(" DATA TD0: 0x");
+        serial_write_num(descriptor_in_tds[0].status);
+        serial_write(" DATA TD1: 0x");
+        serial_write_num(descriptor_in_tds[1].status);
+        serial_write(" DATA TD2: 0x");
+        serial_write_num(descriptor_in_tds[2].status);
+        serial_write(" STATUS TD: 0x");
+        serial_write_num(status_td.status);
+        serial_write("\n");
+        return 0;
+    }
+
+    serial_write("UHCI: Full Device Descriptor received.\n");
+    serial_write("  -> Vendor ID: 0x");
+    serial_write_num((uint32_t)device_descriptor[8] | ((uint32_t)device_descriptor[9] << 8));
+    serial_write(" Product ID: 0x");
+    serial_write_num((uint32_t)device_descriptor[10] | ((uint32_t)device_descriptor[11] << 8));
+    serial_write(" Class: 0x");
+    serial_write_num(device_descriptor[4]);
+    serial_write("\n");
+    return 1;
+}
+
+static int uhci_get_config_descriptor(uint8_t address, uint8_t max_packet_size) {
+    serial_write("UHCI: Requesting configuration descriptor header...\n");
+
+    setup_pkt.bmRequestType = 0x80;
+    setup_pkt.bRequest = 0x06;
+    setup_pkt.wValue = 0x0200;
+    setup_pkt.wIndex = 0;
+    setup_pkt.wLength = 9;
+
+    setup_td.link = virt_to_phys(&descriptor_in_tds[0]);
+    setup_td.status = TD_STAT_ACTIVED | uhci_td_speed_flags | (3 << 27);
+    setup_td.token = (7 << 21) | ((uint32_t)address << 8) | USB_PID_SETUP;
+    setup_td.buffer = virt_to_phys(&setup_pkt);
+
+    uint8_t first_length = max_packet_size < 9 ? max_packet_size : 9;
+    descriptor_in_tds[0].link = virt_to_phys(&descriptor_in_tds[1]);
+    descriptor_in_tds[0].status = TD_STAT_ACTIVED | TD_STAT_SPD
+        | uhci_td_speed_flags | (3 << 27);
+    descriptor_in_tds[0].token = ((uint32_t)(first_length - 1) << 21)
+        | (1 << 19) | ((uint32_t)address << 8) | USB_PID_IN;
+    descriptor_in_tds[0].buffer = virt_to_phys(config_descriptor);
+
+    uint8_t second_length = 9 - first_length;
+    descriptor_in_tds[1].link = virt_to_phys(&status_td);
+    descriptor_in_tds[1].status = TD_STAT_ACTIVED | TD_STAT_SPD
+        | uhci_td_speed_flags | (3 << 27);
+    descriptor_in_tds[1].token = ((uint32_t)(second_length - 1) << 21)
+        | ((uint32_t)address << 8) | USB_PID_IN;
+    descriptor_in_tds[1].buffer = virt_to_phys(&config_descriptor[first_length]);
+
+    status_td.link = 1;
+    status_td.status = TD_STAT_ACTIVED | TD_STAT_IOC | uhci_td_speed_flags | (3 << 27);
+    status_td.token = (0x7FF << 21) | (1 << 19)
+        | ((uint32_t)address << 8) | USB_PID_OUT;
+    status_td.buffer = 0;
+
+    uhci_dispatch_control_transfer();
+
+    int timeout = 2000000;
+    while ((status_td.status & TD_STAT_ACTIVED) && timeout > 0) {
+        timeout--;
+        __asm__ volatile("nop");
+    }
+
+    if (status_td.status & TD_STAT_ACTIVED) {
+        serial_write("UHCI: Configuration descriptor timed out.\n");
+        return 0;
+    }
+
+    serial_write("UHCI: Configuration descriptor header received.\n");
+    serial_write("  -> Total Length: ");
+    serial_write_dec((uint32_t)config_descriptor[2]
+        | ((uint32_t)config_descriptor[3] << 8));
+    serial_write(" Interfaces: ");
+    serial_write_dec(config_descriptor[4]);
+    serial_write("\n");
+    return 1;
+}
+
+static int uhci_get_full_config_descriptor(uint8_t address, uint8_t max_packet_size,
+                                           uint16_t total_length) {
+    if (total_length > sizeof(config_descriptor) || total_length < 9) {
+        serial_write("UHCI: Unsupported configuration descriptor length.\n");
+        return 0;
+    }
+
+    uint8_t packet_count = (uint8_t)((total_length + max_packet_size - 1) / max_packet_size);
+    if (packet_count > 8) {
+        serial_write("UHCI: Configuration descriptor needs too many TDs.\n");
+        return 0;
+    }
+
+    serial_write("UHCI: Requesting full configuration descriptor...\n");
+    setup_pkt.bmRequestType = 0x80;
+    setup_pkt.bRequest = 0x06;
+    setup_pkt.wValue = 0x0200;
+    setup_pkt.wIndex = 0;
+    setup_pkt.wLength = total_length;
+
+    setup_td.link = virt_to_phys(&descriptor_in_tds[0]);
+    setup_td.status = TD_STAT_ACTIVED | uhci_td_speed_flags | (3 << 27);
+    setup_td.token = (7 << 21) | ((uint32_t)address << 8) | USB_PID_SETUP;
+    setup_td.buffer = virt_to_phys(&setup_pkt);
+
+    uint16_t offset = 0;
+    for (uint8_t i = 0; i < packet_count; i++) {
+        uint8_t packet_length = (uint16_t)(total_length - offset) > max_packet_size
+            ? max_packet_size : (uint8_t)(total_length - offset);
+        descriptor_in_tds[i].link = (i + 1 < packet_count)
+            ? virt_to_phys(&descriptor_in_tds[i + 1]) : virt_to_phys(&status_td);
+        descriptor_in_tds[i].status = TD_STAT_ACTIVED | TD_STAT_SPD
+            | uhci_td_speed_flags | (3 << 27);
+        descriptor_in_tds[i].token = ((uint32_t)(packet_length - 1) << 21)
+            | (((uint32_t)(i & 1) ^ 1) << 19)
+            | ((uint32_t)address << 8) | USB_PID_IN;
+        descriptor_in_tds[i].buffer = virt_to_phys(&config_descriptor[offset]);
+        offset += packet_length;
+    }
+
+    status_td.link = 1;
+    status_td.status = TD_STAT_ACTIVED | TD_STAT_IOC | uhci_td_speed_flags | (3 << 27);
+    status_td.token = (0x7FF << 21) | (1 << 19)
+        | ((uint32_t)address << 8) | USB_PID_OUT;
+    status_td.buffer = 0;
+    uhci_dispatch_control_transfer();
+
+    int timeout = 2000000;
+    while ((status_td.status & TD_STAT_ACTIVED) && timeout > 0) {
+        timeout--;
+        __asm__ volatile("nop");
+    }
+    if (status_td.status & TD_STAT_ACTIVED) {
+        serial_write("UHCI: Full configuration descriptor timed out.\n");
+        return 0;
+    }
+
+    uint16_t descriptor_offset = 0;
+    while (descriptor_offset + 2 <= total_length) {
+        uint8_t length = config_descriptor[descriptor_offset];
+        uint8_t type = config_descriptor[descriptor_offset + 1];
+        if (length < 2 || descriptor_offset + length > total_length) break;
+
+        if (type == 0x04 && length >= 9 && config_descriptor[descriptor_offset + 5] == 0x03) {
+            serial_write("UHCI: HID interface found.\n");
+            usb_mouse_set_absolute_mode(!(
+                config_descriptor[descriptor_offset + 6] == 0x01
+                && config_descriptor[descriptor_offset + 7] == 0x02));
+        } else if (type == 0x05 && length >= 7
+                   && (config_descriptor[descriptor_offset + 2] & 0x80)
+                   && (config_descriptor[descriptor_offset + 3] & 0x03) == 0x03) {
+            usb_interrupt_endpoint = config_descriptor[descriptor_offset + 2];
+            usb_interrupt_max_packet = (uint16_t)config_descriptor[descriptor_offset + 4]
+                | ((uint16_t)config_descriptor[descriptor_offset + 5] << 8);
+            serial_write("UHCI: Interrupt IN endpoint found: 0x");
+            serial_write_dec(usb_interrupt_endpoint);
+            serial_write(" MaxPacket: ");
+            serial_write_dec(usb_interrupt_max_packet);
+            serial_write("\n");
+        }
+        descriptor_offset += length;
+    }
+    return usb_interrupt_endpoint != 0 && usb_interrupt_max_packet != 0;
+}
+
+static int uhci_set_configuration(uint8_t address, uint8_t configuration_value) {
+    serial_write("UHCI: Setting device configuration...\n");
+
+    setup_pkt.bmRequestType = 0x00;
+    setup_pkt.bRequest = 0x09;
+    setup_pkt.wValue = configuration_value;
+    setup_pkt.wIndex = 0;
+    setup_pkt.wLength = 0;
+
+    setup_td.link = virt_to_phys(&status_td);
+    setup_td.status = TD_STAT_ACTIVED | uhci_td_speed_flags | (3 << 27);
+    setup_td.token = (7 << 21) | ((uint32_t)address << 8) | USB_PID_SETUP;
+    setup_td.buffer = virt_to_phys(&setup_pkt);
+
+    status_td.link = 1;
+    status_td.status = TD_STAT_ACTIVED | TD_STAT_IOC | uhci_td_speed_flags | (3 << 27);
+    status_td.token = (0x7FF << 21) | (1 << 19)
+        | ((uint32_t)address << 8) | USB_PID_IN;
+    status_td.buffer = 0;
+    uhci_dispatch_control_transfer();
+
+    int timeout = 800000;
+    while ((status_td.status & TD_STAT_ACTIVED) && timeout > 0) {
+        timeout--;
+        __asm__ volatile("nop");
+    }
+
+    if (status_td.status & TD_STAT_ACTIVED) {
+        serial_write("UHCI: SET_CONFIGURATION timed out.\n");
+        return 0;
+    }
+    serial_write("UHCI: Device configured successfully.\n");
+    return 1;
+}
+
+static void uhci_start_mouse_interrupt(uint8_t address) {
+    for (int i = 0; i < USB_MOUSE_TD_COUNT; i++) {
+        int next = (i + 1) % USB_MOUSE_TD_COUNT;
+        mouse_interrupt_tds[i].link = virt_to_phys(&mouse_interrupt_tds[next]);
+        mouse_interrupt_tds[i].status = TD_STAT_ACTIVED | TD_STAT_IOC
+            | uhci_td_speed_flags | (3 << 27);
+        mouse_interrupt_tds[i].token = ((uint32_t)(usb_interrupt_max_packet - 1) << 21)
+            | ((uint32_t)(usb_interrupt_endpoint & 0x0F) << 15)
+            | ((uint32_t)address << 8) | USB_PID_IN;
+        mouse_interrupt_tds[i].buffer = virt_to_phys(mouse_interrupt_buffers[i]);
+    }
+
+    mouse_interrupt_qh.head_link = 1;
+    mouse_interrupt_qh.element_link = virt_to_phys(&mouse_interrupt_tds[0]);
+
+    uint32_t qh_phys = virt_to_phys(&mouse_interrupt_qh) | 0x02;
+    for (int i = 0; i < FRAME_LIST_COUNT; i++) {
+        frame_list[i] = qh_phys;
+    }
+    usb_mouse_ready = 1;
+    serial_write("UHCI: USB mouse interrupt polling started.\n");
+}
+
+void uhci_poll(void) {
+    if (!usb_mouse_ready) return;
+
+    for (int i = 0; i < USB_MOUSE_TD_COUNT; i++) {
+        if (mouse_interrupt_tds[i].status & TD_STAT_ACTIVED) continue;
+
+        usb_mouse_process_report(mouse_interrupt_buffers[i],
+                                 sizeof(mouse_interrupt_buffers[i]));
+        mouse_interrupt_tds[i].status = TD_STAT_ACTIVED | TD_STAT_IOC
+            | uhci_td_speed_flags | (3 << 27);
+    }
+}
+
+uint8_t uhci_mouse_active(void) {
+    return usb_mouse_ready;
 }
 
 static void uhci_check_ports(void) {
@@ -257,13 +566,33 @@ static void uhci_check_ports(void) {
 
             if (status & PORTSC_PORT_EN) {
                 serial_write("UHCI: Port successfully enabled and device ready!\n");
+                uhci_td_speed_flags = (status & PORTSC_LSDA) ? TD_STAT_LOW_SPEED : 0;
                 
                 // Gecikmeyi biraz uzatalım ki cihaz tamamen kendine gelsin
                 for (volatile int d = 0; d < 800000; d++) {
                     __asm__ volatile("nop");
                 }
                 
-                uhci_get_device_descriptor();
+                if (uhci_get_device_descriptor()) {
+                    uint8_t device_address = (uint8_t)(i + 1);
+                    uint8_t max_packet_size = device_descriptor[7];
+                    uhci_get_full_device_descriptor(0, max_packet_size);
+                    uhci_set_address((uint8_t)i, device_address);
+                    for (volatile int delay = 0; delay < 100000; delay++) {
+                        __asm__ volatile("nop");
+                    }
+                    uhci_get_full_device_descriptor(device_address, max_packet_size);
+                    if (uhci_get_config_descriptor(device_address, max_packet_size)) {
+                        uint16_t total_length = (uint16_t)config_descriptor[2]
+                            | ((uint16_t)config_descriptor[3] << 8);
+                        if (uhci_get_full_config_descriptor(device_address, max_packet_size,
+                                                            total_length)) {
+                            if (uhci_set_configuration(device_address, config_descriptor[5])) {
+                                uhci_start_mouse_interrupt(device_address);
+                            }
+                        }
+                    }
+                }
             } else {
                 serial_write("UHCI: Port reset failed or device unsupported.\n");
             }

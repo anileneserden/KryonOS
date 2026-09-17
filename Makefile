@@ -27,6 +27,7 @@ SRC_C = \
     kernel/drivers/audio/ac97.c \
     kernel/drivers/input/keyboard_ps2.c \
     kernel/drivers/input/mouse_ps2.c \
+    kernel/drivers/input/mouse_usb.c \
     kernel/drivers/storage/ata.c \
     kernel/drivers/usb/uhci.c \
     kernel/drivers/video/font/font8x8_basic.c \

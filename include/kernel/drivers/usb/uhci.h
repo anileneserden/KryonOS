@@ -5,18 +5,20 @@
 
 // Transfer Descriptor (TD) - 16 bayt hizalı olmalıdır
 typedef struct {
-    uint32_t link;       // Sonraki TD'nin adresi
-    uint32_t status;     // Durum ve hata bayrakları
-    uint32_t token;      // Paket türü (SETUP, IN, OUT), Adres ve Endpoint
-    uint32_t buffer;     // Verinin bulunduğu fiziksel bellek adresi
+    volatile uint32_t link;       // Sonraki TD'nin adresi
+    volatile uint32_t status;     // Durum ve hata bayrakları
+    volatile uint32_t token;      // Paket türü (SETUP, IN, OUT), Adres ve Endpoint
+    volatile uint32_t buffer;     // Verinin bulunduğu fiziksel bellek adresi
 } __attribute__((packed)) uhci_td_t;
 
 // Queue Head (QH) - Kuyruk Başı Yapısı
 typedef struct {
-    uint32_t head_link;    // Yatay kuyruk bağlantısı
-    uint32_t element_link; // İlk çalıştırılacak TD'nin adresi
+    volatile uint32_t head_link;    // Yatay kuyruk bağlantısı
+    volatile uint32_t element_link; // İlk çalıştırılacak TD'nin adresi
 } __attribute__((packed)) uhci_qh_t;
 
 void uhci_init(void);
+void uhci_poll(void);
+uint8_t uhci_mouse_active(void);
 
 #endif

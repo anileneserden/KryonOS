@@ -128,7 +128,11 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
 
     test_kryfs_read();
 
-    mouse_init(); 
+    if (!uhci_mouse_active()) {
+        mouse_init();
+    } else {
+        serial_write("USB mouse active; PS/2 mouse initialization skipped.\n");
+    }
     keyboard_init();
 
     // --- READ C:/Users/anil/Desktop/test.txt AND WRITE IT TO SERIAL ---
@@ -177,6 +181,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
 
     // 6. Main event loop
     while (1) {
+        uhci_poll();
         if (inb_port(0x64) & 1) {
             uint8_t status = inb_port(0x64);
             if (status & 0x20) {
