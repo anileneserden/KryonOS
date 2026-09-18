@@ -73,7 +73,16 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     }
     keyboard_init();
 
-    // --- C:/Users/anil/Desktop/test.txt DOSYASINI OKUMA VE SERIAL'A YAZMA ---
+    // --- KEF UYGULAMASINI YÜKLE VE ÇALIŞTIR ---
+    serial_write("KEF: Loading calculator application...\n");
+    if (kef_load_and_run("C:/Program Files/calculator/calculator.kef")) {
+        serial_write("KEF: Application executed successfully.\n");
+    } else {
+        serial_write("KEF HATA: Calculator uygulamasi calistirilamadi!\n");
+    }
+    // ------------------------------------------
+
+   // --- C:/Users/anil/Desktop/test.txt DOSYASINI OKUMA VE SERIAL'A YAZMA ---
     uint32_t file_size = 0;
     char* file_content = (char*)vfs_read_file("C:/Users/anil/Desktop/test.txt", &file_size);
     

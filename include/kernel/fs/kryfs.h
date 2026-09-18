@@ -16,12 +16,12 @@ typedef struct {
 } __attribute__((packed)) kryfs_superblock_t;
 
 typedef struct {
-    uint32_t inode_id;     // 4 bytes
-    char filename[32];     // 32 bytes
-    uint32_t size;         // 4 bytes
-    uint32_t first_block;  // 4 bytes
-    uint8_t is_used;       // 1 byte
-    uint8_t is_directory;  // 1 byte
+    uint32_t inode_id;     
+    char filename[64];
+    uint32_t size;         
+    uint32_t first_block;  
+    uint8_t is_used;       
+    uint8_t is_directory;  
 } __attribute__((packed)) kryfs_inode_t;
 
 void kryfs_init(void);
