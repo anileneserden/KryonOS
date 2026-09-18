@@ -24,21 +24,32 @@ bool wav_validate_header(wav_header_t* header) {
 }
 
 bool wav_play_file(const char* full_path) {
+    serial_write("WAV Debug: Entering wav_play_file for path: ");
+    serial_write(full_path);
+    serial_write("\n");
+
     uint32_t file_size = 0;
 
+    serial_write("WAV Debug: Calling vfs_read_file...\n");
     uint8_t* file_buffer = (uint8_t*)vfs_read_file(full_path, &file_size);
     if (!file_buffer || file_size < sizeof(wav_header_t)) {
         serial_write("WAV Error: Failed to read file or file size is insufficient!\n");
         return false;
     }
 
+    serial_write("WAV Debug: File read successfully. Size: ");
+    serial_write_num(file_size);
+    serial_write("\n");
+
     wav_header_t* header = (wav_header_t*)file_buffer;
 
+    serial_write("WAV Debug: Validating header...\n");
     if (!wav_validate_header(header)) {
         serial_write("WAV Error: Header validation failed!\n");
         kfree(file_buffer);
         return false;
     }
+    serial_write("WAV Debug: Header validated successfully.\n");
 
     serial_write("WAV Info: Format=");
     serial_write_num(header->audio_format);
@@ -51,6 +62,7 @@ bool wav_play_file(const char* full_path) {
     serial_write("\n");
 
     // Search for the "data" chunk dynamically
+    serial_write("WAV Debug: Searching for 'data' chunk...\n");
     uint32_t data_offset = 0;
     for (uint32_t i = 12; i < file_size - 8; i++) {
         if (file_buffer[i] == 'd' && file_buffer[i+1] == 'a' && 
@@ -75,8 +87,10 @@ bool wav_play_file(const char* full_path) {
 
     uint16_t* pcm_data = (uint16_t*)(file_buffer + data_offset);
 
+    serial_write("WAV Debug: Setting AC97 sample rate and playing sound...\n");
     ac97_set_sample_rate(header->sample_rate);
     ac97_play_sound(pcm_data, pcm_size);
+    serial_write("WAV Debug: wav_play_file completed successfully.\n");
 
     return true;
 }

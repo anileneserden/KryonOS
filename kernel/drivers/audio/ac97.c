@@ -79,8 +79,11 @@ void ac97_set_sample_rate(uint32_t hz) {
 void ac97_play_sound(uint16_t* buffer, uint32_t length) {
     if (!ac97_dev.found || !bdl_list || !buffer || length == 0) return;
 
-    // Stop the AC'97 DMA controller
+    // 1. Stop the AC'97 DMA controller and clear status bits
     ac97_outb(ac97_dev.nabmbar + AC97_PO_CR, 0x00);
+    
+    // Clear status register flags (Write 1 to clear W1C bits in SR if needed, or reset via CR)
+    ac97_outw(ac97_dev.nabmbar + AC97_PO_SR, 0x001C);
 
     // Total sample (word) count for 16-bit stereo/mono
     uint32_t total_samples = length / 2;
@@ -88,18 +91,15 @@ void ac97_play_sound(uint16_t* buffer, uint32_t length) {
     uint32_t current_offset = 0;
     int bdl_index = 0;
 
-    // Clear the BDL table
+    // Clear the BDL table completely
     memset(bdl_list, 0, sizeof(ac97_bdl_entry_t) * 32);
 
-    // Split the data into 32768-sample (64 KB) chunks and fill the BDL table
+    // Split the data into chunks and fill the BDL table
     while (remaining_samples > 0 && bdl_index < 32) {
         uint32_t chunk_samples = (remaining_samples > 32768) ? 32768 : remaining_samples;
 
-        // Because the VMM uses identity mapping, the buffer address is directly physical.
         bdl_list[bdl_index].ptr = (uint32_t)(buffer + current_offset);
         bdl_list[bdl_index].samples = (uint16_t)chunk_samples;
-        
-        // Default flags are 0 (continue)
         bdl_list[bdl_index].flags = 0;
 
         remaining_samples -= chunk_samples;
@@ -115,7 +115,7 @@ void ac97_play_sound(uint16_t* buffer, uint32_t length) {
     // Write the BDL address
     ac97_outl(ac97_dev.nabmbar + AC97_PO_BDBAR, (uint32_t)bdl_list);
 
-    // Set the last valid index (LVI) (bdl_index - 1 because it is zero-indexed)
+    // Set the last valid index (LVI)
     ac97_outb(ac97_dev.nabmbar + AC97_PO_LVI, (uint8_t)(bdl_index - 1));
 
     // Start the transfer (set the Run/Pause bit)
