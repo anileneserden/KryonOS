@@ -59,15 +59,12 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     vfs_init();
     kryos_fs_system_init();
     
-
     if (fat32_init_disk(1, 0)) {
         fs_driver_t fat32_driver = fat32_get_driver();
         vfs_mount('D', "FAT32_VOL", fat32_driver);
     } else {
         serial_write("FAT32: Driver could not be started!\n");
     }
-
-
 
     if (!uhci_mouse_active()) {
         mouse_init();
@@ -76,7 +73,26 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     }
     keyboard_init();
 
-    // 4. Initialize the graphical interface and perform the first draw
+    // --- C:/Users/anil/Desktop/test.txt DOSYASINI OKUMA VE SERIAL'A YAZMA ---
+    uint32_t file_size = 0;
+    char* file_content = (char*)vfs_read_file("C:/Users/anil/Desktop/test.txt", &file_size);
+    
+    if (file_content && file_size > 0) {
+        serial_write("\n[VFS] C:/test.txt basariyla okundu:\n--- BASLANGIC ---\n");
+        
+        // Karakter karakter veya blok halinde serial porta yazdır
+        for (uint32_t i = 0; i < file_size; i++) {
+            char c[2] = { file_content[i], '\0' };
+            serial_write(c);
+        }
+        
+        serial_write("\n--- BITIS ---\n\n");
+    } else {
+        serial_write("[VFS HATA] test.txt okunamadi veya dosya bos!\n");
+    }
+    // --------------------------------------------------------
+
+    // 4. Grafik Arayüzünün Başlatılması ve İlk Çizim
     uint32_t width = fb_get_width();
     uint32_t height = fb_get_height();
 
