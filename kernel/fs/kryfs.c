@@ -37,6 +37,9 @@ int kryfs_mount(void) {
     serial_write("[KRYFS] -> Inode Tablo Bloku: ");
     serial_write_num(sb_cache.inode_table_block);
     serial_write("\n");
+    serial_write("[KRYFS] -> Veri Bloku Baslangici: ");
+    serial_write_num(sb_cache.data_block_start);
+    serial_write("\n");
 
     kryfs_is_mounted = 1;
     serial_write("[KRYFS] Dosya sistemi basariyla monte edildi (Mounted)!\n");
@@ -49,37 +52,66 @@ int kryfs_find_inode(const char* filename, kryfs_inode_t* out_inode) {
         return -1;
     }
 
-    uint32_t table_lba = sb_cache.inode_table_block;
-    uint32_t inodes_per_sector = 512 / sizeof(kryfs_inode_t);
+    // 1. Gelen yoldaki C:\ veya / eklerini temizleyelim (Eğer varsa)
+    if (filename[0] == '/' || filename[0] == '\\') {
+        filename++;
+    } else if (filename[1] == ':' && (filename[2] == '/' || filename[2] == '\\')) {
+        filename += 3;
+    }
 
-    uint8_t* sector_buf = (uint8_t*)kmalloc(512);
+    uint32_t table_lba = sb_cache.inode_table_block;
+    uint32_t data_start = sb_cache.data_block_start;
+
+    // Inode tablosunun kapladığı sektör sayısını dinamik olarak hesapla
+    uint32_t inode_table_sectors = data_start - table_lba;
+    if (inode_table_sectors == 0) inode_table_sectors = 1;
+
+    uint32_t total_buffer_size = inode_table_sectors * 512;
+    uint8_t* sector_buf = (uint8_t*)kmalloc(total_buffer_size);
     if (!sector_buf) {
         serial_write("[KRYFS HATA] Inode arama icin bellek tahsisi basarisiz!\n");
         return -1;
     }
 
-    // Inode tablosunun ilk sektörünü oku
-    ata_read_sectors(0, table_lba, 1, sector_buf);
+    // Tüm inode tablosunu tek seferde oku
+    ata_read_sectors(0, table_lba, inode_table_sectors, sector_buf);
 
-    kryfs_inode_t* inodes = (kryfs_inode_t*)sector_buf;
     int found = -1;
+    uint32_t max_inodes = total_buffer_size / sizeof(kryfs_inode_t);
 
-    for (uint32_t i = 0; i < inodes_per_sector; i++) {
-        if (inodes[i].is_used) {
-            serial_write("[KRYFS] Inode taranıyor: ");
-            serial_write(inodes[i].filename);
-            serial_write("\n");
+    for (uint32_t i = 0; i < max_inodes; i++) {
+        kryfs_inode_t* inode = (kryfs_inode_t*)(sector_buf + (i * sizeof(kryfs_inode_t)));
 
-            if (strcmp(inodes[i].filename, filename) == 0) {
-                // Dosya bulundu, dışarıdaki yapıya kopyala
-                memcpy(out_inode, &inodes[i], sizeof(kryfs_inode_t));
-                found = 0; // Başarılı
+        if (inode->is_used) {
+            serial_write("[KRYFS] Inode taranıyor: [");
+            serial_write(inode->filename);
+            serial_write("] | Aranan: [");
+            serial_write((char*)filename);
+            serial_write("]\n");
+
+            // Tam eşleşme VEYA yolun sonu eşleşmesi kontrolü (Örn: "test.txt" -> "Users/anil/Desktop/test.txt")
+            int match = 0;
+            if (strcmp(inode->filename, filename) == 0) {
+                match = 1;
+            } else {
+                int in_len = strlen(inode->filename);
+                int fn_len = strlen(filename);
+                if (in_len > fn_len && 
+                    (inode->filename[in_len - fn_len - 1] == '/' || inode->filename[in_len - fn_len - 1] == '\\') &&
+                    strcmp(inode->filename + in_len - fn_len, filename) == 0) {
+                    match = 1;
+                }
+            }
+
+            if (match) {
+                memcpy(out_inode, inode, sizeof(kryfs_inode_t));
+                found = 0;
                 break;
             }
         }
     }
 
-    kfree(sector_buf); // Inode arama tamponunu serbest bırak
+    kfree(sector_buf);
 
     if (found != 0) {
         serial_write("[KRYFS] Aranan dosya bulunamadi: ");

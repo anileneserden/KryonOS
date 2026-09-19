@@ -20,6 +20,7 @@ SRC_S = \
 SRC_C = \
     kernel/audio/wav.c \
     kernel/app_manager.c \
+    kernel/hexdump.c \
     kernel/kef_loader.c \
     kernel/kmain.c \
     kernel/serial.c \

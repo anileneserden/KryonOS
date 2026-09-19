@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <kernel/fs/vfs.h>
 
-#define KRYFS_MAX_FILENAME 32
+#define KRYFS_MAX_FILENAME 256
 
 typedef struct {
     uint32_t magic;              
