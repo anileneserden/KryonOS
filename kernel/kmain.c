@@ -9,18 +9,16 @@
 #include <kernel/fs/fat32.h>
 #include <kernel/fs/vfs.h>
 #include <kernel/drivers/audio/ac97.h>
-#include <kernel/audio/wav.h>
 #include <kernel/drivers/input/mouse_ps2.h>
 #include <kernel/drivers/input/keyboard_ps2.h>
 #include <kernel/drivers/pci.h>
 #include <kernel/drivers/usb/uhci.h>
 #include <ui/cursor.h>
 #include <ui/desktop.h>
+#include <kernel/app.h>
 #include <kernel/mem/heap.h>
 #include <kernel/mem/pmm.h>
 #include <kernel/mem/vmm.h>
-#include <kernel/app.h>
-#include <kernel/kef.h>
 #include <arch/x86/io.h>
 
 static inline uint8_t inb_port(uint16_t port) {
@@ -29,22 +27,18 @@ static inline uint8_t inb_port(uint16_t port) {
     return ret;
 }
 
-void sample_app_draw(app_t* app) {
-    (void)app; // Avoid the -Wunused-parameter warning
-}
-
 void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     serial_init();
     serial_write("KryonOS started!\n");
 
     if (mboot_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
         serial_write("ERROR: Invalid magic number!\n");
-        while (1) { __asm__ volatile("hlt"); }
+        return;
     }
 
-    multiboot_info_t* mboot = (multiboot_info_t*) mboot_info_addr;
+    multiboot_info_t* mboot = (multiboot_info_t*)mboot_info_addr;
 
-    // 1. Memory management
+    // 1. Memory and heap initialization
     pmm_init(mboot);
     vmm_init();
     heap_init(0x2000000, 1024 * 1024 * 16);
@@ -57,7 +51,6 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
 
     // 3. Filesystems and input drivers
     vfs_init();
-    kryos_fs_system_init();
     
     if (fat32_init_disk(1, 0)) {
         fs_driver_t fat32_driver = fat32_get_driver();
@@ -66,6 +59,12 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         serial_write("FAT32: Driver could not be started!\n");
     }
 
+    // KRYFS Mount işlemi (İsteğe bağlı sessiz mount kontrolü)
+    if (kryfs_mount() == 0) {
+        serial_write("KRYFS mounted successfully.\n");
+    }
+
+    // 4. Input drivers
     if (!uhci_mouse_active()) {
         mouse_init();
     } else {
@@ -73,61 +72,30 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     }
     keyboard_init();
 
-    // --- C:/Users/anil/Desktop/test.txt DOSYASINI OKUMA VE SERIAL'A YAZMA ---
-    uint32_t file_size = 0;
-    char* file_content = (char*)vfs_read_file("C:/Users/anil/Desktop/test.txt", &file_size);
-    
-    if (file_content && file_size > 0) {
-        serial_write("\n[VFS] C:/test.txt basariyla okundu:\n--- BASLANGIC ---\n");
-        
-        // Karakter karakter veya blok halinde serial porta yazdır
-        for (uint32_t i = 0; i < file_size; i++) {
-            char c[2] = { file_content[i], '\0' };
-            serial_write(c);
-        }
-        
-        serial_write("\n--- BITIS ---\n\n");
-    } else {
-        serial_write("[VFS HATA] test.txt okunamadi veya dosya bos!\n");
-    }
-    // --------------------------------------------------------
-
-    // 4. Grafik Arayüzünün Başlatılması ve İlk Çizim
+    // 5. Grafik Arayüzünün Başlatılması ve İlk Çizim
     uint32_t width = fb_get_width();
     uint32_t height = fb_get_height();
 
     if (width > 0 && height > 0) {
-        fb_clear(0xFF0000FF); 
+        fb_clear(0xFF0000FF); // Lacivert/Mavi masaüstü arka planı
         desktop_init(); 
     }
 
     app_manager_init();
-    /*if (!kef_load_and_run("C:/Kryon/System32/test1.kef")) {
-        kef_load_and_run("C:/test1.kef");
-    }*/
-    app_create("Not Defteri", 250, 180, 0, sample_app_draw);
-
     fb_swap();
 
-    // 5. AC97 audio driver and WAV player
+    // 6. AC97 audio driver initialization
     if (ac97_init() == 0) {
         ac97_set_master_volume(100);
-
-        serial_write("AC97: Attempting to play startup.wav...\n");
-        wav_play_file("C:/Kryon/Media/startup.wav");
+        serial_write("AC97: Driver initialized and ready.\n");
     }
 
-    // 6. Main event loop
+    // 7. Main event loop (GUI aktif döngü)
     while (1) {
         uint8_t input_updated = uhci_poll();
         if (inb_port(0x64) & 1) {
+            keyboard_handler();
             input_updated = 1;
-            uint8_t status = inb_port(0x64);
-            if (status & 0x20) {
-                mouse_handler();
-            } else {
-                keyboard_handler();
-            }
         }
 
         if (input_updated) {

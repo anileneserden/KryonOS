@@ -82,11 +82,20 @@ iso: $(TARGET)
 	echo '}' >> isodir/boot/grub/grub.cfg
 	grub-mkrescue -o kryonos.iso isodir
 
-run: iso
+# Dosyalar yoksa otomatik boş imaj oluşturan kural
+$(DISK_KRYFS):
+	@mkdir -p $(dir $@)
+	dd if=/dev/zero of=$@ bs=1M count=2
+
+$(DISK_FAT32):
+	@mkdir -p $(dir $@)
+	dd if=/dev/zero of=$@ bs=1M count=16
+
+run: iso $(DISK_KRYFS) $(DISK_FAT32)
 	qemu-system-i386 -cdrom kryonos.iso \
-       -drive format=raw,file=/home/anil/KryonOS/main/disk-kryfs.img,index=0,media=disk \
-       -drive format=raw,file=/home/anil/KryonOS/main/disk-fat32.img,index=1,media=disk \
+       -drive format=raw,file=$(DISK_KRYFS),index=0,media=disk \
+       -drive format=raw,file=$(DISK_FAT32),index=1,media=disk \
        -audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
        -device piix3-usb-uhci,id=uhci \
-    -device usb-mouse,bus=uhci.0 \
+       -device usb-mouse,bus=uhci.0 \
        -serial stdio -vga std -display sdl,gl=on

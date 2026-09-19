@@ -2,6 +2,7 @@
 #include <kernel/drivers/pci.h>
 #include <kernel/mem/heap.h>
 #include <kernel/serial.h>
+#include <kernel/string.h>
 
 static inline void ac97_outb(uint16_t port, uint8_t val) {
     __asm__ volatile ("outb %0, %1" : : "a"(val), "Nd"(port));
@@ -79,22 +80,16 @@ void ac97_set_sample_rate(uint32_t hz) {
 void ac97_play_sound(uint16_t* buffer, uint32_t length) {
     if (!ac97_dev.found || !bdl_list || !buffer || length == 0) return;
 
-    // 1. Stop the AC'97 DMA controller and clear status bits
     ac97_outb(ac97_dev.nabmbar + AC97_PO_CR, 0x00);
-    
-    // Clear status register flags (Write 1 to clear W1C bits in SR if needed, or reset via CR)
     ac97_outw(ac97_dev.nabmbar + AC97_PO_SR, 0x001C);
 
-    // Total sample (word) count for 16-bit stereo/mono
     uint32_t total_samples = length / 2;
     uint32_t remaining_samples = total_samples;
     uint32_t current_offset = 0;
     int bdl_index = 0;
 
-    // Clear the BDL table completely
     memset(bdl_list, 0, sizeof(ac97_bdl_entry_t) * 32);
 
-    // Split the data into chunks and fill the BDL table
     while (remaining_samples > 0 && bdl_index < 32) {
         uint32_t chunk_samples = (remaining_samples > 32768) ? 32768 : remaining_samples;
 
@@ -109,16 +104,10 @@ void ac97_play_sound(uint16_t* buffer, uint32_t length) {
 
     if (bdl_index == 0) return;
 
-    // Set the Interrupt On Completion (IOC) flag on the last BDL entry
     bdl_list[bdl_index - 1].flags = 0x8000;
 
-    // Write the BDL address
     ac97_outl(ac97_dev.nabmbar + AC97_PO_BDBAR, (uint32_t)bdl_list);
-
-    // Set the last valid index (LVI)
     ac97_outb(ac97_dev.nabmbar + AC97_PO_LVI, (uint8_t)(bdl_index - 1));
-
-    // Start the transfer (set the Run/Pause bit)
     ac97_outb(ac97_dev.nabmbar + AC97_PO_CR, AC97_CR_RPBM);
 
     serial_write("AC97: Playing sound (BDL chunk count: ");

@@ -142,6 +142,7 @@ static void fat32_list_dir(void) {
 
 // VFS: populate the directory files in the VFS structure
 static int fat32_get_dir_files(const char* path, vfs_file_info_t* out_list, int max_count) {
+    (void)path;
     if (!is_fat32_initialized || !out_list) return 0;
 
     uint32_t root_lba = cluster_to_lba(bpb.root_cluster);
