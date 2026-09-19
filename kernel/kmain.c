@@ -59,10 +59,28 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         serial_write("FAT32: Driver could not be started!\n");
     }
 
-    // KRYFS Mount işlemi (İsteğe bağlı sessiz mount kontrolü)
+    // KRYFS Mount ve VFS Entegrasyonu (C Sürücüsü)
     if (kryfs_mount() == 0) {
-        serial_write("KRYFS mounted successfully.\n");
+        fs_driver_t kryfs_driver = kryfs_get_driver();
+        vfs_mount('C', "KRYFS_VOL", kryfs_driver);
+        serial_write("KRYFS mounted successfully and registered to VFS on C:\\.\n");
+    } else {
+        serial_write("KRYFS: Driver could not be started!\n");
     }
+
+    // --- KRYFS / VFS DOSYA OKUMA TESTİ ---
+    uint32_t test_size = 0;
+    void* file_data = vfs_read_file("C:/test.txt", &test_size);
+    
+    serial_write("---- test.txt Dosya İçeriği ----\n");
+    if (file_data && test_size > 0) {
+        serial_write((char*)file_data);
+        serial_write("\n");
+    } else {
+        serial_write("[HATA] test.txt okunamadi veya bulunamadi!\n");
+    }
+    serial_write("--------------------------------\n");
+    // ------------------------------------
 
     // 4. Input drivers
     if (!uhci_mouse_active()) {
