@@ -70,10 +70,6 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         serial_write("KRYFS: Driver could not be started!\n");
     }
 
-    #include <kernel/kef.h> // KEF header'ını ekliyoruz
-
-// ... (diğer kodların arasında, VFS ve KRYFS mount edildikten sonra) ...
-
     // --- KRYFS / VFS DOSYA OKUMA TESTİ ---
     uint32_t test_size = 0;
     void* file_data = vfs_read_file("C:/test.txt", &test_size);
@@ -87,32 +83,6 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         serial_write("[HATA] test.txt okunamadi veya bulunamadi!\n");
     }
     serial_write("--------------------------------\n");
-    // ------------------------------------
-
-    // --- CALCULATOR.KEF YÜKLEME VE ÇALIŞTIRMA ---
-    serial_write("---- KEF Uygulamasi Baslatiliyor ----\n");
-    // KEF yükleyicimizi çağırıyoruz
-    if (kef_load_and_run("C:/Program Files/calculator/calculator.kef")) {
-        serial_write("KEF: Uygulama basariyla calistirildi ve sonlandi.\n");
-    } else {
-        serial_write("[HATA] KEF uygulamasi baslatilamadi!\n");
-    }
-    serial_write("-------------------------------------\n");
-    // --------------------------------------------
-
-    // --- CALCULATOR.KEF HEXDUMP TESTİ ---
-    uint32_t calc_size = 0;
-    void* calc_data = vfs_read_file("C:/Program Files/calculator/calculator.kef", &calc_size);
-
-    serial_write("---- calculator.kef Hexdump Testi ----\n");
-    if (calc_data && calc_size > 0) {
-        // Dosyanın ilk 256 baytını (veya tamamını) hexdump olarak serial konsola yazdırıyoruz
-        kernel_hexdump(calc_data, calc_size > 256 ? 256 : calc_size);
-        kfree(calc_data);
-    } else {
-        serial_write("[HATA] calculator.kef okunamadi veya bulunamadi!\n");
-    }
-    serial_write("--------------------------------------\n");
     // ------------------------------------
 
     // 4. Input drivers
@@ -131,6 +101,15 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         fb_clear(0xFF0000FF); // Lacivert/Mavi masaüstü arka planı
         desktop_init(); 
     }
+
+    serial_write("---- KEF Uygulamasi Baslatiliyor ----\n");
+    // (x86) ifadesini kaldırarak doğru klasör yolunu veriyoruz:
+    if (kef_load_and_run("C:/Program Files/calculator/calculator.kef")) {
+        serial_write("KEF: Uygulama basariyla calistirildi ve sonlandi.\n");
+    } else {
+        serial_write("[HATA] KEF uygulamasi baslatilamadi!\n");
+    }
+    serial_write("-------------------------------------\n");
 
     app_manager_init();
     fb_swap();
