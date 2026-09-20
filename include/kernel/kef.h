@@ -8,6 +8,7 @@
 #define KEF_VERSION 1
 #define KEF_ARCH_I386 1
 #define KEF_MAX_SIZE 16384
+#define KEF_LOAD_ADDRESS 0x400000
 #define KEF_API_ADDRESS 0x501000
 
 typedef struct {
@@ -24,6 +25,7 @@ typedef int (*kef_entry_t)(void);
 
 typedef struct {
     int (*window_create)(const char* title, int width, int height);
+    void (*print)(const char* str);
 } kef_api_t;
 
 bool kef_load_and_run(const char* path);

@@ -5,6 +5,10 @@
 #include <kernel/string.h>
 #include <ui/wm.h>
 
+static void kef_print(const char* str) {
+    serial_write(str);
+}
+
 static int kef_window_create(const char* title, int width, int height) {
     window_t* window = wm_create_window(width, height, title);
     return window != 0;
@@ -13,6 +17,7 @@ static int kef_window_create(const char* title, int width, int height) {
 static void kef_install_api(void) {
     volatile kef_api_t* api = (volatile kef_api_t*)KEF_API_ADDRESS;
     api->window_create = kef_window_create;
+    api->print = kef_print;
 }
 
 bool kef_load_and_run(const char* path) {
@@ -37,12 +42,12 @@ bool kef_load_and_run(const char* path) {
         return false;
     }
 
-    uint8_t* payload = (uint8_t*)kmalloc(header->payload_size);
-    if (!payload) {
-        serial_write("KEF: could not allocate memory for the payload.\n");
+    if (KEF_LOAD_ADDRESS + header->payload_size >= KEF_API_ADDRESS) {
+        serial_write("KEF: payload overlaps the API address.\n");
         return false;
     }
 
+    uint8_t* payload = (uint8_t*)KEF_LOAD_ADDRESS;
     memcpy(payload, file + header->header_size, header->payload_size);
 
     kef_install_api();
@@ -50,5 +55,6 @@ bool kef_load_and_run(const char* path) {
     kef_entry_t entry = (kef_entry_t)(payload + header->entry_offset);
     (void)entry();
     serial_write("KEF: application returned.\n");
+    kfree(file);
     return true;
 }
