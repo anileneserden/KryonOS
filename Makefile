@@ -23,6 +23,7 @@ SRC_C = \
     kernel/hexdump.c \
     kernel/kef_loader.c \
     kernel/kmain.c \
+    kernel/power.c \
     kernel/serial.c \
     kernel/string.c \
     kernel/drivers/audio/ac97.c \
