@@ -25,7 +25,9 @@ int kryfs_mount(void) {
     kfree(sector_buffer); // Bellek sızıntısını önlemek için serbest bırakıyoruz
 
     // Sihirli numara (Magic Number) kontrolü ('KRYF' -> 0x4B525946)
-    if (sb_cache.magic != 0x4B525946) {
+    if (sb_cache.magic != 0x4B525946 ||
+        sb_cache.inode_table_block >= sb_cache.data_block_start ||
+        sb_cache.data_block_start >= sb_cache.total_blocks) {
         serial_write("[KRYFS HATA] Gecersiz dosya sistemi imzasi (Magic mismatch)!\n");
         return -1;
     }
@@ -61,6 +63,10 @@ int kryfs_find_inode(const char* filename, kryfs_inode_t* out_inode) {
 
     uint32_t table_lba = sb_cache.inode_table_block;
     uint32_t data_start = sb_cache.data_block_start;
+
+    if (data_start <= table_lba || data_start > sb_cache.total_blocks) {
+        return -1;
+    }
 
     // Inode tablosunun kapladığı sektör sayısını dinamik olarak hesapla
     uint32_t inode_table_sectors = data_start - table_lba;
@@ -154,16 +160,22 @@ void* kryfs_read_file(const char* filename, uint32_t* out_size) {
     // -------------------------------
 
     uint32_t size = inode.size;
+    uint32_t sectors_needed = (size + 511) / 512;
+    if (size > 0 &&
+        (inode.start_block < sb_cache.data_block_start ||
+         inode.start_block >= sb_cache.total_blocks ||
+         sectors_needed > sb_cache.total_blocks - inode.start_block)) {
+        serial_write("[KRYFS HATA] Dosya disk sinirlarinin disinda.\n");
+        if (out_size) *out_size = 0;
+        return NULL;
+    }
+
     uint8_t* file_buffer = (uint8_t*)kmalloc(size + 1); // Güvenli null terminator için +1
     if (!file_buffer) {
         serial_write("[KRYFS HATA] Dosya icerigi icin bellek tahsisi basarisiz!\n");
         if (out_size) *out_size = 0;
         return NULL;
     }
-
-    // Kaç sektör okunacağını hesapla (Sektör başına 512 bayt)
-    uint32_t sectors_needed = (size + 511) / 512;
-    if (sectors_needed == 0) sectors_needed = 1;
 
     uint32_t start_lba = inode.start_block;
     
