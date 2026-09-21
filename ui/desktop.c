@@ -175,7 +175,6 @@ void desktop_init(void) {
     grid_init(width, height, 100, 100);
 
     wm_init();
-    wm_create_window(350, 220, "KryonOS Pencere");
 
     damage_union_rect(0, 0, width, height);
     desktop_redraw();

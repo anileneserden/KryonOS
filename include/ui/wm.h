@@ -4,21 +4,27 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define MAX_WINDOWS 10
-#define MAX_PANELS   4
-#define MAX_LABELS   4
+#define MAX_WINDOWS  10
+#define MAX_PANELS   16
+#define MAX_LABELS   32
 #define MAX_BUTTONS  24
 
 typedef struct {
     int x, y;
     int width, height;
     uint32_t color;
+    uint8_t anchor;
+    int init_x, init_y, init_width, init_height;
+    int init_win_w, init_win_h;
 } panel_t;
 
 typedef struct {
     int x, y;
     uint32_t color;
     char text[64];
+    uint8_t anchor;
+    int init_x, init_y;
+    int init_win_w, init_win_h;
 } label_item_t;
 
 typedef struct {
@@ -29,18 +35,29 @@ typedef struct {
     uint32_t text_color;
     char text[32];
     bool is_hovered;
-    
     void (*on_click)(void);
+    uint8_t anchor;
+    int init_x, init_y, init_width, init_height;
+    int init_win_w, init_win_h;
 } button_t;
 
 typedef struct {
     int x, y;
     int width, height;
+    
+    // Minimum pencere boyutları sınırı
+    int min_width;
+    int min_height;
+
     char title[32];
     bool is_active;
     bool is_dragging;
     int drag_offset_x;
     int drag_offset_y;
+
+    // Pencerenin referans boyutları
+    int init_win_w;
+    int init_win_h;
 
     // Çoklu Panel Desteği
     panel_t panels[MAX_PANELS];

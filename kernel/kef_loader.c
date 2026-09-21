@@ -21,80 +21,76 @@ static void kef_exit(void) {
     serial_write("KEF: Application called the exit API; returning to the kernel.\n");
 }
 
-static int kef_panel_create(int x, int y, int w, int h, uint32_t color) {
+static int kef_panel_create(int x, int y, int w, int h, uint32_t color, uint8_t anchor) {
     window_t* win = wm_get_active_window();
-    if (!win || win->panel_count >= MAX_PANELS) {
-        serial_write("KEF API Error: Aktif pencere bulunamadi veya panel limiti dolu!\n");
-        return -1;
-    }
+    if (!win) return -1;
+
+    if (win->panel_count >= MAX_PANELS) return -1;
 
     panel_t* p = &win->panels[win->panel_count++];
-    p->x = x;
-    p->y = y;
-    p->width = w;
-    p->height = h;
-    p->color = color;
+    p->x = x; p->y = y; p->width = w; p->height = h; p->color = color;
+    p->anchor = anchor;
+
+    // İlk referansları sabitle
+    p->init_x = x; p->init_y = y; p->init_width = w; p->init_height = h;
+    p->init_win_w = win->width; p->init_win_h = win->height;
 
     wm_draw_window(win);
     return 1;
 }
 
-static int kef_label_create(int x, int y, uint32_t color, const char* text) {
+static int kef_label_create(int x, int y, uint32_t color, const char* text, uint8_t anchor) {
     window_t* win = wm_get_active_window();
-    if (!win || win->label_count >= MAX_LABELS) {
-        serial_write("KEF API Error: Aktif pencere bulunamadi veya label limiti dolu!\n");
-        return -1;
-    }
+    if (!win) return -1;
+
+    if (win->label_count >= MAX_LABELS) return -1;
 
     label_item_t* l = &win->labels[win->label_count++];
-    l->x = x;
-    l->y = y;
-    l->color = color;
+    l->x = x; l->y = y; l->color = color; l->anchor = anchor;
+    l->init_x = x; l->init_y = y;
+    l->init_win_w = win->width; l->init_win_h = win->height;
     
     int i = 0;
-    while (text[i] != '\0' && i < 63) {
-        l->text[i] = text[i];
-        i++;
-    }
+    while (text[i] != '\0' && i < 63) { l->text[i] = text[i]; i++; }
     l->text[i] = '\0';
 
     wm_draw_window(win);
-
-    serial_write("KEF API: Pencere ici renkli label basariyla baglandi -> ");
-    serial_write((char*)text);
-    serial_write("\n");
     return 1;
 }
 
-static int kef_button_create(int x, int y, int w, int h, uint32_t bg_color, uint32_t text_color, const char* text, void (*on_click)(void)) {
+static int kef_button_create(int x, int y, int w, int h, uint32_t bg_color, uint32_t text_color, const char* text, void (*on_click)(void), uint8_t anchor) {
     window_t* win = wm_get_active_window();
-    if (!win || win->button_count >= MAX_BUTTONS) {
-        serial_write("KEF API Error: Aktif pencere bulunamadi veya buton limiti dolu!\n");
-        return -1;
-    }
+    if (!win) return -1;
+
+    if (win->button_count >= MAX_BUTTONS) return -1;
 
     button_t* b = &win->buttons[win->button_count++];
-    b->x = x;
-    b->y = y;
-    b->width = w;
-    b->height = h;
-    b->bg_color = bg_color;
-    b->text_color = text_color;
-    b->on_click = on_click;
-    
+    b->x = x; b->y = y; b->width = w; b->height = h;
+    b->bg_color = bg_color; b->text_color = text_color; b->on_click = on_click;
+    b->anchor = anchor;
+    b->init_x = x; b->init_y = y; b->init_width = w; b->init_height = h;
+    b->init_win_w = win->width; b->init_win_h = win->height;
+
     int i = 0;
-    while (text[i] != '\0' && i < 31) {
-        b->text[i] = text[i];
-        i++;
-    }
+    while (text[i] != '\0' && i < 31) { b->text[i] = text[i]; i++; }
     b->text[i] = '\0';
 
     wm_draw_window(win);
-
-    serial_write("KEF API: Pencere ici buton basariyla olusturuldu -> ");
-    serial_write((char*)text);
-    serial_write("\n");
     return 1;
+}
+
+static int kef_get_directory_files(const char* full_path, vfs_file_info_t* out_list, int max_count) {
+    serial_write("KEF API: get_directory_files cagrildi -> ");
+    serial_write((char*)full_path);
+    serial_write("\n");
+    return vfs_get_directory_files(full_path, out_list, max_count);
+}
+
+static void* kef_read_file(const char* full_path, uint32_t* out_size) {
+    serial_write("KEF API: read_file cagrildi -> ");
+    serial_write((char*)full_path);
+    serial_write("\n");
+    return vfs_read_file(full_path, out_size);
 }
 
 static void kef_install_api(void) {
@@ -104,7 +100,9 @@ static void kef_install_api(void) {
     api->exit = kef_exit;
     api->label_create = kef_label_create;
     api->panel_create = kef_panel_create;
-    api->button_create = kef_button_create; // Buton API'si kernel tarafına kaydedildi
+    api->button_create = kef_button_create;
+    api->get_directory_files = kef_get_directory_files;
+    api->read_file = kef_read_file;
 }
 
 bool kef_load_and_run(const char* path) {

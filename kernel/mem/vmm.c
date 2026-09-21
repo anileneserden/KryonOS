@@ -23,7 +23,7 @@ void vmm_init(void) {
     
     // 2. Step: identity-map the entire 4GB address space with 4MB large pages
     for (int i = 0; i < 1024; i++) {
-        uint32_t physical_addr = i * 0x400000; // Each entry represents 4MB
+        uint32_t physical_addr = (uint32_t)i * 0x400000; // Each entry represents 4MB
         
         // Base flags: Present (1) | Write (2) | Page Size - 4MB (0x80)
         uint32_t flags = PAGE_PRESENT | PAGE_WRITE | 0x80;

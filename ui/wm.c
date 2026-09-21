@@ -4,6 +4,7 @@
 #include <kernel/drivers/video/gfx.h>
 #include <kernel/serial.h>
 #include <ui/cursor.h>
+#include <kernel/kef.h>
 
 extern int32_t mouse_x;
 extern int32_t mouse_y;
@@ -35,6 +36,10 @@ static window_t* hovered_window = 0;
 static uint8_t hovered_close_button = 0;
 static int resize_direction = RESIZE_NONE;
 static uint8_t prev_buttons = 0;
+static int resize_old_x = 0;
+static int resize_old_y = 0;
+static int resize_old_w = 0;
+static int resize_old_h = 0;
 
 void wm_init(void) {
     window_count = 0;
@@ -58,19 +63,37 @@ window_t* wm_create_window(int width, int height, const char* title) {
     window_t* win = &window_list[window_count];
     win->x = 60 + (window_count * 30);
     win->y = 60 + (window_count * 30);
-    win->width = width < MIN_WINDOW_WIDTH ? MIN_WINDOW_WIDTH : width;
-    win->height = height < MIN_WINDOW_HEIGHT ? MIN_WINDOW_HEIGHT : height;
     win->is_active = true;
     win->is_dragging = false;
     win->drag_offset_x = 0;
     win->drag_offset_y = 0;
 
-    int i = 0;
-    while (title[i] != '\0' && i < 31) {
-        win->title[i] = title[i];
-        i++;
+    // Başlık uzunluğuna göre minimum genişlik hesapla ([X] butonu ve boşluklar dahil)
+    int title_len = 0;
+    while (title[title_len] != '\0' && title_len < 31) {
+        win->title[title_len] = title[title_len];
+        title_len++;
     }
-    win->title[i] = '\0';
+    win->title[title_len] = '\0';
+
+    // Başlık uzunluğuna göre hesapla ama içeriklerin (dosya listesi vb.) bozulmaması için 
+    // en az 340 piksel (veya projen için gereken güvenli genişlik) taban sınır koyalım.
+    int calculated_min_w = (title_len * 8) + 50;
+    int global_min_w = 340; // İçeriklerin daralıp üst üste binmesini engelleyen güvenli genişlik
+    
+    if (calculated_min_w < global_min_w) {
+        calculated_min_w = global_min_w;
+    }
+
+    win->min_width = calculated_min_w;
+    win->min_height = 240; // Panellerin ve alt durum çubuğunun düzgün sığacağı minimum yükseklik
+
+    win->width = width < win->min_width ? win->min_width : width;
+    win->height = height < win->min_height ? win->min_height : height;
+
+    // Pencere ilk oluşturulduğunda referans boyutlarını atayalım
+    win->init_win_w = win->width;
+    win->init_win_h = win->height;
 
     for (int j = 0; j < window_count; j++) {
         window_list[j].is_active = false;
@@ -79,6 +102,13 @@ window_t* wm_create_window(int width, int height, const char* title) {
     win->is_active = true;
     active_window = win;
     window_count++;
+
+    for (int l = 0; l < win->label_count; l++) {
+        win->labels[l].init_x = win->labels[l].x;
+        win->labels[l].init_y = win->labels[l].y;
+        win->labels[l].init_win_w = win->width;
+        win->labels[l].init_win_h = win->height;
+    }
 
     damage_union_rect(0, 0, fb_get_width(), fb_get_height());
     desktop_redraw();
@@ -115,10 +145,28 @@ void wm_draw_window(window_t* win) {
     // 1. Window body
     gfx_fill_rect(win->x, win->y, win->width, win->height, 0xFF303030);
 
-    // 2. Panelleri çiz (Pencere içi arka plan kutuları)
+    // 2. Panelleri çiz (Gelişmiş kırpma destekli)
     for (int i = 0; i < win->panel_count; i++) {
         panel_t* p = &win->panels[i];
-        gfx_fill_rect(win->x + p->x, win->y + 24 + p->y, p->width, p->height, p->color);
+        
+        int rel_x = p->x;
+        int rel_y = 24 + p->y;
+        int w = p->width;
+        int h = p->height;
+
+        // Sol veya üst sınırdan taşma kırpması
+        if (rel_x < 0) { w += rel_x; rel_x = 0; }
+        if (rel_y < 24) { h += (rel_y - 24); rel_y = 24; }
+
+        // Sağ veya alt sınırdan taşma kırpması
+        if (rel_x < win->width && rel_y < win->height) {
+            if (rel_x + w > win->width) w = win->width - rel_x;
+            if (rel_y + h > win->height) h = win->height - rel_y;
+
+            if (w > 0 && h > 0) {
+                gfx_fill_rect(win->x + rel_x, win->y + rel_y, w, h, p->color);
+            }
+        }
     }
 
     // 3. Title bar
@@ -127,37 +175,69 @@ void wm_draw_window(window_t* win) {
         : (win->is_active ? 0xFF007ACC : 0xFF505050);
     gfx_fill_rect(win->x, win->y, win->width, 24, title_color);
 
-    // 4. Title text
-    gfx_draw_text_utf8(win->x + 8, win->y + 6, 0xFFFFFFFF, win->title);
+    // 4. Title text (Başlık taşıyorsa kırp veya sınırla)
+    // Başlık çubuğu için basitçe x koordinatının pencere içinde kalması sağlanır
+    if (win->width > 16) {
+        // İsteğe bağlı: Başlık uzunluğu pencereyi aşacaksa buraya da kırpma eklenebilir
+        gfx_draw_text_utf8(win->x + 8, win->y + 6, 0xFFFFFFFF, win->title);
+    }
 
     // 5. Close [X] button (top-right corner)
     int btn_x = win->x + win->width - 22;
     int btn_y = win->y + 3;
-    gfx_fill_rect(btn_x, btn_y, 18, 18, close_hovered ? 0xFFFF5A5F : 0xFFE81123);
-    gfx_draw_text_utf8(btn_x + 5, btn_y + 2, 0xFFFFFFFF, "X");
-
-    // 6. Label'ları çiz (Renk desteğiyle birlikte)
-    for (int i = 0; i < win->label_count; i++) {
-        label_item_t* l = &win->labels[i];
-        int abs_x = win->x + l->x;
-        int abs_y = win->y + 24 + l->y; // 24 piksel başlık çubuğu payı
-        gfx_draw_text_utf8(abs_x, abs_y, l->color, l->text);
+    // Sadece pencere yeterince genişse kapatma butonunu göster
+    if (win->width >= 30) {
+        gfx_fill_rect(btn_x, btn_y, 18, 18, close_hovered ? 0xFFFF5A5F : 0xFFE81123);
+        gfx_draw_text_utf8(btn_x + 5, btn_y + 2, 0xFFFFFFFF, "X");
     }
 
-    // 7. Butonları çiz (Hover efektli)
+    // 6. Label'ları çiz (Pencere sınırları dışına çıkanları gizle - Metin taşıma korumasıyla)
+    for (int i = 0; i < win->label_count; i++) {
+        label_item_t* l = &win->labels[i];
+        int rel_x = l->x;
+        int rel_y = 24 + l->y; // 24 piksel başlık çubuğu payı
+
+        // Etiket başlangıcı pencere sınırları içindeyse ve başlık çubuğunun altındaysa
+        if (rel_x >= 0 && rel_x < win->width && rel_y >= 24 && rel_y < win->height) {
+            // Not: Metnin sağa taşmasını engellemek için rel_x, pencere genişliğinden küçük olmalı
+            // Eğer sisteminde metin uzunluğunu veren bir fonksiyon (örn. get_text_width) varsa buraya eklenebilir.
+            // Şimdilik başlangıç noktası pencere içinde olanları güvenle çiziyoruz:
+            gfx_draw_text_utf8(win->x + rel_x, win->y + rel_y, l->color, l->text);
+        }
+    }
+
+    // 7. Butonları çiz (Gelişmiş kırpma destekli)
     for (int i = 0; i < win->button_count; i++) {
         button_t* b = &win->buttons[i];
-        int abs_x = win->x + b->x;
-        int abs_y = win->y + 24 + b->y; 
-        
-        // Eğer hover_color tanımlı değilse (0 ise) varsayılan bir açık gri/mavi ton seçebilirsin
-        uint32_t current_bg_color = b->is_hovered ? (b->hover_color != 0 ? b->hover_color : 0xFF505050) : b->bg_color;
-        
-        // Buton arka planı
-        gfx_fill_rect(abs_x, abs_y, b->width, b->height, current_bg_color);
-        
-        // Buton yazısı (Ortalama hesaplaması yapılabilir)
-        gfx_draw_text_utf8(abs_x + 8, abs_y + 8, b->text_color, b->text);
+        int rel_x = b->x;
+        int rel_y = 24 + b->y;
+        int bw = b->width;
+        int bh = b->height;
+
+        // Sol/Üst kırpma
+        if (rel_x < 0) { bw += rel_x; rel_x = 0; }
+        if (rel_y < 24) { bh += (rel_y - 24); rel_y = 24; }
+
+        // Sağ/Alt kırpma
+        if (rel_x < win->width && rel_y < win->height) {
+            if (rel_x + bw > win->width) bw = win->width - rel_x;
+            if (rel_y + bh > win->height) bh = win->height - rel_y;
+
+            if (bw > 0 && bh > 0) {
+                int abs_x = win->x + rel_x;
+                int abs_y = win->y + rel_y;
+                
+                uint32_t current_bg_color = b->is_hovered ? (b->hover_color != 0 ? b->hover_color : 0xFF505050) : b->bg_color;
+                
+                // Buton arka planı (kırpılmış boyutlarla)
+                gfx_fill_rect(abs_x, abs_y, bw, bh, current_bg_color);
+                
+                // Buton yazısı (Yalnızca butonun sol kısmı görünüyorsa çiz)
+                if (bw > 10) {
+                    gfx_draw_text_utf8(abs_x + 8, abs_y + 8, b->text_color, b->text);
+                }
+            }
+        }
     }
 }
 
@@ -288,7 +368,40 @@ void wm_process_input(void) {
                 dragged_window = 0;
             }
             if (resized_window) {
+                // BOYUTLANDIRMA BİTTİ: Referans (init) değerlerini yeni boyuta sabitle!
+                // Böylece sonraki resize işleminde matematik ve sağa sabitleme (anchor) şaşmaz.
+                resized_window->init_win_w = resized_window->width;
+                resized_window->init_win_h = resized_window->height;
+
+                for (int i = 0; i < resized_window->panel_count; i++) {
+                    resized_window->panels[i].init_x = resized_window->panels[i].x;
+                    resized_window->panels[i].init_y = resized_window->panels[i].y;
+                    resized_window->panels[i].init_width = resized_window->panels[i].width;
+                    resized_window->panels[i].init_height = resized_window->panels[i].height;
+                    resized_window->panels[i].init_win_w = resized_window->width;
+                    resized_window->panels[i].init_win_h = resized_window->height;
+                }
+                for (int i = 0; i < resized_window->button_count; i++) {
+                    resized_window->buttons[i].init_x = resized_window->buttons[i].x;
+                    resized_window->buttons[i].init_y = resized_window->buttons[i].y;
+                    resized_window->buttons[i].init_width = resized_window->buttons[i].width;
+                    resized_window->buttons[i].init_height = resized_window->buttons[i].height;
+                    resized_window->buttons[i].init_win_w = resized_window->width;
+                    resized_window->buttons[i].init_win_h = resized_window->height;
+                }
+                // ETİKETLERİN referans değerleri de bitiş anında güncelleniyor:
+                for (int i = 0; i < resized_window->label_count; i++) {
+                    resized_window->labels[i].init_x = resized_window->labels[i].x;
+                    resized_window->labels[i].init_y = resized_window->labels[i].y;
+                    resized_window->labels[i].init_win_w = resized_window->width;
+                    resized_window->labels[i].init_win_h = resized_window->height;
+                }
+
+                // --- ÇÖZÜM: Pencerenin küçülmeden önceki ESKİ ve BÜYÜK alanını temizle ---
+                damage_union_rect(resize_old_x, resize_old_y, resize_old_w, resize_old_h);
+                // Pencerenin YENİ alanını da kirli işaretle
                 damage_union_rect(resized_window->x, resized_window->y, resized_window->width, resized_window->height);
+                
                 resized_window = 0;
                 resize_direction = RESIZE_NONE;
             }
@@ -335,7 +448,6 @@ void wm_process_input(void) {
                     serial_write(b->text);
                     serial_write("\n");
 
-                    // Butona atanmış bir on_click fonksiyonu varsa çalıştır
                     if (b->on_click != 0) {
                         b->on_click();
                     }
@@ -350,8 +462,13 @@ void wm_process_input(void) {
             if (dir != RESIZE_NONE) {
                 resized_window = target;
                 resize_direction = dir;
+                
+                // BOYUTLANDIRMA BAŞLADI: O anki eski/büyük boyutları saklayalım
+                resize_old_x = target->x;
+                resize_old_y = target->y;
+                resize_old_w = target->width;
+                resize_old_h = target->height;
             } else if (!clicked_on_button) {
-                // Start dragging only when the title bar was clicked and not a button inside
                 if (mouse_y >= target->y && mouse_y < target->y + WM_TITLEBAR_HEIGHT) {
                     dragged_window = front_win;
                     dragged_window->is_dragging = true;
@@ -365,11 +482,9 @@ void wm_process_input(void) {
             cursor_show();
         } 
         else {
-            // Remove focus when the desktop background is clicked
             if (active_window != 0) {
                 cursor_prepare_redraw();
                 
-                // Mark all window areas as damaged so their title bars return to gray (Düz dizi erişimi düzeltildi)
                 for (int i = 0; i < window_count; i++) {
                     if (window_list[i].width > 0) {
                         damage_union_rect(window_list[i].x, window_list[i].y, window_list[i].width, window_list[i].height);
@@ -402,24 +517,34 @@ void wm_process_input(void) {
             int new_w = old_w;
             int new_h = old_h;
 
+            // Pencereye özel min sınırları kullanalım
+            int min_w = resized_window->min_width > 0 ? resized_window->min_width : MIN_WINDOW_WIDTH;
+            int min_h = resized_window->min_height > 0 ? resized_window->min_height : MIN_WINDOW_HEIGHT;
+
             if (resize_direction & RESIZE_LEFT) {
-                int max_x = old_x + old_w - MIN_WINDOW_WIDTH;
+                int max_x = old_x + old_w - min_w;
                 new_x = mouse_x;
                 if (new_x > max_x) new_x = max_x;
                 new_w = old_w + (old_x - new_x);
+                if (new_w < min_w) {
+                    new_w = min_w;
+                    new_x = old_x + old_w - min_w;
+                }
             } else if (resize_direction & RESIZE_RIGHT) {
                 new_w = mouse_x - old_x;
-                if (new_w < MIN_WINDOW_WIDTH) new_w = MIN_WINDOW_WIDTH;
+                if (new_w < min_w) {
+                    new_w = min_w;
+                }
             }
 
             if (resize_direction & RESIZE_TOP) {
-                int max_y = old_y + old_h - MIN_WINDOW_HEIGHT;
+                int max_y = old_y + old_h - min_h;
                 new_y = mouse_y;
                 if (new_y > max_y) new_y = max_y;
                 new_h = old_h + (old_y - new_y);
             } else if (resize_direction & RESIZE_BOTTOM) {
                 new_h = mouse_y - old_y;
-                if (new_h < MIN_WINDOW_HEIGHT) new_h = MIN_WINDOW_HEIGHT;
+                if (new_h < min_h) new_h = min_h;
             }
 
             if (new_x != old_x || new_y != old_y || new_w != old_w || new_h != old_h) {
@@ -431,11 +556,70 @@ void wm_process_input(void) {
                 resized_window->is_active = true;
                 active_window = resized_window;
 
-                damage_union_rect(old_x, old_y, old_w, old_h);
+                // --- ÇÖZÜM: Boyutlandırma esnasında da hem eski alanı hem yeni alanı temizle ---
+                damage_union_rect(resize_old_x, resize_old_y, resize_old_w, resize_old_h);
+                
                 resized_window->x = new_x;
                 resized_window->y = new_y;
                 resized_window->width = new_w;
                 resized_window->height = new_h;
+
+                // --- 1. PANELLER İÇİN ANCHOR HESAPLAMASI ---
+                for (int i = 0; i < resized_window->panel_count; i++) {
+                    panel_t* p = &resized_window->panels[i];
+                    
+                    if ((p->anchor & ANCHOR_LEFT) && (p->anchor & ANCHOR_RIGHT)) {
+                        p->width = p->init_width + (resized_window->width - p->init_win_w);
+                    } else if (p->anchor & ANCHOR_RIGHT) {
+                        int right_margin = p->init_win_w - (p->init_x + p->init_width);
+                        p->x = resized_window->width - right_margin - p->width;
+                    }
+
+                    if ((p->anchor & ANCHOR_TOP) && (p->anchor & ANCHOR_BOTTOM)) {
+                        p->height = p->init_height + (resized_window->height - p->init_win_h);
+                    } else if (p->anchor & ANCHOR_BOTTOM) {
+                        int bottom_margin = p->init_win_h - (p->init_y + p->init_height);
+                        p->y = resized_window->height - bottom_margin - p->height;
+                    }
+                }
+
+                // --- 2. BUTONLAR İÇİN ANCHOR HESAPLAMASI ---
+                for (int i = 0; i < resized_window->button_count; i++) {
+                    button_t* b = &resized_window->buttons[i];
+
+                    if ((b->anchor & ANCHOR_LEFT) && (b->anchor & ANCHOR_RIGHT)) {
+                        b->width = b->init_width + (resized_window->width - b->init_win_w);
+                    } else if (b->anchor & ANCHOR_RIGHT) {
+                        int right_margin = b->init_win_w - (b->init_x + b->init_width);
+                        b->x = resized_window->width - right_margin - b->width;
+                    }
+
+                    if ((b->anchor & ANCHOR_TOP) && (b->anchor & ANCHOR_BOTTOM)) {
+                        b->height = b->init_height + (resized_window->height - b->init_win_h);
+                    } else if (b->anchor & ANCHOR_BOTTOM) {
+                        int bottom_margin = b->init_win_h - (b->init_y + b->init_height);
+                        b->y = resized_window->height - bottom_margin - b->height;
+                    }
+                }
+
+                // --- 3. ETİKETLER (LABELS) İÇİN ANCHOR HESAPLAMASI ---
+                for (int i = 0; i < resized_window->label_count; i++) {
+                    label_item_t* l = &resized_window->labels[i];
+
+                    if (l->init_win_w == 0) l->init_win_w = resized_window->init_win_w;
+                    if (l->init_win_h == 0) l->init_win_h = resized_window->init_win_h;
+
+                    if (l->anchor & ANCHOR_RIGHT) {
+                        int right_margin = l->init_win_w - l->init_x;
+                        l->x = resized_window->width - right_margin;
+                    }
+
+                    if (l->anchor & ANCHOR_BOTTOM) {
+                        int bottom_margin = l->init_win_h - l->init_y;
+                        l->y = resized_window->height - bottom_margin;
+                    }
+                }
+
                 damage_union_rect(new_x, new_y, new_w, new_h);
 
                 damage_union_rect(old_cursor_x, old_cursor_y, CURSOR_WIDTH, CURSOR_HEIGHT);
