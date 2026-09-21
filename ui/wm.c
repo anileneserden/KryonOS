@@ -129,6 +129,13 @@ void wm_draw_window(window_t* win) {
     int btn_y = win->y + 3;
     gfx_fill_rect(btn_x, btn_y, 18, 18, close_hovered ? 0xFFFF5A5F : 0xFFE81123);
     gfx_draw_text_utf8(btn_x + 5, btn_y + 2, 0xFFFFFFFF, "X");
+
+    // 5. Pencere içi label (varsa pencereyle birlikte yeniden çizilir)
+    if (win->has_label) {
+        int abs_x = win->x + win->label_rel_x;
+        int abs_y = win->y + 24 + win->label_rel_y; // 24 piksel başlık çubuğu payı
+        gfx_draw_text_utf8(abs_x, abs_y, 0xFFFFFFFF, win->label_text);
+    }
 }
 
 void wm_draw_all(void) {
@@ -477,4 +484,8 @@ void wm_process_input(void) {
     }
 
     prev_buttons = mouse_buttons;
+}
+
+window_t* wm_get_active_window(void) {
+    return active_window;
 }

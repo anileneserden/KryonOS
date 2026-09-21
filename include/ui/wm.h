@@ -14,10 +14,16 @@ typedef struct {
     bool is_dragging;
     int drag_offset_x;
     int drag_offset_y;
+
+    char label_text[64];
+    int label_rel_x;
+    int label_rel_y;
+    bool has_label;
 } window_t;
 
 void wm_init(void);
 window_t* wm_create_window(int width, int height, const char* title);
+window_t* wm_get_active_window(void);
 void wm_draw_window(window_t* win);
 void wm_draw_all(void);
 

@@ -27,6 +27,7 @@ typedef struct {
     int (*window_create)(const char* title, int width, int height);
     void (*print)(const char* str);
     void (*exit)(void);
+    int (*label_create)(int x, int y, const char* text);
 } kef_api_t;
 
 bool kef_load_and_run(const char* path);

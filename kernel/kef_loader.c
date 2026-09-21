@@ -4,6 +4,9 @@
 #include <kernel/serial.h>
 #include <kernel/string.h>
 #include <ui/wm.h>
+#include <kernel/drivers/video/gfx.h> // 1. Grafik sürücüsü başlığı eklendi
+
+#define WM_TITLEBAR_HEIGHT 24 // 2. Başlık çubuğu yüksekliği tanımlandı
 
 static void kef_print(const char* str) {
     serial_write(str);
@@ -18,11 +21,40 @@ static void kef_exit(void) {
     serial_write("KEF: Application called the exit API; returning to the kernel.\n");
 }
 
+static int kef_label_create(int x, int y, const char* text) {
+    window_t* win = wm_get_active_window();
+    if (!win) {
+        serial_write("KEF API Error: Aktif pencere bulunamadi!\n");
+        return -1;
+    }
+
+    // Label bilgilerini aktif pencereye kaydediyoruz
+    win->label_rel_x = x;
+    win->label_rel_y = y;
+    // Güvenli kopyalama (string copy)
+    int i = 0;
+    while (text[i] != '\0' && i < 63) {
+        win->label_text[i] = text[i];
+        i++;
+    }
+    win->label_text[i] = '\0';
+    win->has_label = true;
+
+    // İlk çizimi tetikle
+    wm_draw_window(win);
+
+    serial_write("KEF API: Pencere ici label basariyla baglandi -> ");
+    serial_write((char*)text);
+    serial_write("\n");
+    return 1;
+}
+
 static void kef_install_api(void) {
     volatile kef_api_t* api = (volatile kef_api_t*)KEF_API_ADDRESS;
     api->window_create = kef_window_create;
     api->print = kef_print;
     api->exit = kef_exit;
+    api->label_create = kef_label_create;
 }
 
 bool kef_load_and_run(const char* path) {
@@ -57,11 +89,7 @@ bool kef_load_and_run(const char* path) {
 
     kef_install_api();
     
-    // Bellek ve yükleme detaylarını loglayalım
     serial_write("KEF: Payload loaded to address: 0x400000\n");
-    serial_write("KEF: Payload size: ");
-    // Basit bir boyut loglama veya doğrudan entry çağrısı
-    
     serial_write("KEF: file loaded, calling entry point.\n");
     kef_entry_t entry = (kef_entry_t)(payload + header->entry_offset);
     
