@@ -24,6 +24,7 @@ typedef struct {
 int kryfs_mount(void);
 int kryfs_find_inode(const char* filename, kryfs_inode_t* out_inode);
 void* kryfs_read_file(const char* filename, uint32_t* out_size);
+int kryfs_get_dir_files(const char* rel_path, vfs_file_info_t* out_list, int max_count);
 fs_driver_t kryfs_get_driver(void);
 
 #endif

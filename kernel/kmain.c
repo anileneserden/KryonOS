@@ -85,6 +85,29 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     serial_write("--------------------------------\n");
     // ------------------------------------
 
+    // --- VFS DIZIN LISTELEME TESTI ---
+    serial_write("---- VFS Dizin Listeleme Testi (C:/) ----\n");
+    vfs_file_info_t root_files[16];
+    int file_count = vfs_get_directory_files("C:/", root_files, 16);
+    
+    if (file_count > 0) {
+        serial_write("C:/ dizinindeki dosya/klasorler:\n");
+        for (int i = 0; i < file_count; i++) {
+            serial_write(" - ");
+            serial_write(root_files[i].name);
+            if (root_files[i].is_directory) {
+                serial_write(" [KLASOR]");
+            } else {
+                serial_write(" [DOSYA]");
+            }
+            serial_write("\n");
+        }
+    } else {
+        serial_write("VFS Bilgi: C:/ dizini bos veya get_dir_files desteklenmiyor/0 dondu.\n");
+    }
+    serial_write("-------------------------------------------\n");
+    // ------------------------------------------
+
     // 4. Input drivers
     if (!uhci_mouse_active()) {
         mouse_init();
