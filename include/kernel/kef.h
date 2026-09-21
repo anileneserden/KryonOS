@@ -27,6 +27,9 @@ typedef struct {
     int (*window_create)(const char* title, int width, int height);
     void (*print)(const char* str);
     void (*exit)(void);
+    int (*label_create)(int x, int y, uint32_t color, const char* text);
+    int (*panel_create)(int x, int y, int w, int h, uint32_t color);
+    int (*button_create)(int x, int y, int w, int h, uint32_t bg_color, uint32_t text_color, const char* text, void (*on_click)(void));
 } kef_api_t;
 
 bool kef_load_and_run(const char* path);
