@@ -29,6 +29,8 @@ typedef struct {
     uint32_t text_color;
     char text[32];
     bool is_hovered;
+    
+    void (*on_click)(void);
 } button_t;
 
 typedef struct {

@@ -66,7 +66,7 @@ static int kef_label_create(int x, int y, uint32_t color, const char* text) {
     return 1;
 }
 
-static int kef_button_create(int x, int y, int w, int h, uint32_t bg_color, uint32_t text_color, const char* text) {
+static int kef_button_create(int x, int y, int w, int h, uint32_t bg_color, uint32_t text_color, const char* text, void (*on_click)(void)) {
     window_t* win = wm_get_active_window();
     if (!win || win->button_count >= MAX_BUTTONS) {
         serial_write("KEF API Error: Aktif pencere bulunamadi veya buton limiti dolu!\n");
@@ -80,6 +80,7 @@ static int kef_button_create(int x, int y, int w, int h, uint32_t bg_color, uint
     b->height = h;
     b->bg_color = bg_color;
     b->text_color = text_color;
+    b->on_click = on_click;
     
     int i = 0;
     while (text[i] != '\0' && i < 31) {

@@ -324,15 +324,22 @@ void wm_process_input(void) {
             // --- PENCERE İÇİ BUTON TIKLAMA KONTROLÜ ---
             bool clicked_on_button = false;
             for (int i = 0; i < target->button_count; i++) {
-                button_t* b = &target->buttons[i]; // button_list yerine buttons kullanıldı
+                button_t* b = &target->buttons[i]; 
                 int abs_bx = target->x + b->x;
                 int abs_by = target->y + 24 + b->y;
 
                 if (mouse_x >= abs_bx && mouse_x < abs_bx + b->width &&
                     mouse_y >= abs_by && mouse_y < abs_by + b->height) {
+                    
                     serial_write("WM: Pencere ici butona tiklandi: ");
                     serial_write(b->text);
                     serial_write("\n");
+
+                    // Butona atanmış bir on_click fonksiyonu varsa çalıştır
+                    if (b->on_click != 0) {
+                        b->on_click();
+                    }
+
                     clicked_on_button = true;
                     break;
                 }
