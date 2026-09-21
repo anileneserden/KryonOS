@@ -115,26 +115,33 @@ void wm_draw_window(window_t* win) {
     // 1. Window body
     gfx_fill_rect(win->x, win->y, win->width, win->height, 0xFF303030);
 
-    // 2. Title bar
+    // 2. Panelleri çiz (Pencere içi arka plan kutuları)
+    for (int i = 0; i < win->panel_count; i++) {
+        panel_t* p = &win->panels[i];
+        gfx_fill_rect(win->x + p->x, win->y + 24 + p->y, p->width, p->height, p->color);
+    }
+
+    // 3. Title bar
     uint32_t title_color = title_hovered
         ? (win->is_active ? 0xFF1088D0 : 0xFF666666)
         : (win->is_active ? 0xFF007ACC : 0xFF505050);
     gfx_fill_rect(win->x, win->y, win->width, 24, title_color);
 
-    // 3. Title text
+    // 4. Title text
     gfx_draw_text_utf8(win->x + 8, win->y + 6, 0xFFFFFFFF, win->title);
 
-    // 4. Close [X] button (top-right corner)
+    // 5. Close [X] button (top-right corner)
     int btn_x = win->x + win->width - 22;
     int btn_y = win->y + 3;
     gfx_fill_rect(btn_x, btn_y, 18, 18, close_hovered ? 0xFFFF5A5F : 0xFFE81123);
     gfx_draw_text_utf8(btn_x + 5, btn_y + 2, 0xFFFFFFFF, "X");
 
-    // 5. Pencere içi label (varsa pencereyle birlikte yeniden çizilir)
-    if (win->has_label) {
-        int abs_x = win->x + win->label_rel_x;
-        int abs_y = win->y + 24 + win->label_rel_y; // 24 piksel başlık çubuğu payı
-        gfx_draw_text_utf8(abs_x, abs_y, 0xFFFFFFFF, win->label_text);
+    // 6. Label'ları çiz (Renk desteğiyle birlikte)
+    for (int i = 0; i < win->label_count; i++) {
+        label_item_t* l = &win->labels[i];
+        int abs_x = win->x + l->x;
+        int abs_y = win->y + 24 + l->y; // 24 piksel başlık çubuğu payı
+        gfx_draw_text_utf8(abs_x, abs_y, l->color, l->text);
     }
 }
 

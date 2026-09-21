@@ -4,9 +4,9 @@
 #include <kernel/serial.h>
 #include <kernel/string.h>
 #include <ui/wm.h>
-#include <kernel/drivers/video/gfx.h> // 1. Grafik sürücüsü başlığı eklendi
+#include <kernel/drivers/video/gfx.h>
 
-#define WM_TITLEBAR_HEIGHT 24 // 2. Başlık çubuğu yüksekliği tanımlandı
+#define WM_TITLEBAR_HEIGHT 24
 
 static void kef_print(const char* str) {
     serial_write(str);
@@ -21,29 +21,46 @@ static void kef_exit(void) {
     serial_write("KEF: Application called the exit API; returning to the kernel.\n");
 }
 
-static int kef_label_create(int x, int y, const char* text) {
+static int kef_panel_create(int x, int y, int w, int h, uint32_t color) {
     window_t* win = wm_get_active_window();
-    if (!win) {
-        serial_write("KEF API Error: Aktif pencere bulunamadi!\n");
+    if (!win || win->panel_count >= MAX_PANELS) {
+        serial_write("KEF API Error: Aktif pencere bulunamadi veya panel limiti dolu!\n");
         return -1;
     }
 
-    // Label bilgilerini aktif pencereye kaydediyoruz
-    win->label_rel_x = x;
-    win->label_rel_y = y;
-    // Güvenli kopyalama (string copy)
+    panel_t* p = &win->panels[win->panel_count++];
+    p->x = x;
+    p->y = y;
+    p->width = w;
+    p->height = h;
+    p->color = color;
+
+    wm_draw_window(win);
+    return 1;
+}
+
+static int kef_label_create(int x, int y, uint32_t color, const char* text) {
+    window_t* win = wm_get_active_window();
+    if (!win || win->label_count >= MAX_LABELS) {
+        serial_write("KEF API Error: Aktif pencere bulunamadi veya label limiti dolu!\n");
+        return -1;
+    }
+
+    label_item_t* l = &win->labels[win->label_count++];
+    l->x = x;
+    l->y = y;
+    l->color = color;
+    
     int i = 0;
     while (text[i] != '\0' && i < 63) {
-        win->label_text[i] = text[i];
+        l->text[i] = text[i];
         i++;
     }
-    win->label_text[i] = '\0';
-    win->has_label = true;
+    l->text[i] = '\0';
 
-    // İlk çizimi tetikle
     wm_draw_window(win);
 
-    serial_write("KEF API: Pencere ici label basariyla baglandi -> ");
+    serial_write("KEF API: Pencere ici renkli label basariyla baglandi -> ");
     serial_write((char*)text);
     serial_write("\n");
     return 1;
@@ -55,6 +72,7 @@ static void kef_install_api(void) {
     api->print = kef_print;
     api->exit = kef_exit;
     api->label_create = kef_label_create;
+    api->panel_create = kef_panel_create;
 }
 
 bool kef_load_and_run(const char* path) {
