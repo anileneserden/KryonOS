@@ -31,7 +31,7 @@ static int kef_panel_create(int x, int y, int w, int h, uint32_t color, uint8_t 
     p->x = x; p->y = y; p->width = w; p->height = h; p->color = color;
     p->anchor = anchor;
 
-    // İlk referansları sabitle
+    // Fix initial references
     p->init_x = x; p->init_y = y; p->init_width = w; p->init_height = h;
     p->init_win_w = win->width; p->init_win_h = win->height;
 
@@ -80,14 +80,14 @@ static int kef_button_create(int x, int y, int w, int h, uint32_t bg_color, uint
 }
 
 static int kef_get_directory_files(const char* full_path, vfs_file_info_t* out_list, int max_count) {
-    serial_write("KEF API: get_directory_files cagrildi -> ");
+    serial_write("KEF API: get_directory_files called -> ");
     serial_write((char*)full_path);
     serial_write("\n");
     return vfs_get_directory_files(full_path, out_list, max_count);
 }
 
 static void* kef_read_file(const char* full_path, uint32_t* out_size) {
-    serial_write("KEF API: read_file cagrildi -> ");
+    serial_write("KEF API: read_file called -> ");
     serial_write((char*)full_path);
     serial_write("\n");
     return vfs_read_file(full_path, out_size);

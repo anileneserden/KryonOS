@@ -9,50 +9,50 @@ static kryfs_superblock_t sb_cache;
 static int kryfs_is_mounted = 0;
 
 int kryfs_mount(void) {
-    serial_write("[KRYFS] Mount islemi baslatiliyor...\n");
+    serial_write("[KRYFS] Mounting process is starting....\n");
 
     uint8_t* sector_buffer = (uint8_t*)kmalloc(512);
     if (!sector_buffer) {
-        serial_write("[KRYFS HATA] Bellek tahsisi basarisiz (kmalloc)!\n");
+        serial_write("[KRYFS ERROR] Memory allocation failed (kmalloc)!\n");
         return -1;
     }
 
-    // ATA sürücüsünün gerçek imzasına uyuyoruz: (drive, lba, count, buf)
+    // We follow the ATA driver's actual signature: (drive, lba, count, buf)
     ata_read_sectors(0, 0, 1, sector_buffer);
 
-    // Okunan veriyi cache yapısına kopyala
+    // Copy the read data to the cache structure.
     memcpy(&sb_cache, sector_buffer, sizeof(kryfs_superblock_t));
-    kfree(sector_buffer); // Bellek sızıntısını önlemek için serbest bırakıyoruz
+    kfree(sector_buffer); // Releasing it to prevent a memory leak.
 
-    // Sihirli numara (Magic Number) kontrolü ('KRYF' -> 0x4B525946)
+    // Magic Number check ('KRYF' -> 0x4B525946)
     if (sb_cache.magic != 0x4B525946) {
-        serial_write("[KRYFS HATA] Gecersiz dosya sistemi imzasi (Magic mismatch)!\n");
+        serial_write("[KRYFS ERROR] Invalid file system signature (Magic mismatch)!\n");
         return -1;
     }
 
-    serial_write("[KRYFS] Superblock basariyla dogrulandi!\n");
-    serial_write("[KRYFS] -> Toplam Blok Sayisi: ");
+    serial_write("[KRYFS] Superblock successfully verified!\n");
+    serial_write("[KRYFS] -> Total Number of Blocks: ");
     serial_write_num(sb_cache.total_blocks);
     serial_write("\n");
-    serial_write("[KRYFS] -> Inode Tablo Bloku: ");
+    serial_write("[KRYFS] -> Inode Table Block: ");
     serial_write_num(sb_cache.inode_table_block);
     serial_write("\n");
-    serial_write("[KRYFS] -> Veri Bloku Baslangici: ");
+    serial_write("[KRYFS] -> Data Block Start: ");
     serial_write_num(sb_cache.data_block_start);
     serial_write("\n");
 
     kryfs_is_mounted = 1;
-    serial_write("[KRYFS] Dosya sistemi basariyla monte edildi (Mounted)!\n");
+    serial_write("[KRYFS] File system successfully mounted!\n");
     return 0;
 }
 
 int kryfs_find_inode(const char* filename, kryfs_inode_t* out_inode) {
     if (!kryfs_is_mounted) {
-        serial_write("[KRYFS HATA] Dosya sistemi monte edilmemis!\n");
+        serial_write("[KRYFS ERROR] File system not mounted!\n");
         return -1;
     }
 
-    // 1. Gelen yoldaki C:\ veya / eklerini temizleyelim (Eğer varsa)
+    // 1. Clean up C:\ or / prefixes from the path if they exist
     if (filename[0] == '/' || filename[0] == '\\') {
         filename++;
     } else if (filename[1] == ':' && (filename[2] == '/' || filename[2] == '\\')) {
@@ -62,18 +62,18 @@ int kryfs_find_inode(const char* filename, kryfs_inode_t* out_inode) {
     uint32_t table_lba = sb_cache.inode_table_block;
     uint32_t data_start = sb_cache.data_block_start;
 
-    // Inode tablosunun kapladığı sektör sayısını dinamik olarak hesapla
+    // Dynamically calculate the number of sectors occupied by the inode table
     uint32_t inode_table_sectors = data_start - table_lba;
     if (inode_table_sectors == 0) inode_table_sectors = 1;
 
     uint32_t total_buffer_size = inode_table_sectors * 512;
     uint8_t* sector_buf = (uint8_t*)kmalloc(total_buffer_size);
     if (!sector_buf) {
-        serial_write("[KRYFS HATA] Inode arama icin bellek tahsisi basarisiz!\n");
+        serial_write("[KRYFS ERROR] Memory allocation failed for inode search!\n");
         return -1;
     }
 
-    // Tüm inode tablosunu tek seferde oku
+    // Read the entire inode table at once
     ata_read_sectors(0, table_lba, inode_table_sectors, sector_buf);
 
     int found = -1;
@@ -83,13 +83,13 @@ int kryfs_find_inode(const char* filename, kryfs_inode_t* out_inode) {
         kryfs_inode_t* inode = (kryfs_inode_t*)(sector_buf + (i * sizeof(kryfs_inode_t)));
 
         if (inode->is_used) {
-            serial_write("[KRYFS] Inode taranıyor: [");
+            serial_write("[KRYFS] Scanning inode: [");
             serial_write(inode->filename);
-            serial_write("] | Aranan: [");
+            serial_write("] | Looking for: [");
             serial_write((char*)filename);
             serial_write("]\n");
 
-            // Tam eşleşme VEYA yolun sonu eşleşmesi kontrolü (Örn: "test.txt" -> "Users/anil/Desktop/test.txt")
+            // Exact match OR path-suffix match check (e.g., "test.txt" -> "Users/anil/Desktop/test.txt")
             int match = 0;
             if (strcmp(inode->filename, filename) == 0) {
                 match = 1;
@@ -114,7 +114,7 @@ int kryfs_find_inode(const char* filename, kryfs_inode_t* out_inode) {
     kfree(sector_buf);
 
     if (found != 0) {
-        serial_write("[KRYFS] Aranan dosya bulunamadi: ");
+        serial_write("[KRYFS] File not found: ");
         serial_write((char*)filename);
         serial_write("\n");
     }
@@ -124,7 +124,7 @@ int kryfs_find_inode(const char* filename, kryfs_inode_t* out_inode) {
 
 void* kryfs_read_file(const char* filename, uint32_t* out_size) {
     if (!kryfs_is_mounted) {
-        serial_write("[KRYFS HATA] Dosya sistemi monte edilmemis!\n");
+        serial_write("[KRYFS ERROR] File system not mounted!\n");
         if (out_size) *out_size = 0;
         return NULL;
     }
@@ -136,32 +136,32 @@ void* kryfs_read_file(const char* filename, uint32_t* out_size) {
     }
 
     if (inode.is_directory) {
-        serial_write("[KRYFS HATA] Belirtilen isim bir dosya degil, dizin!\n");
+        serial_write("[KRYFS ERROR] The specified name is a directory, not a file!\n");
         if (out_size) *out_size = 0;
         return NULL;
     }
 
-    // --- DETAYLI DEBUG BİLGİLERİ ---
-    serial_write("[KRYFS DEBUG] Dosya Adi: ");
+    // --- DETAILED DEBUG INFORMATION ---
+    serial_write("[KRYFS DEBUG] File Name: ");
     serial_write((char*)filename);
-    serial_write("\n[KRYFS DEBUG] Inode Size (Boyut): ");
+    serial_write("\n[KRYFS DEBUG] Inode Size: ");
     serial_write_num(inode.size);
     serial_write("\n[KRYFS DEBUG] Inode Start Block: ");
     serial_write_num(inode.start_block);
     serial_write("\n[KRYFS DEBUG] Data Block Start: ");
     serial_write_num(sb_cache.data_block_start);
     serial_write("\n");
-    // -------------------------------
+    // ----------------------------------
 
     uint32_t size = inode.size;
-    uint8_t* file_buffer = (uint8_t*)kmalloc(size + 1); // Güvenli null terminator için +1
+    uint8_t* file_buffer = (uint8_t*)kmalloc(size + 1); // +1 for safe null terminator
     if (!file_buffer) {
-        serial_write("[KRYFS HATA] Dosya icerigi icin bellek tahsisi basarisiz!\n");
+        serial_write("[KRYFS ERROR] Memory allocation failed for file content!\n");
         if (out_size) *out_size = 0;
         return NULL;
     }
 
-    // Kaç sektör okunacağını hesapla (Sektör başına 512 bayt)
+    // Calculate how many sectors need to be read (512 bytes per sector)
     uint32_t sectors_needed = (size + 511) / 512;
     if (sectors_needed == 0) sectors_needed = 1;
 
@@ -188,13 +188,13 @@ void* kryfs_read_file(const char* filename, uint32_t* out_size) {
     }
 
     kfree(sector_sec);
-    file_buffer[size] = '\0'; // String sonlandırıcı
+    file_buffer[size] = '\0'; // String terminator
 
     if (out_size) {
         *out_size = size;
     }
 
-    serial_write("[KRYFS] Dosya basariyla okundu: ");
+    serial_write("[KRYFS] File successfully read: ");
     serial_write((char*)filename);
     serial_write("\n");
 
@@ -203,11 +203,11 @@ void* kryfs_read_file(const char* filename, uint32_t* out_size) {
 
 int kryfs_get_dir_files(const char* rel_path, vfs_file_info_t* out_list, int max_count) {
     if (!kryfs_is_mounted) {
-        serial_write("[KRYFS HATA] Dosya sistemi monte edilmemis!\n");
+        serial_write("[KRYFS ERROR] File system not mounted!\n");
         return 0;
     }
 
-    // Gelen yol başındaki C:\ veya / eklerini temizle
+    // Clear C:\ or / prefixes from the incoming path
     if (rel_path[0] == '/' || rel_path[0] == '\\') {
         rel_path++;
     } else if (rel_path[1] == ':' && (rel_path[2] == '/' || rel_path[2] == '\\')) {
@@ -223,7 +223,7 @@ int kryfs_get_dir_files(const char* rel_path, vfs_file_info_t* out_list, int max
     uint32_t total_buffer_size = inode_table_sectors * 512;
     uint8_t* sector_buf = (uint8_t*)kmalloc(total_buffer_size);
     if (!sector_buf) {
-        serial_write("[KRYFS HATA] Dizin listeleme icin bellek tahsisi basarisiz!\n");
+        serial_write("[KRYFS ERROR] Memory allocation failed for directory listing!\n");
         return 0;
     }
 
@@ -233,8 +233,8 @@ int kryfs_get_dir_files(const char* rel_path, vfs_file_info_t* out_list, int max
     uint32_t max_inodes = total_buffer_size / sizeof(kryfs_inode_t);
     int target_len = strlen(rel_path);
 
-    // Zaten eklenen dosya/klasör isimlerini tekrar eklememek için basit bir kontrol listesi tutabiliriz 
-    // (Aynı klasör seviyesindeki unique elemanları bulmak için)
+    // Keep a simple tracking list to avoid adding already added file/folder names again
+    // (To find unique elements at the same directory level)
     for (uint32_t i = 0; i < max_inodes && count < max_count; i++) {
         kryfs_inode_t* inode = (kryfs_inode_t*)(sector_buf + (i * sizeof(kryfs_inode_t)));
 
@@ -245,14 +245,14 @@ int kryfs_get_dir_files(const char* rel_path, vfs_file_info_t* out_list, int max
         const char* sub_name = NULL;
 
         if (target_len == 0) {
-            // Kök dizin listeleniyor ("" veya "/")
-            // Sadece içinde '/' barındırmayanlar VEYA ilk '/' karakterine kadar olanlar ana dizin elemanıdır.
-            // Örn: "test.txt" -> Ana dizin. "Program Files/file.txt" -> Ana dizindeki "Program Files" klasörü.
+            // Root directory is being listed ("" or "/")
+            // Only items without '/' inside them OR up to the first '/' character belong to the root directory.
+            // e.g., "test.txt" -> Root. "Program Files/file.txt" -> "Program Files" folder in the root.
             sub_name = in_name;
             match = 1;
         } else {
-            // Belirli bir alt klasör listeleniyor (Örn: "Program Files")
-            // in_name, rel_path ile başlamalı ve hemen ardından bir '/' gelmeli.
+            // A specific subfolder is being listed (e.g., "Program Files")
+            // in_name must start with rel_path followed immediately by a '/' or '\'.
             if (strncmp(in_name, rel_path, target_len) == 0 && 
                 (in_name[target_len] == '/' || in_name[target_len] == '\\')) {
                 sub_name = in_name + target_len + 1;
@@ -261,7 +261,7 @@ int kryfs_get_dir_files(const char* rel_path, vfs_file_info_t* out_list, int max
         }
 
         if (match && sub_name && sub_name[0] != '\0') {
-            // Sadece ilk seviyedeki dosya/klasör adını alacağız (örn: "Program Files/calculator/calc.kef" -> "calculator" kısmı veya dosya adı)
+            // Get only the first-level file/folder name (e.g., "Program Files/calculator/calc.kef" -> "calculator" part or file name)
             char direct_child[KRYFS_MAX_FILENAME];
             int j = 0;
             while (sub_name[j] != '\0' && sub_name[j] != '/' && sub_name[j] != '\\' && j < KRYFS_MAX_FILENAME - 1) {
@@ -270,7 +270,7 @@ int kryfs_get_dir_files(const char* rel_path, vfs_file_info_t* out_list, int max
             }
             direct_child[j] = '\0';
 
-            // Bu ismi daha önce out_list'e ekledik mi kontrol et (Unique check)
+            // Check if we have already added this name to out_list (Unique check)
             int already_added = 0;
             for (int k = 0; k < count; k++) {
                 if (strcmp(out_list[k].name, direct_child) == 0) {
@@ -280,7 +280,7 @@ int kryfs_get_dir_files(const char* rel_path, vfs_file_info_t* out_list, int max
             }
 
             if (!already_added) {
-                // İsmi kopyala
+                // Copy the name
                 int c = 0;
                 while (direct_child[c] != '\0' && c < 255) {
                     out_list[count].name[c] = direct_child[c];
@@ -288,8 +288,8 @@ int kryfs_get_dir_files(const char* rel_path, vfs_file_info_t* out_list, int max
                 }
                 out_list[count].name[c] = '\0';
 
-                // Eğer direkt çocuk ile tam in_name aynı ise bu bir dosyadır veya o satırdaki öğedir.
-                // Eğer içinde hala '/' varsa veya başka bir inode bu alt klasöre aitse bu bir klasördür ([is_directory = true]).
+                // If the direct child is identical to the full in_name, it's a file or the item on that row.
+                // If there is still a '/' inside or another inode belongs to this subfolder, it's a directory ([is_directory = true]).
                 int is_dir = (strcmp(sub_name, direct_child) != 0) || inode->is_directory;
                 out_list[count].is_directory = is_dir ? 1 : 0;
                 out_list[count].size = is_dir ? 0 : inode->size;

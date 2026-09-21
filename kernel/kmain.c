@@ -61,7 +61,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         serial_write("FAT32: Driver could not be started!\n");
     }
 
-    // KRYFS Mount ve VFS Entegrasyonu (C Sürücüsü)
+    // KRYFS Mount and VFS Integration (C Drive)
     if (kryfs_mount() == 0) {
         fs_driver_t kryfs_driver = kryfs_get_driver();
         vfs_mount('C', "KRYFS_VOL", kryfs_driver);
@@ -70,40 +70,40 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         serial_write("KRYFS: Driver could not be started!\n");
     }
 
-    // --- KRYFS / VFS DOSYA OKUMA TESTİ ---
+    // --- KRYFS / VFS FILE READ TEST ---
     uint32_t test_size = 0;
     void* file_data = vfs_read_file("C:/test.txt", &test_size);
     
-    serial_write("---- test.txt Dosya İçeriği ----\n");
+    serial_write("---- test.txt File Content ----\n");
     if (file_data && test_size > 0) {
         serial_write((char*)file_data);
         serial_write("\n");
         kfree(file_data);
     } else {
-        serial_write("[HATA] test.txt okunamadi veya bulunamadi!\n");
+        serial_write("[ERROR] test.txt could not be read or found!\n");
     }
     serial_write("--------------------------------\n");
     // ------------------------------------
 
-    // --- VFS DIZIN LISTELEME TESTI ---
-    serial_write("---- VFS Dizin Listeleme Testi (C:/) ----\n");
+    // --- VFS DIRECTORY LISTING TEST ---
+    serial_write("---- VFS Directory Listing Test (C:/) ----\n");
     vfs_file_info_t root_files[16];
     int file_count = vfs_get_directory_files("C:/", root_files, 16);
     
     if (file_count > 0) {
-        serial_write("C:/ dizinindeki dosya/klasorler:\n");
+        serial_write("Files/folders in C:/ directory:\n");
         for (int i = 0; i < file_count; i++) {
             serial_write(" - ");
             serial_write(root_files[i].name);
             if (root_files[i].is_directory) {
-                serial_write(" [KLASOR]");
+                serial_write(" [FOLDER]");
             } else {
-                serial_write(" [DOSYA]");
+                serial_write(" [FILE]");
             }
             serial_write("\n");
         }
     } else {
-        serial_write("VFS Bilgi: C:/ dizini bos veya get_dir_files desteklenmiyor/0 dondu.\n");
+        serial_write("VFS Info: C:/ directory is empty or get_dir_files is not supported/returned 0.\n");
     }
     serial_write("-------------------------------------------\n");
     // ------------------------------------------
@@ -116,21 +116,20 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     }
     keyboard_init();
 
-    // 5. Grafik Arayüzünün Başlatılması ve İlk Çizim
+    // 5. Graphical Interface Initialization and Initial Drawing
     uint32_t width = fb_get_width();
     uint32_t height = fb_get_height();
 
     if (width > 0 && height > 0) {
-        fb_clear(0xFF0000FF); // Lacivert/Mavi masaüstü arka planı
+        fb_clear(0xFF0000FF); // Navy blue desktop background
         desktop_init(); 
     }
 
-    serial_write("---- KEF Uygulamasi Baslatiliyor ----\n");
-    // (x86) ifadesini kaldırarak doğru klasör yolunu veriyoruz:
+    serial_write("---- Starting KEF Application ----\n");
     if (kef_load_and_run("C:/Program Files/cpp-app-test/cpp-app-test.kef")) {
-        serial_write("KEF: Uygulama basariyla calistirildi ve sonlandi.\n");
+        serial_write("KEF: Application successfully executed and terminated.\n");
     } else {
-        serial_write("[HATA] KEF uygulamasi baslatilamadi!\n");
+        serial_write("[ERROR] KEF application could not be started!\n");
     }
     serial_write("-------------------------------------\n");
 
@@ -143,7 +142,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         serial_write("AC97: Driver initialized and ready.\n");
     }
 
-    // 7. Main event loop (GUI aktif döngü)
+    // 7. Main event loop (GUI active loop)
     while (1) {
         uint8_t input_updated = uhci_poll();
         if (inb_port(0x64) & 1) {

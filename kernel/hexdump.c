@@ -4,12 +4,12 @@
 void kernel_hexdump(const void* data, size_t size) {
     const uint8_t* ptr = (const uint8_t*)data;
     
-    serial_write("\n--- HEXDUMP (Boyut: ");
+    serial_write("\n--- HEXDUMP (Size: ");
     serial_write_num(size);
-    serial_write(" bayt) ---\n");
+    serial_write(" bytes) ---\n");
 
     for (size_t i = 0; i < size; i += 16) {
-        // Hex kısımlarını yazdır
+        // Print hex parts
         for (size_t j = 0; j < 16; j++) {
             if (i + j < size) {
                 uint8_t b = ptr[i + j];
@@ -25,7 +25,7 @@ void kernel_hexdump(const void* data, size_t size) {
 
         serial_write(" | ");
 
-        // ASCII karşılıklarını yazdır
+        // Print ASCII equivalents
         for (size_t j = 0; j < 16; j++) {
             if (i + j < size) {
                 uint8_t b = ptr[i + j];

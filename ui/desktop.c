@@ -20,7 +20,7 @@ typedef struct {
 
 static damage_rect_t screen_damage = {0, 0, 0, 0, false};
 
-// Başlat menüsünün açık/kapalı durumu ve önceki fare sol tık durumu
+// Start menu open/closed state and previous mouse left click state
 static bool start_menu_open = false;
 static bool prev_mouse_left = false;
 
@@ -110,98 +110,98 @@ void desktop_redraw(void) {
         // Taskbar top border (a thin light line for a modern border effect)
         gfx_fill_rect(screen_damage.x, taskbar_y, screen_damage.w, 1, 0xFF333333);
 
-        // --- BAŞLAT BUTONU ---
+        // --- START BUTTON ---
         int btn_x = 4;
         int btn_y = taskbar_y + 4;
         int btn_w = 70;
         int btn_h = 28;
 
-        // Menü açıkken butonu basılı (koyu) göster
+        // Show the start button pressed (dark) when menu is open
         uint32_t btn_bg = start_menu_open ? 0xFF2A2A2A : 0xFF3A3A3A;
         gfx_fill_rect(btn_x, btn_y, btn_w, btn_h, btn_bg);
         
-        // Buton çerçevesi (3D klasik görünüm hissi için)
-        gfx_fill_rect(btn_x, btn_y, btn_w, 1, 0xFF555555); // Üst
-        gfx_fill_rect(btn_x, btn_y, 1, btn_h, 0xFF555555); // Sol
-        gfx_fill_rect(btn_x + btn_w - 1, btn_y, 1, btn_h, 0xFF111111); // Sağ
-        gfx_fill_rect(btn_x, btn_y + btn_h - 1, btn_w, 1, 0xFF111111); // Alt
+        // Button border (for a classic 3D look and feel)
+        gfx_fill_rect(btn_x, btn_y, btn_w, 1, 0xFF555555); // Top
+        gfx_fill_rect(btn_x, btn_y, 1, btn_h, 0xFF555555); // Left
+        gfx_fill_rect(btn_x + btn_w - 1, btn_y, 1, btn_h, 0xFF111111); // Right
+        gfx_fill_rect(btn_x, btn_y + btn_h - 1, btn_w, 1, 0xFF111111); // Bottom
     }
 
-    // 6. --- BAŞLAT MENÜSÜ (Açıksa çizilir) ---
+    // 6. --- START MENU (Drawn if open) ---
     if (start_menu_open) {
         int menu_x = 4;
         int menu_w = MENU_W;
         int menu_h = MENU_H;
         int menu_y = taskbar_y - menu_h;
 
-        // Menü ana arkaplanı
+        // Menu main background
         gfx_fill_rect(menu_x, menu_y, menu_w, menu_h, 0xFF222222);
 
-        // Klasik Windows tarzı yan şerit (Gri dekoratif panel)
+        // Classic Windows-style side strip (Gray decorative panel)
         gfx_fill_rect(menu_x, menu_y, 24, menu_h, 0xFF333333);
 
-        // --- SHUTDOWN BUTONU (Sağ alta hizalandı ve yazısı eklendi) ---
-        int shut_w = 100; // Buton genişliği
-        int shut_h = 32;  // Buton yüksekliği
-        int shut_x = menu_x + menu_w - shut_w - 12; // Menünün sağından 12px içeride
-        int shut_y = menu_y + menu_h - shut_h - 12; // Menünün altından 12px yukarıda
+        // --- SHUTDOWN BUTTON (Aligned to bottom-right with text added) ---
+        int shut_w = 100; // Button width
+        int shut_h = 32;  // Button height
+        int shut_x = menu_x + menu_w - shut_w - 12; // 12px inside from the right of the menu
+        int shut_y = menu_y + menu_h - shut_h - 12; // 12px above from the bottom of the menu
 
-        // Buton arkaplanı (Kırmızımsı / Koyu ton)
+        // Button background (Reddish / Dark tone)
         gfx_fill_rect(shut_x, shut_y, shut_w, shut_h, 0xFF4A2222);
-        // Buton 3D çerçevesi
-        gfx_fill_rect(shut_x, shut_y, shut_w, 1, 0xFF663333); // Üst
-        gfx_fill_rect(shut_x, shut_y, 1, shut_h, 0xFF663333); // Sol
-        gfx_fill_rect(shut_x + shut_w - 1, shut_y, 1, shut_h, 0xFF221111); // Sağ
-        gfx_fill_rect(shut_x, shut_y + shut_h - 1, shut_w, 1, 0xFF221111); // Alt
+        // Button 3D border
+        gfx_fill_rect(shut_x, shut_y, shut_w, 1, 0xFF663333); // Top
+        gfx_fill_rect(shut_x, shut_y, 1, shut_h, 0xFF663333); // Left
+        gfx_fill_rect(shut_x + shut_w - 1, shut_y, 1, shut_h, 0xFF221111); // Right
+        gfx_fill_rect(shut_x, shut_y + shut_h - 1, shut_w, 1, 0xFF221111); // Bottom
 
-        // Buton Yazısı ("Kapat" - Beyaz renk)
-        gfx_draw_text(shut_x + 28, shut_y + 8, 0xFFFFFFFF, "Kapat");
+        // Button Text ("Shut Down" - White color)
+        gfx_draw_text(shut_x + 22, shut_y + 8, 0xFFFFFFFF, "Shut Down");
 
-        // Menü dış çerçevesi
-        gfx_fill_rect(menu_x, menu_y, menu_w, 1, 0xFF666666); // Üst
-        gfx_fill_rect(menu_x, menu_y, 1, menu_h, 0xFF666666); // Sol
-        gfx_fill_rect(menu_x + menu_w - 1, menu_y, 1, menu_h, 0xFF111111); // Sağ
-        gfx_fill_rect(menu_x, menu_y + menu_h - 1, menu_w, 1, 0xFF111111); // Alt
+        // Menu outer border
+        gfx_fill_rect(menu_x, menu_y, menu_w, 1, 0xFF666666); // Top
+        gfx_fill_rect(menu_x, menu_y, 1, menu_h, 0xFF666666); // Left
+        gfx_fill_rect(menu_x + menu_w - 1, menu_y, 1, menu_h, 0xFF111111); // Right
+        gfx_fill_rect(menu_x, menu_y + menu_h - 1, menu_w, 1, 0xFF111111); // Bottom
     }
 
-    // 6.5. --- SAĞ TIK MENÜSÜ (Açıksa çizilir ve Hover Kontrolü Yapılır) ---
+    // 6.5. --- RIGHT-CLICK MENU (Drawn if open and Hover Check is Performed) ---
     if (right_menu_open) {
         int r_w = RIGHT_MENU_W;
         int r_h = RIGHT_MENU_H;
         int r_x = right_menu_x;
         int r_y = right_menu_y;
 
-        // Ekran sınırlarından taşmayı engelle
+        // Prevent overflowing screen boundaries
         if (r_x + r_w > screen_w) r_x = screen_w - r_w;
         if (r_y + r_h > screen_h) r_y = screen_h - r_h;
 
-        // Menü arka planı
+        // Menu background
         gfx_fill_rect(r_x, r_y, r_w, r_h, 0xFF222222);
 
         int cur_x = cursor_get_x();
         int cur_y = cursor_get_y();
 
-        // Seçenek 1: Yenile
+        // Option 1: Refresh
         bool hover_yenile = (cur_x >= r_x + 4 && cur_x <= r_x + r_w - 4 &&
                              cur_y >= r_y + 6 && cur_y <= r_y + 30);
-        uint32_t bg_yenile = hover_yenile ? 0xFF3A3A3A : 0xFF2A2A2A; // Üzerindeyse açık renk
+        uint32_t bg_yenile = hover_yenile ? 0xFF3A3A3A : 0xFF2A2A2A; // Lighter color if hovered
         
         gfx_fill_rect(r_x + 4, r_y + 6, r_w - 8, 24, bg_yenile);
-        gfx_draw_text(r_x + 12, r_y + 10, 0xFFFFFFFF, "Yenile");
+        gfx_draw_text(r_x + 12, r_y + 10, 0xFFFFFFFF, "Refresh");
 
-        // Seçenek 2: Terminal
+        // Option 2: Terminal
         bool hover_terminal = (cur_x >= r_x + 4 && cur_x <= r_x + r_w - 4 &&
                                cur_y >= r_y + 34 && cur_y <= r_y + 58);
-        uint32_t bg_terminal = hover_terminal ? 0xFF3A3A3A : 0xFF2A2A2A; // Üzerindeyse açık renk
+        uint32_t bg_terminal = hover_terminal ? 0xFF3A3A3A : 0xFF2A2A2A; // Lighter color if hovered
 
         gfx_fill_rect(r_x + 4, r_y + 34, r_w - 8, 24, bg_terminal);
         gfx_draw_text(r_x + 12, r_y + 38, 0xFFFFFFFF, "Terminal");
 
-        // Menü Dış Çerçevesi (Klasik 3D görünüm)
-        gfx_fill_rect(r_x, r_y, r_w, 1, 0xFF666666); // Üst
-        gfx_fill_rect(r_x, r_y, 1, r_h, 0xFF666666); // Sol
-        gfx_fill_rect(r_x + r_w - 1, r_y, 1, r_h, 0xFF111111); // Sağ
-        gfx_fill_rect(r_x, r_y + r_h - 1, r_w, 1, 0xFF111111); // Alt
+        // Menu Outer Border (Classic 3D look)
+        gfx_fill_rect(r_x, r_y, r_w, 1, 0xFF666666); // Top
+        gfx_fill_rect(r_x, r_y, 1, r_h, 0xFF666666); // Left
+        gfx_fill_rect(r_x + r_w - 1, r_y, 1, r_h, 0xFF111111); // Right
+        gfx_fill_rect(r_x, r_y + r_h - 1, r_w, 1, 0xFF111111); // Bottom
     }
 
     // 7. Draw the cursor at its new back-buffer position (blit=false because we perform one combined blit)
@@ -250,7 +250,7 @@ void desktop_process_input(void) {
     int screen_h = fb_get_height();
     int taskbar_y = screen_h - 36;
 
-    // 3. Sol Tık Kontrolü (Başlat butonuna, menüye ve kapatma butonuna tıklama tespiti)
+    // 3. Left Click Check (Detection of clicks on start button, menu, and shutdown button)
     bool current_mouse_left = (mouse_buttons & 1);
     if (current_mouse_left && !prev_mouse_left) {
         int btn_x = 4;
@@ -258,42 +258,42 @@ void desktop_process_input(void) {
         int btn_w = 70;
         int btn_h = 28;
 
-        // Sağ tık menüsü açıkken sol tık yapılırsa önce onu kapat
+        // If a left-click occurs while the right-click menu is open, close it first
         if (right_menu_open) {
             right_menu_open = false;
             damage_union_rect(0, 0, screen_w, screen_h);
             desktop_redraw();
         }
 
-        // Fare Başlat butonunun üzerinde mi?
+        // Is the mouse over the Start button?
         if (new_x >= btn_x && new_x <= btn_x + btn_w &&
             new_y >= btn_y && new_y <= btn_y + btn_h) {
             start_menu_open = !start_menu_open;
             
-            // Menü açılıp kapanacağı için tüm ekranı hasarlı işaretleyip yeniden çizilmesini tetikle
+            // Mark the entire screen as damaged and trigger a redraw since the menu will open/close
             damage_union_rect(0, 0, screen_w, screen_h);
             desktop_redraw();
         }
-        // Menü açıkken menü içi veya dışı kontrolü
+        // Inside or outside menu check when menu is open
         else if (start_menu_open) {
             int menu_x = 4;
             int menu_w = MENU_W; 
             int menu_h = MENU_H; 
             int menu_y = taskbar_y - menu_h;
 
-            // Shutdown butonunun koordinatları (Çizim ile birebir aynı olmalı)
+            // Shutdown button coordinates (Must be identical to the drawing)
             int shut_w = 100;
             int shut_h = 32;
             int shut_x = menu_x + menu_w - shut_w - 12;
             int shut_y = menu_y + menu_h - shut_h - 12;
 
-            // Kullanıcı Shutdown butonuna tıkladı mı?
+            // Did the user click the Shutdown button?
             if (new_x >= shut_x && new_x <= shut_x + shut_w &&
                 new_y >= shut_y && new_y <= shut_y + shut_h) {
-                system_shutdown(); // Sistemi kapat
+                system_shutdown(); // Shut down the system
             }
             else {
-                // Menü dışına tıklandıysa menüyü kapat
+                // Close the menu if clicked outside
                 bool inside_menu = (new_x >= menu_x && new_x <= menu_x + menu_w &&
                                     new_y >= menu_y && new_y <= menu_y + menu_h);
 
@@ -307,16 +307,16 @@ void desktop_process_input(void) {
     }
     prev_mouse_left = current_mouse_left;
 
-    // 4. --- SAĞ TIK KONTROLÜ ---
-    bool current_mouse_right = (mouse_buttons & 0x02); // Bit 1 = Sağ Tık
+    // 4. --- RIGHT-CLICK CHECK ---
+    bool current_mouse_right = (mouse_buttons & 0x02); // Bit 1 = Right Click
     if (current_mouse_right && !prev_mouse_right) {
-        // Görev çubuğu (taskbar) alanı haricinde masaüstüne sağ tıklandıysa menüyü aç
+        // Open the menu if the desktop is right-clicked outside the taskbar area
         if (new_y < taskbar_y) {
             right_menu_open = true;
             right_menu_x = new_x;
             right_menu_y = new_y;
             
-            // Çakışmayı önlemek için başlat menüsünü kapat
+            // Close the start menu to avoid conflicts
             start_menu_open = false;
 
             damage_union_rect(0, 0, screen_w, screen_h);
@@ -330,7 +330,7 @@ void desktop_process_input(void) {
         damage_union_rect(old_x, old_y, cursor_w, cursor_h); // Clear the old position
         damage_union_rect(new_x, new_y, cursor_w, cursor_h); // Draw the new position
         
-        // Sağ tık menüsü açıkken fare hareket ettiğinde menünün de yenilenmesini sağla (hover için)
+        // Ensure the menu also refreshes when the mouse moves while the right-click menu is open (for hover)
         if (right_menu_open) {
             damage_union_rect(right_menu_x, right_menu_y, RIGHT_MENU_W, RIGHT_MENU_H);
         }

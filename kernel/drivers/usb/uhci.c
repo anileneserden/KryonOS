@@ -151,12 +151,9 @@ static void uhci_set_address(uint8_t port_index, uint8_t new_address) {
     } else {
         serial_write("UHCI: Warning: SET_ADDRESS timed out or failed.\n");
         
-        // Status değerini ve hata bayraklarını inceleyelim
         uint32_t st = status_td.status;
         serial_write("  -> SET_ADDRESS: STATUS TD active. Status reg: ");
         
-        // Basit bir hex yazdırma yardımı (veya mevcut hex fonksiyonun varsa kullanabilirsin)
-        // Stalled bit kontrolü (Bit 26)
         if (st & (1 << 26)) serial_write(" [STALLED] ");
         if (st & (1 << 25)) serial_write(" [Data Buffer Error] ");
         if (st & (1 << 24)) serial_write(" [Babble] ");
@@ -168,12 +165,12 @@ static void uhci_set_address(uint8_t port_index, uint8_t new_address) {
 static int uhci_get_device_descriptor(void) {
     serial_write("UHCI: Requesting Device Descriptor (8-byte chunk for Address 0)...\n");
 
-    // 1. Setup Paketi (Get Descriptor: Device Type, Length 8)
+    // 1. Setup Package (Get Descriptor: Device Type, Length 8)
     setup_pkt.bmRequestType = 0x80; // Device-to-host, Standard, Recipient: Device
     setup_pkt.bRequest      = 0x06; // GET_DESCRIPTOR
     setup_pkt.wValue        = 0x0100; // Descriptor Type: Device (1), Index: 0
     setup_pkt.wIndex        = 0x0000;
-    setup_pkt.wLength       = 0x0008; // İlk aşamada 8 bytes istiyoruz
+    setup_pkt.wLength       = 0x0008; // We require 8 bytes in the first stage.
 
     // 2. Setup TD (MaxLen = 7 [8 bytes], Toggle = 0 [DATA0], Endpoint = 0, Addr = 0)
     setup_td.link   = virt_to_phys(&descriptor_in_tds[0]) | UHCI_LINK_DEPTH_FIRST;
@@ -197,13 +194,13 @@ static int uhci_get_device_descriptor(void) {
     control_qh.head_link    = 1;
     control_qh.element_link = virt_to_phys(&setup_td) | UHCI_LINK_DEPTH_FIRST;
 
-    // 6. Frame List'e bağla
+    // 6. Connect to Frame List
     uint32_t qh_phys = virt_to_phys(&control_qh) | 0x02;
     for (int i = 0; i < FRAME_LIST_COUNT; i++) {
         frame_list[i] = qh_phys;
     }
 
-    // 7. Bekleme döngüsü
+    // 7. Wait loop
     int timeout = 2000000;
     while ((status_td.status & TD_STAT_ACTIVED) && (timeout > 0)) {
         timeout--;
@@ -213,7 +210,7 @@ static int uhci_get_device_descriptor(void) {
     if (!(status_td.status & TD_STAT_ACTIVED)) {
         serial_write("UHCI: Device Descriptor (8 bytes) fetched successfully on Address 0!\n");
         
-        // Cihazın bMaxPacketSize0 değerini görmek için (genellikle 7. bayttır):
+        // To view the device's bMaxPacketSize0 value (usually the 7th byte):
         uint8_t max_packet_size = device_descriptor[7];
         serial_write("  -> MaxPacketSize0: ");
         serial_write_dec(max_packet_size);
