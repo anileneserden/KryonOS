@@ -5,8 +5,9 @@
 #include <stdbool.h>
 
 #define MAX_WINDOWS 10
-#define MAX_PANELS 4
-#define MAX_LABELS 4
+#define MAX_PANELS   4
+#define MAX_LABELS   4
+#define MAX_BUTTONS  24
 
 typedef struct {
     int x, y;
@@ -19,6 +20,16 @@ typedef struct {
     uint32_t color;
     char text[64];
 } label_item_t;
+
+typedef struct {
+    int x, y;
+    int width, height;
+    uint32_t bg_color;
+    uint32_t hover_color;
+    uint32_t text_color;
+    char text[32];
+    bool is_hovered;
+} button_t;
 
 typedef struct {
     int x, y;
@@ -36,6 +47,10 @@ typedef struct {
     // Çoklu Renkli Label Desteği
     label_item_t labels[MAX_LABELS];
     int label_count;
+
+    // Çoklu Renkli Button Desteği
+    button_t buttons[MAX_BUTTONS];
+    int button_count;
 } window_t;
 
 void wm_init(void);

@@ -66,6 +66,36 @@ static int kef_label_create(int x, int y, uint32_t color, const char* text) {
     return 1;
 }
 
+static int kef_button_create(int x, int y, int w, int h, uint32_t bg_color, uint32_t text_color, const char* text) {
+    window_t* win = wm_get_active_window();
+    if (!win || win->button_count >= MAX_BUTTONS) {
+        serial_write("KEF API Error: Aktif pencere bulunamadi veya buton limiti dolu!\n");
+        return -1;
+    }
+
+    button_t* b = &win->buttons[win->button_count++];
+    b->x = x;
+    b->y = y;
+    b->width = w;
+    b->height = h;
+    b->bg_color = bg_color;
+    b->text_color = text_color;
+    
+    int i = 0;
+    while (text[i] != '\0' && i < 31) {
+        b->text[i] = text[i];
+        i++;
+    }
+    b->text[i] = '\0';
+
+    wm_draw_window(win);
+
+    serial_write("KEF API: Pencere ici buton basariyla olusturuldu -> ");
+    serial_write((char*)text);
+    serial_write("\n");
+    return 1;
+}
+
 static void kef_install_api(void) {
     volatile kef_api_t* api = (volatile kef_api_t*)KEF_API_ADDRESS;
     api->window_create = kef_window_create;
@@ -73,6 +103,7 @@ static void kef_install_api(void) {
     api->exit = kef_exit;
     api->label_create = kef_label_create;
     api->panel_create = kef_panel_create;
+    api->button_create = kef_button_create; // Buton API'si kernel tarafına kaydedildi
 }
 
 bool kef_load_and_run(const char* path) {

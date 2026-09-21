@@ -143,6 +143,22 @@ void wm_draw_window(window_t* win) {
         int abs_y = win->y + 24 + l->y; // 24 piksel başlık çubuğu payı
         gfx_draw_text_utf8(abs_x, abs_y, l->color, l->text);
     }
+
+    // 7. Butonları çiz (Hover efektli)
+    for (int i = 0; i < win->button_count; i++) {
+        button_t* b = &win->buttons[i];
+        int abs_x = win->x + b->x;
+        int abs_y = win->y + 24 + b->y; 
+        
+        // Eğer hover_color tanımlı değilse (0 ise) varsayılan bir açık gri/mavi ton seçebilirsin
+        uint32_t current_bg_color = b->is_hovered ? (b->hover_color != 0 ? b->hover_color : 0xFF505050) : b->bg_color;
+        
+        // Buton arka planı
+        gfx_fill_rect(abs_x, abs_y, b->width, b->height, current_bg_color);
+        
+        // Buton yazısı (Ortalama hesaplaması yapılabilir)
+        gfx_draw_text_utf8(abs_x + 8, abs_y + 8, b->text_color, b->text);
+    }
 }
 
 void wm_draw_all(void) {
@@ -226,34 +242,34 @@ static window_t* wm_bring_to_front(window_t* win) {
 }
 
 static void wm_update_hover_state(void) {
-    window_t* new_hovered_window = wm_find_at(mouse_x, mouse_y);
-    uint8_t new_hovered_close = 0;
+    for (int i = 0; i < window_count; i++) {
+        window_t* win = &window_list[i];
+        if (!win || win->width == 0) continue;
 
-    if (new_hovered_window
-        && mouse_y >= new_hovered_window->y
-        && mouse_y < new_hovered_window->y + WM_TITLEBAR_HEIGHT) {
-        int close_x = new_hovered_window->x + new_hovered_window->width - 22;
-        int close_y = new_hovered_window->y + 3;
-        new_hovered_close = mouse_x >= close_x && mouse_x <= close_x + 18
-            && mouse_y >= close_y && mouse_y <= close_y + 18;
-    } else {
-        new_hovered_window = 0;
+        for (int b = 0; b < win->button_count; b++) {
+            button_t* btn = &win->buttons[b];
+            
+            // Pencere sol-üst köşesine 24 piksel başlık çubuğu payını net ekleyelim
+            int abs_x = win->x + btn->x;
+            int abs_y = win->y + 24 + btn->y;
+
+            // Sınır kontrolü (Genişlik ve yükseklik taşmalarını önlemek için kesin sınır)
+            if (mouse_x >= abs_x && mouse_x < abs_x + btn->width &&
+                mouse_y >= abs_y && mouse_y < abs_y + btn->height) {
+                
+                // Eğer hover durumu değiştiyse ekranı o bölgede tazele
+                if (!btn->is_hovered) {
+                    btn->is_hovered = true;
+                    damage_union_rect(abs_x, abs_y, btn->width, btn->height);
+                }
+            } else {
+                if (btn->is_hovered) {
+                    btn->is_hovered = false;
+                    damage_union_rect(abs_x, abs_y, btn->width, btn->height);
+                }
+            }
+        }
     }
-
-    if (new_hovered_window == hovered_window
-        && new_hovered_close == hovered_close_button) return;
-
-    if (hovered_window) {
-        damage_union_rect(hovered_window->x, hovered_window->y,
-                          hovered_window->width, WM_TITLEBAR_HEIGHT);
-    }
-    if (new_hovered_window) {
-        damage_union_rect(new_hovered_window->x, new_hovered_window->y,
-                          new_hovered_window->width, WM_TITLEBAR_HEIGHT);
-    }
-
-    hovered_window = new_hovered_window;
-    hovered_close_button = new_hovered_close;
 }
 
 void wm_process_input(void) {
@@ -281,7 +297,7 @@ void wm_process_input(void) {
             cursor_show();
         }
         prev_buttons = mouse_buttons;
-        return; // No other window movement can be processed while the button is not pressed
+        return;
     }
 
     // 2. If the left button is pressed and was just clicked (click/focus/drag start)
@@ -305,13 +321,30 @@ void wm_process_input(void) {
                 return;
             }
 
+            // --- PENCERE İÇİ BUTON TIKLAMA KONTROLÜ ---
+            bool clicked_on_button = false;
+            for (int i = 0; i < target->button_count; i++) {
+                button_t* b = &target->buttons[i]; // button_list yerine buttons kullanıldı
+                int abs_bx = target->x + b->x;
+                int abs_by = target->y + 24 + b->y;
+
+                if (mouse_x >= abs_bx && mouse_x < abs_bx + b->width &&
+                    mouse_y >= abs_by && mouse_y < abs_by + b->height) {
+                    serial_write("WM: Pencere ici butona tiklandi: ");
+                    serial_write(b->text);
+                    serial_write("\n");
+                    clicked_on_button = true;
+                    break;
+                }
+            }
+
             // Resize check
             int dir = get_resize_direction(target, mouse_x, mouse_y);
             if (dir != RESIZE_NONE) {
                 resized_window = target;
                 resize_direction = dir;
-            } else {
-                // Start dragging only when the title bar was clicked
+            } else if (!clicked_on_button) {
+                // Start dragging only when the title bar was clicked and not a button inside
                 if (mouse_y >= target->y && mouse_y < target->y + WM_TITLEBAR_HEIGHT) {
                     dragged_window = front_win;
                     dragged_window->is_dragging = true;
@@ -329,7 +362,7 @@ void wm_process_input(void) {
             if (active_window != 0) {
                 cursor_prepare_redraw();
                 
-                // Mark all window areas as damaged so their title bars return to gray
+                // Mark all window areas as damaged so their title bars return to gray (Düz dizi erişimi düzeltildi)
                 for (int i = 0; i < window_count; i++) {
                     if (window_list[i].width > 0) {
                         damage_union_rect(window_list[i].x, window_list[i].y, window_list[i].width, window_list[i].height);
@@ -339,7 +372,6 @@ void wm_process_input(void) {
                 
                 active_window = 0;
 
-                // Include the cursor position in the damaged area
                 int32_t cur_x, cur_y;
                 cursor_get_position(&cur_x, &cur_y);
                 damage_union_rect(cur_x, cur_y, CURSOR_WIDTH, CURSOR_HEIGHT);
@@ -409,34 +441,23 @@ void wm_process_input(void) {
             }
         }
         else if (dragged_window && dragged_window->is_dragging) {
-            // Target window coordinates based on the cursor position
             int new_x = mouse_x - dragged_window->drag_offset_x;
             int new_y = mouse_y - dragged_window->drag_offset_y;
 
-            // Get the screen boundaries
             int screen_w = fb_get_width();
             int screen_h = fb_get_height();
 
-            // Constrain the window to follow the cursor while keeping part of the title bar
-            // (for example, 50 pixels) visible and reachable on screen.
-            
-            // Left boundary: keep at least 50 pixels of the window's right side visible
             if (new_x + dragged_window->width < 50) {
                 new_x = 50 - dragged_window->width;
             }
-            // Right boundary: keep the window's left side from extending too far past the screen
             if (new_x > screen_w - 50) {
                 new_x = screen_w - 50;
             }
-
-            // Top boundary: keep the title bar from disappearing above the screen
             if (new_y < 0) {
                 new_y = 0;
             }
             
-            // Bottom boundary: keep the title bar visible above the taskbar
             int taskbar_h = 36;
-            
             if (new_y > screen_h - taskbar_h - WM_TITLEBAR_HEIGHT) {
                 new_y = screen_h - taskbar_h - WM_TITLEBAR_HEIGHT;
             }
@@ -469,16 +490,12 @@ void wm_process_input(void) {
             }
         }
         else {
-            // IMPORTANT: The left button is held, but no window is being dragged.
-            // The cursor is only passing over the windows.
             int32_t old_cursor_x, old_cursor_y;
             cursor_get_position(&old_cursor_x, &old_cursor_y);
 
             if (old_cursor_x != mouse_x || old_cursor_y != mouse_y) {
                 cursor_prepare_redraw();
 
-                // Mark the cursor's old and new positions as damaged so the underlying
-                // title bar/window colors are redrawn correctly.
                 damage_union_rect(old_cursor_x, old_cursor_y, CURSOR_WIDTH, CURSOR_HEIGHT);
                 damage_union_rect(mouse_x, mouse_y, CURSOR_WIDTH, CURSOR_HEIGHT);
 
