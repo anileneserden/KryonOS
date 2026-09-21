@@ -24,6 +24,14 @@ static damage_rect_t screen_damage = {0, 0, 0, 0, false};
 static bool start_menu_open = false;
 static bool prev_mouse_left = false;
 
+static bool right_menu_open = false;
+static bool prev_mouse_right = false;
+static int right_menu_x = 0;
+static int right_menu_y = 0;
+
+#define RIGHT_MENU_W 140
+#define RIGHT_MENU_H 90
+
 void damage_clear(void) {
     screen_damage.active = false;
     screen_damage.x = 0;
@@ -156,6 +164,46 @@ void desktop_redraw(void) {
         gfx_fill_rect(menu_x, menu_y + menu_h - 1, menu_w, 1, 0xFF111111); // Alt
     }
 
+    // 6.5. --- SAĞ TIK MENÜSÜ (Açıksa çizilir ve Hover Kontrolü Yapılır) ---
+    if (right_menu_open) {
+        int r_w = RIGHT_MENU_W;
+        int r_h = RIGHT_MENU_H;
+        int r_x = right_menu_x;
+        int r_y = right_menu_y;
+
+        // Ekran sınırlarından taşmayı engelle
+        if (r_x + r_w > screen_w) r_x = screen_w - r_w;
+        if (r_y + r_h > screen_h) r_y = screen_h - r_h;
+
+        // Menü arka planı
+        gfx_fill_rect(r_x, r_y, r_w, r_h, 0xFF222222);
+
+        int cur_x = cursor_get_x();
+        int cur_y = cursor_get_y();
+
+        // Seçenek 1: Yenile
+        bool hover_yenile = (cur_x >= r_x + 4 && cur_x <= r_x + r_w - 4 &&
+                             cur_y >= r_y + 6 && cur_y <= r_y + 30);
+        uint32_t bg_yenile = hover_yenile ? 0xFF3A3A3A : 0xFF2A2A2A; // Üzerindeyse açık renk
+        
+        gfx_fill_rect(r_x + 4, r_y + 6, r_w - 8, 24, bg_yenile);
+        gfx_draw_text(r_x + 12, r_y + 10, 0xFFFFFFFF, "Yenile");
+
+        // Seçenek 2: Terminal
+        bool hover_terminal = (cur_x >= r_x + 4 && cur_x <= r_x + r_w - 4 &&
+                               cur_y >= r_y + 34 && cur_y <= r_y + 58);
+        uint32_t bg_terminal = hover_terminal ? 0xFF3A3A3A : 0xFF2A2A2A; // Üzerindeyse açık renk
+
+        gfx_fill_rect(r_x + 4, r_y + 34, r_w - 8, 24, bg_terminal);
+        gfx_draw_text(r_x + 12, r_y + 38, 0xFFFFFFFF, "Terminal");
+
+        // Menü Dış Çerçevesi (Klasik 3D görünüm)
+        gfx_fill_rect(r_x, r_y, r_w, 1, 0xFF666666); // Üst
+        gfx_fill_rect(r_x, r_y, 1, r_h, 0xFF666666); // Sol
+        gfx_fill_rect(r_x + r_w - 1, r_y, 1, r_h, 0xFF111111); // Sağ
+        gfx_fill_rect(r_x, r_y + r_h - 1, r_w, 1, 0xFF111111); // Alt
+    }
+
     // 7. Draw the cursor at its new back-buffer position (blit=false because we perform one combined blit)
     cursor_show_internal(false);
 
@@ -210,6 +258,13 @@ void desktop_process_input(void) {
         int btn_w = 70;
         int btn_h = 28;
 
+        // Sağ tık menüsü açıkken sol tık yapılırsa önce onu kapat
+        if (right_menu_open) {
+            right_menu_open = false;
+            damage_union_rect(0, 0, screen_w, screen_h);
+            desktop_redraw();
+        }
+
         // Fare Başlat butonunun üzerinde mi?
         if (new_x >= btn_x && new_x <= btn_x + btn_w &&
             new_y >= btn_y && new_y <= btn_y + btn_h) {
@@ -252,11 +307,34 @@ void desktop_process_input(void) {
     }
     prev_mouse_left = current_mouse_left;
 
-    // 4. If the cursor moved, mark its old and new positions as damaged
+    // 4. --- SAĞ TIK KONTROLÜ ---
+    bool current_mouse_right = (mouse_buttons & 0x02); // Bit 1 = Sağ Tık
+    if (current_mouse_right && !prev_mouse_right) {
+        // Görev çubuğu (taskbar) alanı haricinde masaüstüne sağ tıklandıysa menüyü aç
+        if (new_y < taskbar_y) {
+            right_menu_open = true;
+            right_menu_x = new_x;
+            right_menu_y = new_y;
+            
+            // Çakışmayı önlemek için başlat menüsünü kapat
+            start_menu_open = false;
+
+            damage_union_rect(0, 0, screen_w, screen_h);
+            desktop_redraw();
+        }
+    }
+    prev_mouse_right = current_mouse_right;
+
+    // 5. If the cursor moved, mark its old and new positions as damaged
     if (old_x != new_x || old_y != new_y) {
         damage_union_rect(old_x, old_y, cursor_w, cursor_h); // Clear the old position
         damage_union_rect(new_x, new_y, cursor_w, cursor_h); // Draw the new position
         
+        // Sağ tık menüsü açıkken fare hareket ettiğinde menünün de yenilenmesini sağla (hover için)
+        if (right_menu_open) {
+            damage_union_rect(right_menu_x, right_menu_y, RIGHT_MENU_W, RIGHT_MENU_H);
+        }
+
         // Trigger a redraw
         desktop_redraw();
     }
