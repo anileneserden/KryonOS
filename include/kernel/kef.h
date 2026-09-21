@@ -41,6 +41,7 @@ typedef struct {
     int (*button_create)(int x, int y, int w, int h, uint32_t bg_color, uint32_t text_color, const char* text, void (*on_click)(void), uint8_t anchor);
     int (*get_directory_files)(const char* full_path, vfs_file_info_t* out_list, int max_count);
     void* (*read_file)(const char* full_path, uint32_t* out_size);
+    void (*yield)(void);
 } kef_api_t;
 
 bool kef_load_and_run(const char* path);

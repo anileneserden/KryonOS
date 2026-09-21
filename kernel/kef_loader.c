@@ -93,6 +93,10 @@ static void* kef_read_file(const char* full_path, uint32_t* out_size) {
     return vfs_read_file(full_path, out_size);
 }
 
+static void kef_yield(void) {
+    __asm__ volatile("pause");
+}
+
 static void kef_install_api(void) {
     volatile kef_api_t* api = (volatile kef_api_t*)KEF_API_ADDRESS;
     api->window_create = kef_window_create;
@@ -103,6 +107,7 @@ static void kef_install_api(void) {
     api->button_create = kef_button_create;
     api->get_directory_files = kef_get_directory_files;
     api->read_file = kef_read_file;
+    api->yield = kef_yield;
 }
 
 bool kef_load_and_run(const char* path) {

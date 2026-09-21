@@ -127,7 +127,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
 
     serial_write("---- KEF Uygulamasi Baslatiliyor ----\n");
     // (x86) ifadesini kaldırarak doğru klasör yolunu veriyoruz:
-    if (kef_load_and_run("C:/Program Files/file_manager/file_manager.kef")) {
+    if (kef_load_and_run("C:/Program Files/cpp-app-test/cpp-app-test.kef")) {
         serial_write("KEF: Uygulama basariyla calistirildi ve sonlandi.\n");
     } else {
         serial_write("[HATA] KEF uygulamasi baslatilamadi!\n");
