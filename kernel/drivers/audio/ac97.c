@@ -3,10 +3,7 @@
 #include <kernel/mem/heap.h>
 #include <kernel/serial.h>
 #include <kernel/string.h>
-
-static inline void ac97_outb(uint16_t port, uint8_t val) {
-    __asm__ volatile ("outb %0, %1" : : "a"(val), "Nd"(port));
-}
+#include <arch/x86/io.h>
 
 static inline uint8_t ac97_inb(uint16_t port) {
     uint8_t ret;
@@ -18,14 +15,6 @@ static inline uint16_t ac97_inw(uint16_t port) {
     uint16_t ret;
     __asm__ volatile ("inw %1, %0" : "=a"(ret) : "Nd"(port));
     return ret;
-}
-
-static inline void ac97_outw(uint16_t port, uint16_t val) {
-    __asm__ volatile ("outw %0, %1" : : "a"(val), "Nd"(port));
-}
-
-static inline void ac97_outl(uint16_t port, uint32_t val) {
-    __asm__ volatile ("outl %0, %1" : : "a"(val), "Nd"(port));
 }
 
 static ac97_device_t ac97_dev;
@@ -49,13 +38,13 @@ int ac97_init(void) {
     ac97_dev.found   = 1;
 
     // Cold Reset
-    ac97_outl(ac97_dev.nabmbar + AC97_GLOB_CNT, 0x00000002);
+    outl(ac97_dev.nabmbar + AC97_GLOB_CNT, 0x00000002);
     for (volatile int i = 0; i < 10000; i++);
-    ac97_outl(ac97_dev.nabmbar + AC97_GLOB_CNT, 0x00000000);
+    outl(ac97_dev.nabmbar + AC97_GLOB_CNT, 0x00000000);
 
     // Enable audio levels
-    ac97_outw(ac97_dev.nambar + AC97_MASTER_VOL, 0x0000);
-    ac97_outw(ac97_dev.nambar + AC97_PCM_OUT_VOL, 0x0000);
+    outw(ac97_dev.nambar + AC97_MASTER_VOL, 0x0000);
+    outw(ac97_dev.nambar + AC97_PCM_OUT_VOL, 0x0000);
 
     // Allocate buffers
     bdl_list = (ac97_bdl_entry_t*)kmalloc(sizeof(ac97_bdl_entry_t) * 32);
@@ -69,19 +58,19 @@ void ac97_set_master_volume(uint8_t volume) {
     if (!ac97_dev.found) return;
     uint8_t vol = 31 - (volume & 31);
     uint16_t val = (vol << 8) | vol;
-    ac97_outw(ac97_dev.nambar + AC97_MASTER_VOL, val);
+    outw(ac97_dev.nambar + AC97_MASTER_VOL, val);
 }
 
 void ac97_set_sample_rate(uint32_t hz) {
     if (!ac97_dev.found) return;
-    ac97_outw(ac97_dev.nambar + AC97_PCM_FRONT_DAC_RATE, (uint16_t)hz);
+    outw(ac97_dev.nambar + AC97_PCM_FRONT_DAC_RATE, (uint16_t)hz);
 }
 
 void ac97_play_sound(uint16_t* buffer, uint32_t length) {
     if (!ac97_dev.found || !bdl_list || !buffer || length == 0) return;
 
-    ac97_outb(ac97_dev.nabmbar + AC97_PO_CR, 0x00);
-    ac97_outw(ac97_dev.nabmbar + AC97_PO_SR, 0x001C);
+    outb(ac97_dev.nabmbar + AC97_PO_CR, 0x00);
+    outw(ac97_dev.nabmbar + AC97_PO_SR, 0x001C);
 
     uint32_t total_samples = length / 2;
     uint32_t remaining_samples = total_samples;
@@ -106,9 +95,9 @@ void ac97_play_sound(uint16_t* buffer, uint32_t length) {
 
     bdl_list[bdl_index - 1].flags = 0x8000;
 
-    ac97_outl(ac97_dev.nabmbar + AC97_PO_BDBAR, (uint32_t)bdl_list);
-    ac97_outb(ac97_dev.nabmbar + AC97_PO_LVI, (uint8_t)(bdl_index - 1));
-    ac97_outb(ac97_dev.nabmbar + AC97_PO_CR, AC97_CR_RPBM);
+    outl(ac97_dev.nabmbar + AC97_PO_BDBAR, (uint32_t)bdl_list);
+    outb(ac97_dev.nabmbar + AC97_PO_LVI, (uint8_t)(bdl_index - 1));
+    outb(ac97_dev.nabmbar + AC97_PO_CR, AC97_CR_RPBM);
 
     serial_write("AC97: Playing sound (BDL chunk count: ");
     serial_write_num(bdl_index);
@@ -131,21 +120,21 @@ void ac97_play_tone(uint32_t frequency, uint32_t duration_ms) {
         pcm_buffer[i] = ((i % period) < (period / 2)) ? 0x2000 : -0x2000;
     }
 
-    ac97_outb(ac97_dev.nabmbar + AC97_PO_CR, 0x00);
+    outb(ac97_dev.nabmbar + AC97_PO_CR, 0x00);
     
     bdl_list[0].ptr = (uint32_t)pcm_buffer;
     bdl_list[0].samples = total_samples;
     bdl_list[0].flags = 0x8000;
 
-    ac97_outw(ac97_dev.nabmbar + AC97_PO_SR, 0x001C);
-    ac97_outl(ac97_dev.nabmbar + AC97_PO_BDBAR, (uint32_t)bdl_list);
-    ac97_outb(ac97_dev.nabmbar + AC97_PO_LVI, 0);
+    outw(ac97_dev.nabmbar + AC97_PO_SR, 0x001C);
+    outl(ac97_dev.nabmbar + AC97_PO_BDBAR, (uint32_t)bdl_list);
+    outb(ac97_dev.nabmbar + AC97_PO_LVI, 0);
 
-    ac97_outb(ac97_dev.nabmbar + AC97_PO_CR, AC97_CR_RPBM);
+    outb(ac97_dev.nabmbar + AC97_PO_CR, AC97_CR_RPBM);
 
     for (volatile uint32_t i = 0; i < duration_ms * 10000; i++) {
         __asm__ volatile ("pause");
     }
 
-    ac97_outb(ac97_dev.nabmbar + AC97_PO_CR, 0x00);
+    outb(ac97_dev.nabmbar + AC97_PO_CR, 0x00);
 }

@@ -23,12 +23,6 @@
 #include <kernel/hexdump.h>
 #include <kernel/kef.h>
 
-static inline uint8_t inb_port(uint16_t port) {
-    uint8_t ret;
-    __asm__ volatile ("inb %1, %0" : "=a"(ret) : "Nd"(port));
-    return ret;
-}
-
 void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     serial_init();
     serial_write("KryonOS started!\n");
@@ -145,7 +139,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     // 7. Main event loop (GUI active loop)
     while (1) {
         uint8_t input_updated = uhci_poll();
-        if (inb_port(0x64) & 1) {
+        if (inb(0x64) & 1) {
             keyboard_handler();
             input_updated = 1;
         }

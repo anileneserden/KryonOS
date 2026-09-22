@@ -60,21 +60,6 @@ typedef struct {
     uint16_t wLength;
 } __attribute__((packed)) usb_setup_packet_t;
 
-// UHCI I/O Helpers
-static inline void uhci_outw(uint16_t port, uint16_t val) {
-    __asm__ volatile ("outw %0, %1" : : "a"(val), "Nd"(port));
-}
-
-static inline void uhci_outl(uint16_t port, uint32_t val) {
-    __asm__ volatile ("outl %0, %1" : : "a"(val), "Nd"(port));
-}
-
-static inline uint16_t uhci_inw(uint16_t port) {
-    uint16_t ret;
-    __asm__ volatile ("inw %1, %0" : "=a"(ret) : "Nd"(port));
-    return ret;
-}
-
 // Virtual to Physical address conversion helper for DMA
 static inline uint32_t virt_to_phys(volatile void* virt_addr) {
     // KryonOS uses full 4GB identity mapping (VMM large pages), 
@@ -541,14 +526,14 @@ static void uhci_check_ports(void) {
 
     for (int i = 0; i < 2; i++) {
         uint16_t port_reg = uhci_io_base + ports[i];
-        uint16_t status = uhci_inw(port_reg);
+        uint16_t status = inw(port_reg);
 
         // 1. Ensure Port Power is enabled
         if (!(status & PORTSC_POW)) {
             serial_write("UHCI: Enabling power for port...\n");
-            uhci_outw(port_reg, status | PORTSC_POW);
+            outw(port_reg, status | PORTSC_POW);
             for (volatile int d = 0; d < 50000; d++);
-            status = uhci_inw(port_reg);
+            status = inw(port_reg);
         }
 
         serial_write("UHCI: Checking Port...\n");
@@ -561,26 +546,26 @@ static void uhci_check_ports(void) {
             if (status & PORTSC_CSC) reset_val |= PORTSC_CSC;
             if (status & PORTSC_PEC) reset_val |= PORTSC_PEC;
             
-            uhci_outw(port_reg, reset_val);
+            outw(port_reg, reset_val);
             
             // Hold reset for ~50ms
             for (volatile int d = 0; d < 60000; d++);
             
             // Clear Reset bit, keep Power enabled, and clear any pending change bits
             uint16_t clear_reset_val = PORTSC_POW | PORTSC_CSC | PORTSC_PEC;
-            uhci_outw(port_reg, clear_reset_val);
+            outw(port_reg, clear_reset_val);
             
             // Wait for recovery (~20ms)
             for (volatile int d = 0; d < 20000; d++);
             
             // Check status again
-            status = uhci_inw(port_reg);
+            status = inw(port_reg);
             if (!(status & PORTSC_PORT_EN)) {
                 // If port didn't enable automatically, explicitly try to enable it
                 serial_write("UHCI: Port not enabled yet, forcing enable...\n");
-                uhci_outw(port_reg, PORTSC_POW | PORTSC_PORT_EN | PORTSC_CSC | PORTSC_PEC);
+                outw(port_reg, PORTSC_POW | PORTSC_PORT_EN | PORTSC_CSC | PORTSC_PEC);
                 for (volatile int d = 0; d < 10000; d++);
-                status = uhci_inw(port_reg);
+                status = inw(port_reg);
             }
 
             if (status & PORTSC_PORT_EN) {
@@ -649,11 +634,11 @@ void uhci_init(void) {
     serial_write("UHCI: I/O Base address successfully obtained.\n");
 
     // 1. Reset the Controller (Host Controller Reset)
-    uhci_outw(uhci_io_base + UHCI_USBCMD, USBCMD_HCRESET);
+    outw(uhci_io_base + UHCI_USBCMD, USBCMD_HCRESET);
     
     // Wait for the reset bit to clear
     for (volatile int i = 0; i < 10000; i++) {
-        if (!(uhci_inw(uhci_io_base + UHCI_USBCMD) & USBCMD_HCRESET)) break;
+        if (!(inw(uhci_io_base + UHCI_USBCMD) & USBCMD_HCRESET)) break;
     }
 
     // 2. Configure Frame List Memory (Terminate bit set)
@@ -661,11 +646,11 @@ void uhci_init(void) {
         frame_list[i] = 1; // Terminate bit (T = 1)
     }
     // Provide physical address of frame_list to the controller
-    uhci_outl(uhci_io_base + UHCI_FRBASEADD, virt_to_phys(frame_list));
-    uhci_outw(uhci_io_base + UHCI_FRNUM, 0);
+    outl(uhci_io_base + UHCI_FRBASEADD, virt_to_phys(frame_list));
+    outw(uhci_io_base + UHCI_FRNUM, 0);
 
     // 3. Start the Controller (Run/Stop)
-    uhci_outw(uhci_io_base + UHCI_USBCMD, USBCMD_RS | (1 << 7));
+    outw(uhci_io_base + UHCI_USBCMD, USBCMD_RS | (1 << 7));
 
     serial_write("UHCI: Controller successfully started (Running).\n");
 

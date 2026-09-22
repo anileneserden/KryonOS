@@ -1,16 +1,6 @@
 #include <kernel/drivers/pci.h>
 #include <kernel/serial.h>
-
-// Guaranteed port access functions to avoid linker errors
-static inline void pci_outl(uint16_t port, uint32_t val) {
-    __asm__ volatile ("outl %0, %1" : : "a"(val), "Nd"(port));
-}
-
-static inline uint32_t pci_inl(uint16_t port) {
-    uint32_t ret;
-    __asm__ volatile ("inl %1, %0" : "=a"(ret) : "Nd"(port));
-    return ret;
-}
+#include <arch/x86/io.h>
 
 #define MAX_PCI_DEVICES 32
 static pci_device_t pci_devices[MAX_PCI_DEVICES];
@@ -21,8 +11,8 @@ static uint32_t pci_device_count = 0;
 uint32_t pci_read_config32(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset) {
     uint32_t address = (uint32_t)((bus << 16) | (slot << 11) |
                        (func << 8) | (offset & 0xFC) | ((uint32_t)0x80000000));
-    pci_outl(PCI_CONFIG_ADDRESS, address);
-    return pci_inl(PCI_CONFIG_DATA);
+    outl(PCI_CONFIG_ADDRESS, address);
+    return inl(PCI_CONFIG_DATA);
 }
 
 uint16_t pci_read_config16(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset) {
@@ -38,21 +28,21 @@ uint8_t pci_read_config8(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset
 void pci_write_config32(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset, uint32_t val) {
     uint32_t address = (uint32_t)((bus << 16) | (slot << 11) |
                        (func << 8) | (offset & 0xFC) | ((uint32_t)0x80000000));
-    pci_outl(PCI_CONFIG_ADDRESS, address);
-    pci_outl(PCI_CONFIG_DATA, val);
+    outl(PCI_CONFIG_ADDRESS, address);
+    outl(PCI_CONFIG_DATA, val);
 }
 
 void pci_write_config16(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset, uint16_t val) {
     uint32_t address = (uint32_t)((bus << 16) | (slot << 11) |
                        (func << 8) | (offset & 0xFC) | ((uint32_t)0x80000000));
-    pci_outl(PCI_CONFIG_ADDRESS, address);
+    outl(PCI_CONFIG_ADDRESS, address);
     
-    uint32_t old_val = pci_inl(PCI_CONFIG_DATA);
+    uint32_t old_val = inl(PCI_CONFIG_DATA);
     uint32_t shift = (offset & 2) * 8;
     uint32_t mask = 0xFFFF << shift;
     uint32_t new_val = (old_val & ~mask) | ((uint32_t)val << shift);
     
-    pci_outl(PCI_CONFIG_DATA, new_val);
+    outl(PCI_CONFIG_DATA, new_val);
 }
 
 // --- PCI Control Permissions ---
