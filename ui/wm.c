@@ -5,6 +5,7 @@
 #include <kernel/serial.h>
 #include <ui/cursor.h>
 #include <kernel/kef.h>
+#include <stddef.h>
 
 extern int32_t mouse_x;
 extern int32_t mouse_y;
@@ -164,7 +165,8 @@ void wm_draw_window(window_t* win) {
             if (rel_y + h > win->height) h = win->height - rel_y;
 
             if (w > 0 && h > 0) {
-                gfx_fill_rect(win->x + rel_x, win->y + rel_y, w, h, p->color);
+                uint32_t current_color = p->is_hovered ? p->hover_color : p->color;
+                gfx_fill_rect(win->x + rel_x, win->y + rel_y, w, h, current_color);
             }
         }
     }
@@ -320,18 +322,16 @@ static void wm_update_hover_state(void) {
         window_t* win = &window_list[i];
         if (!win || win->width == 0) continue;
 
+        // --- 1. BUTONLAR İÇİN HOVER KONTROLÜ ---
         for (int b = 0; b < win->button_count; b++) {
             button_t* btn = &win->buttons[b];
             
-            // Explicitly add the 24-pixel title bar offset to the window's top-left corner
             int abs_x = win->x + btn->x;
             int abs_y = win->y + 24 + btn->y;
 
-            // Boundary check (strict limit to prevent width and height overflows)
             if (mouse_x >= abs_x && mouse_x < abs_x + btn->width &&
                 mouse_y >= abs_y && mouse_y < abs_y + btn->height) {
                 
-                // If hover state changed, refresh the screen in that region
                 if (!btn->is_hovered) {
                     btn->is_hovered = true;
                     damage_union_rect(abs_x, abs_y, btn->width, btn->height);
@@ -340,6 +340,34 @@ static void wm_update_hover_state(void) {
                 if (btn->is_hovered) {
                     btn->is_hovered = false;
                     damage_union_rect(abs_x, abs_y, btn->width, btn->height);
+                }
+            }
+        }
+
+        // --- 2. PANELLER İÇİN HOVER KONTROLÜ ---
+        for (int p_idx = 0; p_idx < win->panel_count; p_idx++) {
+            panel_t* panel = &win->panels[p_idx];
+
+            int abs_x = win->x + panel->x;
+            int abs_y = win->y + 24 + panel->y;
+
+            if (mouse_x >= abs_x && mouse_x < abs_x + panel->width &&
+                mouse_y >= abs_y && mouse_y < abs_y + panel->height) {
+                
+                if (!panel->is_hovered) {
+                    panel->is_hovered = true;
+                    
+                    // Eğer on_hover tanımlandıysa çalıştır
+                    if (panel->on_hover != NULL) {
+                        panel->on_hover();
+                    }
+
+                    damage_union_rect(abs_x, abs_y, panel->width, panel->height);
+                }
+            } else {
+                if (panel->is_hovered) {
+                    panel->is_hovered = false;
+                    damage_union_rect(abs_x, abs_y, panel->width, panel->height);
                 }
             }
         }
@@ -600,8 +628,8 @@ void wm_process_input(void) {
                 for (int i = 0; i < resized_window->label_count; i++) {
                     label_item_t* l = &resized_window->labels[i];
 
-                    if (l->init_win_w == 0) l->init_win_w = resized_window->init_win_w;
-                    if (l->init_win_h == 0) l->init_win_h = resized_window->init_win_h;
+                    if (l->init_win_w == 0) l->init_win_w = resized_window->width;
+                    if (l->init_win_h == 0) l->init_win_h = resized_window->height;
 
                     if (l->anchor & ANCHOR_RIGHT) {
                         int right_margin = l->init_win_w - l->init_x;

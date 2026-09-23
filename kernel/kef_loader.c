@@ -21,17 +21,22 @@ static void kef_exit(void) {
     serial_write("KEF: Application called the exit API; returning to the kernel.\n");
 }
 
-static int kef_panel_create(int x, int y, int w, int h, uint32_t color, uint8_t anchor) {
+// Güncellenmiş 9 parametreli panel oluşturma fonksiyonu (Hover ve Callback'ler)
+static int kef_panel_create(int x, int y, int w, int h, uint32_t color, uint32_t hover_color, void (*on_click)(void), void (*on_hover)(void), uint8_t anchor) {
     window_t* win = wm_get_active_window();
     if (!win) return -1;
 
     if (win->panel_count >= MAX_PANELS) return -1;
 
     panel_t* p = &win->panels[win->panel_count++];
-    p->x = x; p->y = y; p->width = w; p->height = h; p->color = color;
+    p->x = x; p->y = y; p->width = w; p->height = h; 
+    p->color = color;
+    p->hover_color = hover_color;     
+    p->on_click = on_click;           
+    p->on_hover = on_hover;           
     p->anchor = anchor;
 
-    // Fix initial references
+    // Referansları sabitle
     p->init_x = x; p->init_y = y; p->init_width = w; p->init_height = h;
     p->init_win_w = win->width; p->init_win_h = win->height;
 
@@ -93,6 +98,15 @@ static void* kef_read_file(const char* full_path, uint32_t* out_size) {
     return vfs_read_file(full_path, out_size);
 }
 
+// --- KERNEL TARAFINDAN SAĞLANAN STRING FONKSİYONLARI ---
+static int kef_strcmp(const char* s1, const char* s2) {
+    return strcmp(s1, s2);
+}
+
+static size_t kef_strlen(const char* str) {
+    return strlen(str);
+}
+
 static void kef_yield(void) {
     __asm__ volatile("pause");
 }
@@ -107,6 +121,8 @@ static void kef_install_api(void) {
     api->button_create = kef_button_create;
     api->get_directory_files = kef_get_directory_files;
     api->read_file = kef_read_file;
+    api->strcmp = kef_strcmp;   // <-- strcmp API'ye bağlandı
+    api->strlen = kef_strlen;   // <-- strlen API'ye bağlandı
     api->yield = kef_yield;
 }
 

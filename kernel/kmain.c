@@ -120,7 +120,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     }
 
     serial_write("---- Starting KEF Application ----\n");
-    if (kef_load_and_run("C:/Program Files/cpp-app-test/cpp-app-test.kef")) {
+    if (kef_load_and_run("C:/Program Files/file_manager/file_manager.kef")) {
         serial_write("KEF: Application successfully executed and terminated.\n");
     } else {
         serial_write("[ERROR] KEF application could not be started!\n");

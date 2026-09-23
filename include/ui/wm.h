@@ -13,6 +13,10 @@ typedef struct {
     int x, y;
     int width, height;
     uint32_t color;
+    uint32_t hover_color;
+    bool is_hovered;
+    void (*on_click)(void);
+    void (*on_hover)(void);
     uint8_t anchor;
     int init_x, init_y, init_width, init_height;
     int init_win_w, init_win_h;
@@ -45,7 +49,6 @@ typedef struct {
     int x, y;
     int width, height;
     
-    // Minimum pencere boyutları sınırı
     int min_width;
     int min_height;
 
@@ -55,19 +58,15 @@ typedef struct {
     int drag_offset_x;
     int drag_offset_y;
 
-    // Pencerenin referans boyutları
     int init_win_w;
     int init_win_h;
 
-    // Çoklu Panel Desteği
     panel_t panels[MAX_PANELS];
     int panel_count;
 
-    // Çoklu Renkli Label Desteği
     label_item_t labels[MAX_LABELS];
     int label_count;
 
-    // Çoklu Renkli Button Desteği
     button_t buttons[MAX_BUTTONS];
     int button_count;
 } window_t;
