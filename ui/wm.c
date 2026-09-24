@@ -357,10 +357,9 @@ static void wm_update_hover_state(void) {
                 if (!panel->is_hovered) {
                     panel->is_hovered = true;
                     
-                    // Eğer on_hover tanımlandıysa çalıştır
-                    if (panel->on_hover != NULL) {
-                        panel->on_hover();
-                    }
+                    // GÜVENLİK İÇİN: Kernel'dan user-space fonksiyonuna 
+                    // doğrudan atlamak yerine şimdilik burayı pas geçiyoruz.
+                    // if (panel->on_hover != NULL) { panel->on_hover(); }
 
                     damage_union_rect(abs_x, abs_y, panel->width, panel->height);
                 }
