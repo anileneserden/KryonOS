@@ -14,4 +14,6 @@ void gfx_fill_rounded_rect(int x, int y, int width, int height, int radius, uint
 void gfx_draw_text(int x, int y, uint32_t color, const char* s);
 void gfx_draw_text_utf8(int x, int y, uint32_t color, const char* s);
 
+void gfx_draw_buffer(int x, int y, int width, int height, const uint32_t* buffer, int buffer_stride);
+
 #endif

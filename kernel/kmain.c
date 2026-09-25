@@ -119,13 +119,15 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         desktop_init(); 
     }
 
+    
     serial_write("---- Starting KEF Application ----\n");
-    if (kef_load_and_run("C:/Program Files/hello-app2/hello-app2.kef")) {
+    if (kef_load_and_run("C:/Program Files/terminal/terminal.kef")) {
         serial_write("KEF: Application successfully executed and terminated.\n");
     } else {
         serial_write("[ERROR] KEF application could not be started!\n");
     }
     serial_write("-------------------------------------\n");
+    
 
     app_manager_init();
     fb_swap();

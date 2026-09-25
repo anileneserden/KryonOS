@@ -49,6 +49,12 @@ typedef struct {
     int (*strcmp)(const char* s1, const char* s2);
     size_t (*strlen)(const char* str);
     void (*yield)(void);
+
+    uint32_t* (*canvas_create)(int x, int y, int w, int h, uint8_t anchor, int* out_canvas_id);
+    void (*canvas_update_buffer)(int canvas_id);
+    
+    // Yeni eklenen arkaplan fonksiyonu
+    void (*background_color)(uint32_t color);
 } kef_api_t;
 
 bool kef_load_and_run(const char* path);

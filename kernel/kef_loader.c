@@ -17,11 +17,22 @@ static int kef_window_create(const char* title, int width, int height) {
     return window != 0;
 }
 
+static void kef_background_color(uint32_t color) {
+    window_t* win = wm_get_active_window();
+    if (!win) return;
+    
+    win->bg_color = color;
+
+    // Aynı şekilde arka plan rengi değişiminde de ekranın güncellenmesi gerekir
+    damage_union_rect(win->x, win->y, win->width, win->height);
+    wm_draw_window(win);
+    desktop_redraw();
+}
+
 static void kef_exit(void) {
     serial_write("KEF: Application called the exit API; returning to the kernel.\n");
 }
 
-// Güncellenmiş 9 parametreli panel oluşturma fonksiyonu (Hover ve Callback'ler)
 static int kef_panel_create(int x, int y, int w, int h, uint32_t color, uint32_t hover_color, void (*on_click)(void), void (*on_hover)(void), uint8_t anchor) {
     window_t* win = wm_get_active_window();
     if (!win) return -1;
@@ -36,11 +47,9 @@ static int kef_panel_create(int x, int y, int w, int h, uint32_t color, uint32_t
     p->on_hover = on_hover;           
     p->anchor = anchor;
 
-    // Referansları sabitle
     p->init_x = x; p->init_y = y; p->init_width = w; p->init_height = h;
     p->init_win_w = win->width; p->init_win_h = win->height;
 
-    wm_draw_window(win);
     return 1;
 }
 
@@ -59,7 +68,6 @@ static int kef_label_create(int x, int y, uint32_t color, const char* text, uint
     while (text[i] != '\0' && i < 63) { l->text[i] = text[i]; i++; }
     l->text[i] = '\0';
 
-    wm_draw_window(win);
     return 1;
 }
 
@@ -98,7 +106,6 @@ static void* kef_read_file(const char* full_path, uint32_t* out_size) {
     return vfs_read_file(full_path, out_size);
 }
 
-// --- KERNEL TARAFINDAN SAĞLANAN STRING FONKSİYONLARI ---
 static int kef_strcmp(const char* s1, const char* s2) {
     return strcmp(s1, s2);
 }
@@ -108,7 +115,44 @@ static size_t kef_strlen(const char* str) {
 }
 
 static void kef_yield(void) {
+    wm_process_input();
     __asm__ volatile("pause");
+}
+
+static uint32_t* kef_canvas_create(int x, int y, int w, int h, uint8_t anchor, int* out_canvas_id) {
+    window_t* win = wm_get_active_window();
+    if (!win) return 0;
+
+    if (win->has_canvas) return 0;
+
+    win->has_canvas = true;
+    win->canvas_x = x;
+    win->canvas_y = y;
+    win->canvas_w = w;
+    win->canvas_h = h;
+    win->canvas_buffer = (uint32_t*)kmalloc(w * h * sizeof(uint32_t));
+    win->canvas_anchor = anchor;
+
+    if (out_canvas_id) {
+        *out_canvas_id = 1;
+    }
+
+    return win->canvas_buffer;
+}
+
+static void kef_canvas_update_buffer(int canvas_id) {
+    (void)canvas_id; 
+    window_t* win = wm_get_active_window();
+    if (!win || !win->has_canvas) return;
+
+    // 1. Pencerenin ekran üzerindeki alanını kirli (damage) olarak işaretle
+    damage_union_rect(win->x, win->y, win->width, win->height);
+
+    // 2. Pencereyi ve bileşenlerini yeniden çiz
+    wm_draw_window(win);
+
+    // 3. Masaüstünü ve ekranı tazele
+    desktop_redraw();
 }
 
 static void kef_install_api(void) {
@@ -121,9 +165,12 @@ static void kef_install_api(void) {
     api->button_create = kef_button_create;
     api->get_directory_files = kef_get_directory_files;
     api->read_file = kef_read_file;
-    api->strcmp = kef_strcmp;   // <-- strcmp API'ye bağlandı
-    api->strlen = kef_strlen;   // <-- strlen API'ye bağlandı
+    api->strcmp = kef_strcmp;
+    api->strlen = kef_strlen;
     api->yield = kef_yield;
+    api->canvas_create = kef_canvas_create;
+    api->canvas_update_buffer = kef_canvas_update_buffer;
+    api->background_color = kef_background_color; // API Tablosuna bağlandı
 }
 
 bool kef_load_and_run(const char* path) {
@@ -145,11 +192,13 @@ bool kef_load_and_run(const char* path) {
         header->entry_offset >= header->payload_size ||
         header->payload_size > KEF_MAX_SIZE) {
         serial_write("KEF: invalid or unsupported header.\n");
+        kfree(file);
         return false;
     }
 
     if (KEF_LOAD_ADDRESS + header->payload_size >= KEF_API_ADDRESS) {
         serial_write("KEF: payload overlaps the API address.\n");
+        kfree(file);
         return false;
     }
 
@@ -164,6 +213,14 @@ bool kef_load_and_run(const char* path) {
     
     (void)entry();
     
+    // UYGULAMA ÇALIŞTIKTAN / PENCERE OLUŞTURULDUKTAN SONRA İLK ÇİZİMİ TETİKLE:
+    window_t* win = wm_get_active_window();
+    if (win) {
+        damage_union_rect(win->x, win->y, win->width, win->height);
+        wm_draw_window(win);
+        desktop_redraw();
+    }
+
     serial_write("KEF: application returned.\n");
     kfree(file);
     return true;

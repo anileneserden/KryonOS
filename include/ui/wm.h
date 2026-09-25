@@ -61,6 +61,8 @@ typedef struct {
     int init_win_w;
     int init_win_h;
 
+    uint32_t bg_color; // <-- Arka plan rengi alanı buraya eklendi
+
     panel_t panels[MAX_PANELS];
     int panel_count;
 
@@ -69,6 +71,13 @@ typedef struct {
 
     button_t buttons[MAX_BUTTONS];
     int button_count;
+
+    // --- 3D CANVAS / FRAMEBUFFER DESTEĞİ ---
+    bool has_canvas;
+    int canvas_x, canvas_y;
+    int canvas_w, canvas_h;
+    uint32_t* canvas_buffer;
+    uint8_t canvas_anchor;
 } window_t;
 
 void wm_init(void);

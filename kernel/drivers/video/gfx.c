@@ -217,3 +217,25 @@ void gfx_draw_text_utf8(int x, int y, uint32_t color, const char* s) {
     out[oi] = '\0';
     if (oi) gfx_draw_text(x, y, color, out);
 }
+
+void gfx_draw_buffer(int x, int y, int width, int height, const uint32_t* buffer, int buffer_stride) {
+    if (!buffer) return;
+
+    uint32_t sw = fb_get_width();
+    uint32_t sh = fb_get_height();
+
+    for (int cy = 0; cy < height; cy++) {
+        int py = y + cy;
+        if (py < 0 || (uint32_t)py >= sh) continue;
+
+        for (int cx = 0; cx < width; cx++) {
+            int px = x + cx;
+            if (px < 0 || (uint32_t)px >= sw) continue;
+
+            uint32_t color = buffer[cy * buffer_stride + cx];
+            // Eğer alfa kanalı destekleyen tam şeffaf pikselleri atlamak istersen buraya kontrol koyabilirsin,
+            // direkt basmak için:
+            fb_putpixel(px, py, color);
+        }
+    }
+}

@@ -144,7 +144,7 @@ void wm_draw_window(window_t* win) {
     bool close_hovered = title_hovered && hovered_close_button;
 
     // 1. Window body
-    gfx_fill_rect(win->x, win->y, win->width, win->height, 0xFF303030);
+    gfx_fill_rect(win->x, win->y, win->width, win->height, win->bg_color);
 
     // 2. Draw panels (with advanced clipping support)
     for (int i = 0; i < win->panel_count; i++) {
@@ -231,6 +231,25 @@ void wm_draw_window(window_t* win) {
                 // Button text (draw only if the left part of the button is visible)
                 if (bw > 10) {
                     gfx_draw_text_utf8(abs_x + 8, abs_y + 8, b->text_color, b->text);
+                }
+            }
+        }
+
+        if (win->has_canvas && win->canvas_buffer) {
+            int rel_x = win->canvas_x;
+            int rel_y = 24 + win->canvas_y;
+            int cw = win->canvas_w;
+            int ch = win->canvas_h;
+
+            if (rel_x < 0) { rel_x = 0; }
+            if (rel_y < 24) { rel_y = 24; }
+
+            if (rel_x < win->width && rel_y < win->height) {
+                if (rel_x + cw > win->width) cw = win->width - rel_x;
+                if (rel_y + ch > win->height) ch = win->height - rel_y;
+
+                if (cw > 0 && ch > 0) {
+                    gfx_draw_buffer(win->x + rel_x, win->y + rel_y, cw, ch, win->canvas_buffer, win->canvas_w);
                 }
             }
         }
@@ -639,6 +658,15 @@ void wm_process_input(void) {
                         int bottom_margin = l->init_win_h - l->init_y;
                         l->y = resized_window->height - bottom_margin;
                     }
+                }
+
+                // --- 4. ANCHOR CALCULATION FOR 3D CANVAS ---
+                if (resized_window->has_canvas) {
+                    // Eğer canvas yatayda veya dikeyde genişletilecekse (örneğin sağa/alta yaslıysa ya da tam kaplıyorsa)
+                    // İhtiyacınıza göre burada canvas genişlik/yükseklik veya konum güncellemeleri yapabilirsiniz.
+                    // Örneğin pencere boyutuna göre canvas boyutunu oranlamak isterseniz:
+                    // resized_window->canvas_w = resized_window->canvas_w + (resized_window->width - old_w);
+                    // resized_window->canvas_h = resized_window->canvas_h + (resized_window->height - old_h);
                 }
 
                 damage_union_rect(new_x, new_y, new_w, new_h);
