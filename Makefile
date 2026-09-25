@@ -37,6 +37,7 @@ SRC_C = \
     kernel/drivers/video/fb.c \
     kernel/drivers/video/gfx.c \
     kernel/drivers/pci.c \
+    kernel/drivers/rtc.c \
     kernel/fs/fat32.c \
     kernel/fs/kryfs.c \
     kernel/fs/vfs.c \

@@ -7,6 +7,10 @@
 #include <kernel/drivers/input/keyboard_ps2.h>
 #include <arch/x86/io.h>
 #include <kernel/power.h>
+#include <kernel/drivers/rtc.h>
+
+static int timezone_offset = 3;
+static uint32_t desktop_bg_color = 0xFF1E1E1E;
 
 #define MENU_W 400
 #define MENU_H 500
@@ -20,7 +24,6 @@ typedef struct {
 
 static damage_rect_t screen_damage = {0, 0, 0, 0, false};
 
-// Start menu open/closed state and previous mouse left click state
 static bool start_menu_open = false;
 static bool prev_mouse_left = false;
 
@@ -107,7 +110,7 @@ void desktop_redraw(void) {
         // Taskbar background (dark gray / black tone)
         gfx_fill_rect(screen_damage.x, taskbar_y > screen_damage.y ? taskbar_y : screen_damage.y, 
                       screen_damage.w, taskbar_h, 0xFF181818);
-        // Taskbar top border (a thin light line for a modern border effect)
+        // Taskbar top border
         gfx_fill_rect(screen_damage.x, taskbar_y, screen_damage.w, 1, 0xFF333333);
 
         // --- START BUTTON ---
@@ -116,15 +119,45 @@ void desktop_redraw(void) {
         int btn_w = 70;
         int btn_h = 28;
 
-        // Show the start button pressed (dark) when menu is open
         uint32_t btn_bg = start_menu_open ? 0xFF2A2A2A : 0xFF3A3A3A;
         gfx_fill_rect(btn_x, btn_y, btn_w, btn_h, btn_bg);
         
-        // Button border (for a classic 3D look and feel)
         gfx_fill_rect(btn_x, btn_y, btn_w, 1, 0xFF555555); // Top
         gfx_fill_rect(btn_x, btn_y, 1, btn_h, 0xFF555555); // Left
         gfx_fill_rect(btn_x + btn_w - 1, btn_y, 1, btn_h, 0xFF111111); // Right
         gfx_fill_rect(btn_x, btn_y + btn_h - 1, btn_w, 1, 0xFF111111); // Bottom
+
+        // --- SAĞ TARAFA RTC SAAT ALANI VE OFFSET UYGULAMA ---
+        rtc_time_t t;
+        rtc_get_time(&t);
+
+        int adjusted_hour = (int)t.hour + timezone_offset;
+        while (adjusted_hour < 0) adjusted_hour += 24;
+        adjusted_hour %= 24;
+
+        int clock_w = 70;
+        int clock_h = 24;
+        int clock_x = screen_w - clock_w - 8; // Sağ kenardan 8px içeride
+        int clock_y = taskbar_y + 6;          // Dikeyde ortalanmış
+
+        // Saat kutusu arkaplanı
+        gfx_fill_rect(clock_x, clock_y, clock_w, clock_h, 0xFF2A2A2A);
+        // 3D çerçeve efekti
+        gfx_fill_rect(clock_x, clock_y, clock_w, 1, 0xFF111111); // Üst
+        gfx_fill_rect(clock_x, clock_y, 1, clock_h, 0xFF111111); // Sol
+        gfx_fill_rect(clock_x + clock_w - 1, clock_y, 1, clock_h, 0xFF555555); // Sağ
+        gfx_fill_rect(clock_x, clock_y + clock_h - 1, clock_w, 1, 0xFF555555); // Alt
+
+        // Saat metni (HH:MM formatı - Offset eklenmiş saat ile)
+        char time_str[6];
+        time_str[0] = '0' + (adjusted_hour / 10);
+        time_str[1] = '0' + (adjusted_hour % 10);
+        time_str[2] = ':';
+        time_str[3] = '0' + (t.minute / 10);
+        time_str[4] = '0' + (t.minute % 10);
+        time_str[5] = '\0';
+
+        gfx_draw_text(clock_x + 10, clock_y + 6, 0xFFFFFFFF, time_str);
     }
 
     // 6. --- START MENU (Drawn if open) ---
@@ -219,7 +252,72 @@ void desktop_init(void) {
 
     if (width == 0 || height == 0) return;
 
-    // Initialize the grid here using the screen dimensions (for example, 64x64 cells)
+    // --- SETTINGS.CFG DOSYASINDAN AYARLARI OKUMA ---
+    uint32_t cfg_size = 0;
+    char* cfg_content = (char*)vfs_read_file("C:/Kryon/System32/settings.cfg", &cfg_size);
+    if (cfg_content && cfg_size > 0) {
+        
+        // 1. Timezone Offset Parse Etme
+        for (uint32_t i = 0; i < cfg_size - 6; i++) {
+            if (strncmp(&cfg_content[i], "offset=", 7) == 0) {
+                int val = 0;
+                int sign = 1;
+                int idx = i + 7;
+                
+                if (cfg_content[idx] == '-') {
+                    sign = -1;
+                    idx++;
+                } else if (cfg_content[idx] == '+') {
+                    idx++;
+                }
+
+                while (idx < cfg_size && cfg_content[idx] >= '0' && cfg_content[idx] <= '9') {
+                    val = val * 10 + (cfg_content[idx] - '0');
+                    idx++;
+                }
+                timezone_offset = val * sign;
+                break;
+            }
+        }
+
+        // 2. Desktop Background Color Parse Etme (Örn: backcolor=0xFF2B4C7E veya backcolor=0x2B4C7E)
+        for (uint32_t i = 0; i < cfg_size - 9; i++) {
+            if (strncmp(&cfg_content[i], "backcolor=", 10) == 0) {
+                int idx = i + 10;
+                uint32_t parsed_color = 0;
+
+                // Eğer "0x" veya "0X" ile başlıyorsa atlayalım
+                if (cfg_content[idx] == '0' && (cfg_content[idx+1] == 'x' || cfg_content[idx+1] == 'X')) {
+                    idx += 2;
+                }
+
+                while (idx < cfg_size) {
+                    char c = cfg_content[idx];
+                    uint8_t nibble = 0;
+                    if (c >= '0' && c <= '9') nibble = c - '0';
+                    else if (c >= 'a' && c <= 'f') nibble = c - 'a' + 10;
+                    else if (c >= 'A' && c <= 'F') nibble = c - 'A' + 10;
+                    else break; // Hex karakter bittiğinde çık
+
+                    parsed_color = (parsed_color << 4) | nibble;
+                    idx++;
+                }
+
+                // Eğer alpha kanalı belirtilmemişse (örneğin 6 haneliyse, örn: 0x1E1E1E), otomatik FF ekleyelim
+                if ((parsed_color & 0xFF000000) == 0) {
+                    parsed_color |= 0xFF000000;
+                }
+
+                desktop_bg_color = parsed_color;
+                break;
+            }
+        }
+
+        kfree(cfg_content);
+    }
+    // ----------------------------------------------
+
+    // Initialize the grid here using the screen dimensions
     grid_init(width, height, 100, 100);
 
     wm_init();
