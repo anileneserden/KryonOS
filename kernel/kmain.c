@@ -46,9 +46,6 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     fb_init(mboot);
     ata_init();
 
-    // Boot beep notification (750 Hz frequency for 100 ms)
-    pcspeaker_play(750);
-
     // 3. Filesystems and input drivers
     vfs_init();
     
