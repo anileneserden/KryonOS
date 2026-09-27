@@ -9,6 +9,7 @@
 #include <kernel/fs/fat32.h>
 #include <kernel/fs/vfs.h>
 #include <kernel/drivers/audio/ac97.h>
+#include <kernel/drivers/audio/pcspeaker.h>
 #include <kernel/drivers/input/mouse_ps2.h>
 #include <kernel/drivers/input/keyboard_ps2.h>
 #include <kernel/drivers/pci.h>
@@ -39,11 +40,14 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     vmm_init();
     heap_init(0x2000000, 1024 * 1024 * 16);
 
-    // 2. PCI and display hardware drivers
+    // 2. PCI, display, and speaker hardware drivers
     pci_init();
     uhci_init();
     fb_init(mboot);
     ata_init();
+
+    // Boot beep notification (750 Hz frequency for 100 ms)
+    pcspeaker_play(750);
 
     // 3. Filesystems and input drivers
     vfs_init();

@@ -27,6 +27,7 @@ SRC_C = \
     kernel/serial.c \
     kernel/string.c \
     kernel/drivers/audio/ac97.c \
+    kernel/drivers/audio/pcspeaker.c \
     kernel/drivers/input/keyboard_ps2.c \
     kernel/drivers/input/mouse_ps2.c \
     kernel/drivers/input/mouse_usb.c \
@@ -96,9 +97,10 @@ $(DISK_FAT32):
 
 run: iso $(DISK_KRYFS) $(DISK_FAT32)
 	qemu-system-i386 -cdrom kryonos.iso \
-       -drive format=raw,file=$(DISK_KRYFS),index=0,media=disk \
-       -drive format=raw,file=$(DISK_FAT32),index=1,media=disk \
-       -audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
-       -device piix3-usb-uhci,id=uhci \
-       -device usb-mouse,bus=uhci.0 \
-       -serial stdio -vga std -display sdl,gl=on
+	   -drive format=raw,file=$(DISK_KRYFS),index=0,media=disk \
+	   -drive format=raw,file=$(DISK_FAT32),index=1,media=disk \
+	   -audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
+	   -machine pcspk-audiodev=audio0 \
+	   -device piix3-usb-uhci,id=uhci \
+	   -device usb-mouse,bus=uhci.0 \
+	   -serial stdio -vga std -display sdl,gl=on
