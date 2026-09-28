@@ -73,6 +73,100 @@ void* vfs_read_file(const char* full_path, uint32_t* out_size) {
     return mount_table[index].driver.read_file(filename, out_size);
 }
 
+int vfs_create_file(const char* full_path) {
+    serial_write("[VFS] vfs_create_file started...\n");
+
+    if (!full_path) {
+        serial_write("[VFS Error] full_path is NULL!\n");
+        return -1;
+    }
+
+    char drive = 0;
+    const char* filename = NULL;
+
+    serial_write("[VFS] Calling parse_path...\n");
+    if (!parse_path(full_path, &drive, &filename)) {
+        serial_write("[VFS Error] Invalid path format!\n");
+        return -1;
+    }
+
+    serial_write("[VFS] parse_path succeed. Drive: ");
+    // Sürücü harfini logla
+    char d_str[2] = { drive, '\0' };
+    serial_write(d_str);
+    serial_write("\n");
+
+    if (drive >= 'a' && drive <= 'z') drive -= 32;
+    int index = drive - 'A';
+
+    if (index < 0 || index >= 26) {
+        serial_write("[VFS Error] Invalid drive index!\n");
+        return -1;
+    }
+
+    serial_write("[VFS] Checking mount table...\n");
+    if (!mount_table[index].is_mounted) {
+        serial_write("[VFS Error] Drive is not mounted!\n");
+        return -1;
+    }
+
+    if (!mount_table[index].driver.create_file) {
+        serial_write("[VFS Error] Driver create_file function pointer is NULL!\n");
+        return -1;
+    }
+
+    serial_write("[VFS] Calling driver create_file hook...\n");
+    
+    // Sürücüye geçmeden önce filename pointer'ını doğrula
+    if (!filename) {
+        serial_write("[VFS Error] Extracted filename is NULL!\n");
+        return -1;
+    }
+
+    int result = mount_table[index].driver.create_file(filename);
+    
+    serial_write("[VFS] Driver create_file completed successfully.\n");
+    return result;
+}
+
+int vfs_write_file(const char* full_path, const void* buffer, uint32_t size) {
+    char drive;
+    const char* filename;
+
+    if (!parse_path(full_path, &drive, &filename)) {
+        serial_write("VFS Error: Invalid path format!\n");
+        return -1;
+    }
+
+    if (drive >= 'a' && drive <= 'z') drive -= 32;
+    int index = drive - 'A';
+
+    if (!mount_table[index].is_mounted || !mount_table[index].driver.write_file) {
+        return -1;
+    }
+
+    return mount_table[index].driver.write_file(filename, buffer, size);
+}
+
+int vfs_mkdir(const char* full_path) {
+    char drive;
+    const char* filename;
+
+    if (!parse_path(full_path, &drive, &filename)) {
+        serial_write("VFS Error: Invalid path format!\n");
+        return -1;
+    }
+
+    if (drive >= 'a' && drive <= 'z') drive -= 32;
+    int index = drive - 'A';
+
+    if (!mount_table[index].is_mounted || !mount_table[index].driver.mkdir) {
+        return -1;
+    }
+
+    return mount_table[index].driver.mkdir(filename);
+}
+
 void vfs_list_drive(char drive_letter) {
     if (drive_letter >= 'a' && drive_letter <= 'z') drive_letter -= 32;
     int index = drive_letter - 'A';

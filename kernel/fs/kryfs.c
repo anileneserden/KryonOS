@@ -303,10 +303,134 @@ int kryfs_get_dir_files(const char* rel_path, vfs_file_info_t* out_list, int max
     return count;
 }
 
+int kryfs_create_file(const char* path) {
+    serial_write("[KRYFS] Entering kryfs_create_file...\n");
+    if (!kryfs_is_mounted) {
+        serial_write("[KRYFS ERROR] Not mounted!\n");
+        return -1;
+    }
+
+    if (path && (path[0] == '/' || path[0] == '\\')) {
+        path++;
+    } else if (path && path[0] != '\0' && path[1] == ':' && (path[2] == '/' || path[2] == '\\')) {
+        path += 3;
+    }
+
+    uint32_t table_lba = sb_cache.inode_table_block;
+    uint32_t data_start = sb_cache.data_block_start;
+    uint32_t inode_table_sectors = data_start - table_lba;
+    if (inode_table_sectors == 0) inode_table_sectors = 1;
+
+    uint32_t total_buffer_size = inode_table_sectors * 512;
+    
+    // Buffer boyutunu kontrol etmek için log bas
+    serial_write("[KRYFS] Allocating buffer for inode table...\n");
+
+    uint8_t* sector_buf = (uint8_t*)kmalloc(total_buffer_size);
+    if (!sector_buf) {
+        serial_write("[KRYFS ERROR] kmalloc failed!\n");
+        return -1;
+    }
+
+    serial_write("[KRYFS] Reading inode table sectors...\n");
+    ata_read_sectors(0, table_lba, inode_table_sectors, sector_buf);
+
+    serial_write("[KRYFS] Searching free slot...\n");
+    uint32_t max_inodes = total_buffer_size / sizeof(kryfs_inode_t);
+    int free_slot = -1;
+
+    for (uint32_t i = 0; i < max_inodes; i++) {
+        kryfs_inode_t* inode = (kryfs_inode_t*)(sector_buf + (i * sizeof(kryfs_inode_t)));
+        if (!inode->is_used) {
+            free_slot = i;
+            break;
+        }
+    }
+
+    if (free_slot == -1) {
+        serial_write("[KRYFS ERROR] Inode table full!\n");
+        kfree(sector_buf);
+        return -1;
+    }
+
+    kryfs_inode_t* new_inode = (kryfs_inode_t*)(sector_buf + (free_slot * sizeof(kryfs_inode_t)));
+    memset(new_inode, 0, sizeof(kryfs_inode_t));
+
+    strncpy(new_inode->filename, path, KRYFS_MAX_FILENAME - 1);
+    new_inode->is_used = 1;
+    new_inode->is_directory = 0;
+    new_inode->size = 0;
+    new_inode->start_block = 0;
+
+    serial_write("[KRYFS] Writing updated inode table to disk...\n");
+    ata_write_sectors(0, table_lba, inode_table_sectors, sector_buf);
+
+    serial_write("[KRYFS] Freeing buffer...\n");
+    kfree(sector_buf);
+
+    serial_write("[KRYFS] File created successfully: ");
+    serial_write((char*)path);
+    serial_write("\n");
+    return 0;
+}
+
+int kryfs_mkdir(const char* path) {
+    if (!kryfs_is_mounted) return -1;
+
+    if (path[0] == '/' || path[0] == '\\') {
+        path++;
+    } else if (path[1] == ':' && (path[2] == '/' || path[2] == '\\')) {
+        path += 3;
+    }
+
+    uint32_t table_lba = sb_cache.inode_table_block;
+    uint32_t data_start = sb_cache.data_block_start;
+    uint32_t inode_table_sectors = data_start - table_lba;
+    if (inode_table_sectors == 0) inode_table_sectors = 1;
+
+    uint32_t total_buffer_size = inode_table_sectors * 512;
+    uint8_t* sector_buf = (uint8_t*)kmalloc(total_buffer_size);
+    if (!sector_buf) return -1;
+
+    ata_read_sectors(0, table_lba, inode_table_sectors, sector_buf);
+
+    uint32_t max_inodes = total_buffer_size / sizeof(kryfs_inode_t);
+    int free_slot = -1;
+
+    for (uint32_t i = 0; i < max_inodes; i++) {
+        kryfs_inode_t* inode = (kryfs_inode_t*)(sector_buf + (i * sizeof(kryfs_inode_t)));
+        if (!inode->is_used) {
+            free_slot = i;
+            break;
+        }
+    }
+
+    if (free_slot != -1) {
+        kryfs_inode_t* new_inode = (kryfs_inode_t*)(sector_buf + (free_slot * sizeof(kryfs_inode_t)));
+        memset(new_inode, 0, sizeof(kryfs_inode_t));
+
+        strncpy(new_inode->filename, path, KRYFS_MAX_FILENAME - 1);
+        new_inode->is_used = 1;
+        new_inode->is_directory = 1;
+        new_inode->size = 0;
+
+        ata_write_sectors(0, table_lba, inode_table_sectors, sector_buf);
+        serial_write("[KRYFS] Directory created: ");
+        serial_write((char*)path);
+        serial_write("\n");
+    }
+
+    kfree(sector_buf);
+    return free_slot != -1 ? 0 : -1;
+}
+
 fs_driver_t kryfs_get_driver(void) {
     fs_driver_t driver;
     driver.read_file = kryfs_read_file;
     driver.list_dir = NULL;
     driver.get_dir_files = kryfs_get_dir_files;
+    driver.create_file = kryfs_create_file;
+    driver.write_file = NULL;
+    driver.mkdir = kryfs_mkdir;
     return driver;
 }
