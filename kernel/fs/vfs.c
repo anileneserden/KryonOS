@@ -214,3 +214,36 @@ int vfs_get_directory_files(const char* full_path, vfs_file_info_t* out_list, in
 
     return 0;
 }
+
+bool vfs_file_exists(const char* full_path) {
+    if (!full_path) return false;
+
+    char drive;
+    const char* filename;
+
+    if (!parse_path(full_path, &drive, &filename)) {
+        return false;
+    }
+
+    if (drive >= 'a' && drive <= 'z') drive -= 32;
+    int index = drive - 'A';
+
+    if (index < 0 || index >= 26 || !mount_table[index].is_mounted) {
+        return false;
+    }
+
+    // Eğer sürücü (KRYFS) özel bir file_exists / stat fonksiyonu sunuyorsa onu çağır:
+    if (mount_table[index].driver.file_exists) {
+        return mount_table[index].driver.file_exists(filename);
+    }
+
+    // Yedek yöntem (Driver hook'u henüz yoksa): Dosyayı okumayı dener.
+    uint32_t size = 0;
+    void *file = mount_table[index].driver.read_file(filename, &size);
+    if (file) {
+        kfree(file);
+        return true;
+    }
+
+    return false;
+}

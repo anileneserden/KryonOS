@@ -19,6 +19,7 @@ typedef struct {
     int (*create_file)(const char* path);
     int (*write_file)(const char* path, const void* buffer, uint32_t size);
     int (*mkdir)(const char* path);
+    bool (*file_exists)(const char* path);
 } fs_driver_t;
 
 // Filesystem mount entry
@@ -37,5 +38,6 @@ int vfs_write_file(const char* full_path, const void* buffer, uint32_t size);
 int vfs_mkdir(const char* full_path);
 void vfs_list_drive(char drive_letter);
 int vfs_get_directory_files(const char* full_path, vfs_file_info_t* out_list, int max_count);
+bool vfs_file_exists(const char* full_path);
 
 #endif

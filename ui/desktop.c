@@ -1,7 +1,14 @@
+#include <stddef.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <kernel/string.h>
+#include <kernel/mem/heap.h>
+#include <ui/desktop_icons.h>
 #include <ui/desktop.h>
 #include <ui/wm.h>
 #include <ui/cursor.h>
-#include <ui/grid.h> // Grid header
+#include <ui/grid.h>
+#include <kernel/fs/vfs.h>
 #include <kernel/drivers/video/fb.h>
 #include <kernel/drivers/video/gfx.h>
 #include <kernel/drivers/input/keyboard_ps2.h>
@@ -9,8 +16,11 @@
 #include <kernel/power.h>
 #include <kernel/drivers/rtc.h>
 
+// Eğer kernel/string.h içinde snprintf prototipi yoksa uyarıyı önlemek için:
+int snprintf(char *str, size_t size, const char *format, ...);
+
 static int timezone_offset = 3;
-static uint32_t desktop_bg_color = 0xFF1E1E1E;
+uint32_t desktop_bg_color = 0xFF1E1E1E;
 
 #define MENU_W 400
 #define MENU_H 500
@@ -32,8 +42,30 @@ static bool prev_mouse_right = false;
 static int right_menu_x = 0;
 static int right_menu_y = 0;
 
-#define RIGHT_MENU_W 140
-#define RIGHT_MENU_H 90
+#define RIGHT_MENU_W 160
+#define RIGHT_MENU_H 100
+
+static bool file_exists(const char* path) {
+    return vfs_file_exists(path);
+}
+
+static void get_unique_filename(const char *base_dir, const char *base_name, const char *ext, char *out_path, size_t max_len) {
+    int counter = 0;
+    while (1) {
+        if (counter == 0) {
+            snprintf(out_path, max_len, "%s/%s%s", base_dir, base_name, ext);
+        } else {
+            snprintf(out_path, max_len, "%s/%s (%d)%s", base_dir, base_name, counter, ext);
+        }
+
+        // KRYFS tarafında vfs_read_file veya vfs_open varlığı doğrulayamıyorsa 
+        // file_exists sürekli false döner ve döngüden hemen çıkıp aynı isimle yazar.
+        if (!file_exists(out_path)) {
+            break;
+        }
+        counter++;
+    }
+}
 
 void damage_clear(void) {
     screen_damage.active = false;
@@ -75,11 +107,9 @@ void damage_union_rect(int x, int y, int w, int h) {
 void desktop_redraw(void) {
     if (!screen_damage.active) return;
 
-    // 1. Remove the old cursor first (restore the pixels beneath it)
     cursor_prepare_redraw();
 
-    // 2. Desktop background
-    gfx_fill_rect(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h, 0xFF1E1E1E);
+    gfx_fill_rect(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h, desktop_bg_color);
 
     // 3. Grid lines
     int screen_w = fb_get_width();
@@ -95,13 +125,18 @@ void desktop_redraw(void) {
     }
 
     for (int y = 0; y <= screen_h; y += cell_h) {
-        if (y >= screen_damage.y && y <= screen_damage.y + screen_damage.w) { 
+        if (y >= screen_damage.y && y <= screen_damage.y + screen_damage.h) { 
             gfx_fill_rect(screen_damage.x, y, screen_damage.w, 1, grid_line_color);
         }
     }
 
     // 4. Draw open windows
     wm_draw_all();
+
+    // 4.5. MASAÜSTÜ İKONLARINI ÇİZ
+    int cur_x = cursor_get_x();
+    int cur_y = cursor_get_y();
+    desktop_icons_draw(cur_x, cur_y, false);
 
     // 5. Bottom taskbar - draw it on the topmost layer (above windows)
     int taskbar_h = 36;
@@ -230,6 +265,13 @@ void desktop_redraw(void) {
         gfx_fill_rect(r_x + 4, r_y + 34, r_w - 8, 24, bg_terminal);
         gfx_draw_text(r_x + 12, r_y + 38, 0xFFFFFFFF, "Terminal");
 
+        // Option 3: New File
+        bool hover_newfile = (cur_x >= r_x + 4 && cur_x <= r_x + r_w - 4 &&
+                              cur_y >= r_y + 62 && cur_y <= r_y + 86);
+        uint32_t bg_newfile = hover_newfile ? 0xFF3A3A3A : 0xFF2A2A2A;
+        gfx_fill_rect(r_x + 4, r_y + 62, r_w - 8, 24, bg_newfile);
+        gfx_draw_text(r_x + 12, r_y + 66, 0xFFFFFFFF, "New File");
+
         // Menu Outer Border (Classic 3D look)
         gfx_fill_rect(r_x, r_y, r_w, 1, 0xFF666666); // Top
         gfx_fill_rect(r_x, r_y, 1, r_h, 0xFF666666); // Left
@@ -262,7 +304,7 @@ void desktop_init(void) {
             if (strncmp(&cfg_content[i], "offset=", 7) == 0) {
                 int val = 0;
                 int sign = 1;
-                int idx = i + 7;
+                uint32_t idx = i + 7;
                 
                 if (cfg_content[idx] == '-') {
                     sign = -1;
@@ -319,7 +361,7 @@ void desktop_init(void) {
 
     // Initialize the grid here using the screen dimensions
     grid_init(width, height, 100, 100);
-
+    desktop_icons_init();
     wm_init();
 
     damage_union_rect(0, 0, width, height);
@@ -348,7 +390,7 @@ void desktop_process_input(void) {
     int screen_h = fb_get_height();
     int taskbar_y = screen_h - 36;
 
-    // 3. Left Click Check (Detection of clicks on start button, menu, and shutdown button)
+    // 3. Left Click Check (Detection of clicks on start button, menu, right-click menu and shutdown button)
     bool current_mouse_left = (mouse_buttons & 1);
     if (current_mouse_left && !prev_mouse_left) {
         int btn_x = 4;
@@ -356,23 +398,48 @@ void desktop_process_input(void) {
         int btn_w = 70;
         int btn_h = 28;
 
-        // If a left-click occurs while the right-click menu is open, close it first
+        // --- SAĞ TIK MENÜSÜ AÇIKKEN SOL TIKLANDIYSAYSA ---
         if (right_menu_open) {
+            int r_w = RIGHT_MENU_W;
+            int r_h = RIGHT_MENU_H;
+            int r_x = right_menu_x;
+            int r_y = right_menu_y;
+
+            // Ekran sınırlarına taşmayı engelle (Redraw mantığıyla birebir aynı)
+            if (r_x + r_w > screen_w) r_x = screen_w - r_w;
+            if (r_y + r_h > screen_h) r_y = screen_h - r_h;
+
+            // "New File" butonuna basildiginda:
+            if (new_x >= r_x + 4 && new_x <= r_x + r_w - 4 &&
+                new_y >= r_y + 62 && new_y <= r_y + 86) {
+
+                char target_path[256];
+                const char *desktop_dir = "C:/Users/anil/Desktop";
+
+                get_unique_filename(desktop_dir, "Metin Belgesi", ".txt", target_path, sizeof(target_path));
+                
+                // 1. Dosyayı diske/VFS'e yaz
+                if (vfs_create_file(target_path) == 0) {
+                    // 2. Bütün ekranı yenilenmeye zorla ki yeni dosya ikonu anında belirsin
+                    damage_union_rect(0, 0, screen_w, screen_h);
+                }
+            }
+
+            // Seçim yapılsın veya dışarı tıklansın, sağ tık menüsünü kapat ve ekranı yenile
             right_menu_open = false;
             damage_union_rect(0, 0, screen_w, screen_h);
             desktop_redraw();
         }
-
-        // Is the mouse over the Start button?
-        if (new_x >= btn_x && new_x <= btn_x + btn_w &&
-            new_y >= btn_y && new_y <= btn_y + btn_h) {
+        // --- BAŞLAT BUTONUNA TIKLANDI MI? ---
+        else if (new_x >= btn_x && new_x <= btn_x + btn_w &&
+                 new_y >= btn_y && new_y <= btn_y + btn_h) {
             start_menu_open = !start_menu_open;
             
             // Mark the entire screen as damaged and trigger a redraw since the menu will open/close
             damage_union_rect(0, 0, screen_w, screen_h);
             desktop_redraw();
         }
-        // Inside or outside menu check when menu is open
+        // --- BAŞLAT MENÜSÜ AÇIKKEN TIKLAMA KONTROLÜ ---
         else if (start_menu_open) {
             int menu_x = 4;
             int menu_w = MENU_W; 

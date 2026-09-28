@@ -122,6 +122,19 @@ int kryfs_find_inode(const char* filename, kryfs_inode_t* out_inode) {
     return found;
 }
 
+bool kryfs_file_exists(const char* path) {
+    if (!kryfs_is_mounted || !path) return false;
+
+    kryfs_inode_t dummy_inode;
+    // kryfs_find_inode yolu otomatik temizler ve inode tablosunu tarar.
+    // Eğer inode bulunduysa (0 döndüyse) dosya/klasör vardır.
+    if (kryfs_find_inode(path, &dummy_inode) == 0) {
+        return true;
+    }
+
+    return false;
+}
+
 void* kryfs_read_file(const char* filename, uint32_t* out_size) {
     if (!kryfs_is_mounted) {
         serial_write("[KRYFS ERROR] File system not mounted!\n");
@@ -310,6 +323,11 @@ int kryfs_create_file(const char* path) {
         return -1;
     }
 
+    if (kryfs_file_exists(path)) {
+        serial_write("[KRYFS ERROR] File already exists, skipping creation!\n");
+        return -1;
+    }
+
     if (path && (path[0] == '/' || path[0] == '\\')) {
         path++;
     } else if (path && path[0] != '\0' && path[1] == ':' && (path[2] == '/' || path[2] == '\\')) {
@@ -432,5 +450,6 @@ fs_driver_t kryfs_get_driver(void) {
     driver.create_file = kryfs_create_file;
     driver.write_file = NULL;
     driver.mkdir = kryfs_mkdir;
+    driver.file_exists = kryfs_file_exists;
     return driver;
 }
