@@ -1,6 +1,7 @@
 #include <kernel/drivers/net/e1000.h>
 #include <kernel/drivers/pci.h>
 #include <kernel/serial.h>
+#include <kernel/mem/heap.h>
 #include <arch/x86/io.h>
 
 static e1000_device_t e1000_dev;
@@ -52,6 +53,52 @@ static void e1000_read_mac(void) {
     }
 }
 
+// Receive (RX) Ring Başlatma
+static void e1000_init_rx(void) {
+    e1000_dev.rx_descs = (struct e1000_rx_desc*)kmalloc(sizeof(struct e1000_rx_desc) * E1000_NUM_RX_DESC);
+
+    for (int i = 0; i < E1000_NUM_RX_DESC; i++) {
+        uint8_t *buf = (uint8_t*)kmalloc(E1000_DEFAULT_PACKET_SIZE);
+        e1000_dev.rx_descs[i].addr = (uint32_t)buf;
+        e1000_dev.rx_descs[i].status = 0;
+    }
+
+    e1000_write32(E1000_REG_RDBAL, (uint32_t)e1000_dev.rx_descs);
+    e1000_write32(E1000_REG_RDBAH, 0);
+    e1000_write32(E1000_REG_RDLEN, E1000_NUM_RX_DESC * sizeof(struct e1000_rx_desc));
+
+    e1000_write32(E1000_REG_RDH, 0);
+    e1000_write32(E1000_REG_RDT, E1000_NUM_RX_DESC - 1);
+    e1000_dev.rx_cur = 0;
+
+    // RCTL (Receive Control): EN | SECRC | BAM
+    uint32_t rctl = (1 << 1) | (1 << 15) | (1 << 26);
+    e1000_write32(E1000_REG_RCTL, rctl);
+}
+
+// Transmit (TX) Ring Başlatma
+static void e1000_init_tx(void) {
+    e1000_dev.tx_descs = (struct e1000_tx_desc*)kmalloc(sizeof(struct e1000_tx_desc) * E1000_NUM_TX_DESC);
+
+    for (int i = 0; i < E1000_NUM_TX_DESC; i++) {
+        e1000_dev.tx_descs[i].addr = 0;
+        e1000_dev.tx_descs[i].cmd = 0;
+        e1000_dev.tx_descs[i].status = 1; // DD (Descriptor Done) bit
+    }
+
+    e1000_write32(E1000_REG_TDBAL, (uint32_t)e1000_dev.tx_descs);
+    e1000_write32(E1000_REG_TDBAH, 0);
+    e1000_write32(E1000_REG_TDLEN, E1000_NUM_TX_DESC * sizeof(struct e1000_tx_desc));
+
+    e1000_write32(E1000_REG_TDH, 0);
+    e1000_write32(E1000_REG_TDT, 0);
+    e1000_dev.tx_cur = 0;
+
+    // TCTL (Transmit Control): EN | PSP
+    uint32_t tctl = (1 << 1) | (1 << 3);
+    e1000_write32(E1000_REG_TCTL, tctl);
+}
+
 static void serial_write_hex8(uint8_t val) {
     const char hex_chars[] = "0123456789ABCDEF";
     serial_write_char(hex_chars[(val >> 4) & 0x0F]);
@@ -71,24 +118,8 @@ int e1000_init(void) {
     e1000_dev.slot = pci_dev->slot;
     e1000_dev.func = pci_dev->func;
 
-    serial_write("[e1000] Controller found at PCI ");
-    serial_write_hex8(pci_dev->bus);
-    serial_write(":");
-    serial_write_hex8(pci_dev->slot);
-    serial_write(".");
-    serial_write_hex8(pci_dev->func);
-    serial_write("\n");
-
     pci_enable_bus_mastering(pci_dev);
     e1000_dev.mmio_base = pci_dev->bar[0] & ~0xF;
-
-    serial_write("[e1000] MMIO Base Address (BAR0): 0x");
-    uint32_t base = e1000_dev.mmio_base;
-    serial_write_hex8((base >> 24) & 0xFF);
-    serial_write_hex8((base >> 16) & 0xFF);
-    serial_write_hex8((base >> 8) & 0xFF);
-    serial_write_hex8(base & 0xFF);
-    serial_write("\n");
 
     e1000_read_mac();
 
@@ -99,6 +130,17 @@ int e1000_init(void) {
     }
     serial_write("\n");
 
-    serial_write("[e1000] Hardware discovery & MAC reading completed successfully.\n");
+    // Donanımsal Reset
+    serial_write("[e1000] Resetting hardware controller...\n");
+    e1000_write32(E1000_REG_CTRL, e1000_read32(E1000_REG_CTRL) | (1 << 26));
+    
+    for (volatile int i = 0; i < 100000; i++);
+
+    // TX/RX Ring Buffer Kurulumu
+    serial_write("[e1000] Initializing TX and RX descriptor rings...\n");
+    e1000_init_rx();
+    e1000_init_tx();
+
+    serial_write("[e1000] Controller successfully initialized and ready for I/O!\n");
     return 0;
 }
