@@ -12,6 +12,7 @@
 #include <kernel/drivers/audio/pcspeaker.h>
 #include <kernel/drivers/input/mouse_ps2.h>
 #include <kernel/drivers/input/keyboard_ps2.h>
+#include <kernel/drivers/net/e1000.h>
 #include <kernel/drivers/pci.h>
 #include <kernel/drivers/usb/uhci.h>
 #include <ui/cursor.h>
@@ -45,6 +46,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     uhci_init();
     fb_init(mboot);
     ata_init();
+    e1000_init();
 
     // 3. Filesystems and input drivers
     vfs_init();
@@ -120,7 +122,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         desktop_init(); 
     }
 
-    
+    /*
     serial_write("---- Starting KEF Application ----\n");
     if (kef_load_and_run("C:/Program Files/terminal/terminal.kef")) {
         serial_write("KEF: Application successfully executed and terminated.\n");
@@ -128,7 +130,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         serial_write("[ERROR] KEF application could not be started!\n");
     }
     serial_write("-------------------------------------\n");
-    
+    */
 
     app_manager_init();
     fb_swap();
