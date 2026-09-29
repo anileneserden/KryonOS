@@ -367,6 +367,12 @@ static void wm_update_hover_state(void) {
         for (int p_idx = 0; p_idx < win->panel_count; p_idx++) {
             panel_t* panel = &win->panels[p_idx];
 
+            // EĞER panelin hover rengi yoksa (0 ise) VE on_hover callback'i de tanımlı değilse,
+            // bu panel için hover tetiklemeye gerek yoktur!
+            if (panel->hover_color == 0 && panel->on_hover == NULL) {
+                continue;
+            }
+
             int abs_x = win->x + panel->x;
             int abs_y = win->y + 24 + panel->y;
 
@@ -375,11 +381,6 @@ static void wm_update_hover_state(void) {
                 
                 if (!panel->is_hovered) {
                     panel->is_hovered = true;
-                    
-                    // GÜVENLİK İÇİN: Kernel'dan user-space fonksiyonuna 
-                    // doğrudan atlamak yerine şimdilik burayı pas geçiyoruz.
-                    // if (panel->on_hover != NULL) { panel->on_hover(); }
-
                     damage_union_rect(abs_x, abs_y, panel->width, panel->height);
                 }
             } else {
