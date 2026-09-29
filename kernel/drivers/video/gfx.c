@@ -4,6 +4,14 @@
 #include <kernel/drivers/video/fb.h>
 #include <kernel/drivers/video/font/font8x16_basic.h>
 
+void gfx_fill_screen(uint32_t color) {
+    fb_clear(color);
+}
+
+void gfx_flush(void) {
+    fb_swap();
+}
+
 void gfx_draw_pixel(int x, int y, uint32_t color) {
     fb_putpixel(x, y, color);
 }
@@ -233,8 +241,6 @@ void gfx_draw_buffer(int x, int y, int width, int height, const uint32_t* buffer
             if (px < 0 || (uint32_t)px >= sw) continue;
 
             uint32_t color = buffer[cy * buffer_stride + cx];
-            // Eğer alfa kanalı destekleyen tam şeffaf pikselleri atlamak istersen buraya kontrol koyabilirsin,
-            // direkt basmak için:
             fb_putpixel(px, py, color);
         }
     }

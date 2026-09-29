@@ -16,6 +16,7 @@
 #include <kernel/drivers/usb/uhci.h>
 #include <ui/cursor.h>
 #include <ui/desktop.h>
+#include <ui/debug.h> // DEBUG HEADER EKLENDI
 #include <kernel/app.h>
 #include <kernel/mem/heap.h>
 #include <kernel/mem/pmm.h>
@@ -23,6 +24,10 @@
 #include <arch/x86/io.h>
 #include <kernel/hexdump.h>
 #include <kernel/kef.h>
+
+// 1: Donma teşhisi için Test Ekranı (Kare Animasyonu)
+// 0: Normal KryonOS Masaüstü ve Servisleri
+#define ENABLE_DEBUG_MODE 1
 
 void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     serial_init();
@@ -40,10 +45,29 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     vmm_init();
     heap_init(0x2000000, 1024 * 1024 * 16);
 
+    // Framebuffer Init (Her iki modda da gerekli)
+    fb_init(mboot);
+
+#if ENABLE_DEBUG_MODE
+    serial_write("--- DEBUG MODE ACTIVE: Testing Render & Event Loop ---\n");
+    debug_screen_init();
+
+    // Debug modunda sadece sade bir döngü çalıştırıyoruz
+    while (1) {
+        debug_screen_update();
+        
+        // Eğer kernel'da sleep/delay veya halt fonksiyonun varsa buraya ekleyebilirsin
+        // asm volatile("hlt");
+    }
+
+#else
+    // =======================================================
+    // NORMAL KRYONOS BAŞLATMA AKIŞI
+    // =======================================================
+
     // 2. PCI, display, and speaker hardware drivers
     pci_init();
     uhci_init();
-    fb_init(mboot);
     ata_init();
 
     // 3. Filesystems and input drivers
@@ -78,7 +102,6 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         serial_write("[ERROR] test.txt could not be read or found!\n");
     }
     serial_write("--------------------------------\n");
-    // ------------------------------------
 
     // --- VFS DIRECTORY LISTING TEST ---
     serial_write("---- VFS Directory Listing Test (C:/) ----\n");
@@ -101,7 +124,6 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         serial_write("VFS Info: C:/ directory is empty or get_dir_files is not supported/returned 0.\n");
     }
     serial_write("-------------------------------------------\n");
-    // ------------------------------------------
 
     // 4. Input drivers
     if (!uhci_mouse_active()) {
@@ -120,7 +142,6 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         desktop_init(); 
     }
 
-    
     serial_write("---- Starting KEF Application ----\n");
     if (kef_load_and_run("C:/Program Files/file-manager/file-manager.kef")) {
         serial_write("KEF: Application successfully executed and terminated.\n");
@@ -128,7 +149,6 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         serial_write("[ERROR] KEF application could not be started!\n");
     }
     serial_write("-------------------------------------\n");
-    
 
     app_manager_init();
     fb_swap();
@@ -154,4 +174,5 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
 
         cursor_update_and_redraw();
     }
+#endif
 }

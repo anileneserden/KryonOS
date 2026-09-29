@@ -46,6 +46,7 @@ SRC_C = \
     kernel/mem/pmm.c \
     kernel/mem/vmm.c \
     ui/cursor.c \
+    ui/debug.c \
     ui/desktop_icons.c \
     ui/desktop.c \
     ui/grid.c \
