@@ -374,6 +374,20 @@ void desktop_init(void) {
 }
 
 void desktop_process_input(void) {
+    // --- KLAVYE KISAYOL KONTROLÜ (SUPER TUŞU -> BAŞLAT MENÜSÜ) ---
+    uint8_t scancode = keyboard_get_last_scancode();
+    if (scancode == 0x5B) { // 0x5B: Super / Windows tuşu
+        start_menu_open = !start_menu_open;
+        right_menu_open = false; // Çakışmayı önlemek için sağ tık menüsünü kapat
+
+        int screen_w = fb_get_width();
+        int screen_h = fb_get_height();
+        damage_union_rect(0, 0, screen_w, screen_h);
+        desktop_redraw();
+
+        keyboard_clear_last_scancode(); // Tuşun tekrar tetiklenmesini önle
+    }
+
     // 1. Get the previous cursor position (if the cursor module stores it)
     int old_x = cursor_get_old_x();
     int old_y = cursor_get_old_y();
