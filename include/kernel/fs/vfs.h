@@ -5,7 +5,7 @@
 #include <stdbool.h>
 
 // Common structure for file/directory information
-typedef struct {
+typedef struct __attribute__((packed)) {
     char name[32];
     uint32_t size;
     bool is_directory;
