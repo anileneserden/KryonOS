@@ -56,6 +56,9 @@ typedef struct {
     
     // Yeni eklenen arkaplan fonksiyonu
     void (*background_color)(uint32_t color);
+
+    void (*reboot_system)(void);
+    void (*shutdown_system)(void);
 } kef_api_t;
 
 bool kef_load_and_run(const char* path);

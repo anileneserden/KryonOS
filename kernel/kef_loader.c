@@ -6,6 +6,7 @@
 #include <ui/wm.h>
 #include <kernel/drivers/video/gfx.h>
 #include <ui/desktop.h>
+#include <kernel/power.h>
 
 #define WM_TITLEBAR_HEIGHT 24
 
@@ -212,6 +213,14 @@ static void kef_canvas_update_buffer(int canvas_id) {
     desktop_redraw();
 }
 
+static void kef_reboot_system(void) {
+    system_reboot();
+}
+
+static void kef_shutdown_system(void) {
+    system_shutdown();
+}
+
 static void kef_install_api(void) {
     volatile kef_api_t* api = (volatile kef_api_t*)KEF_API_ADDRESS;
     api->window_create = kef_window_create;
@@ -229,7 +238,9 @@ static void kef_install_api(void) {
     api->yield = kef_yield;
     api->canvas_create = kef_canvas_create;
     api->canvas_update_buffer = kef_canvas_update_buffer;
-    api->background_color = kef_background_color; // API Tablosuna bağlandı
+    api->background_color = kef_background_color;
+    api->reboot_system = kef_reboot_system;
+    api->shutdown_system = kef_shutdown_system;
 }
 
 bool kef_load_and_run(const char* path) {

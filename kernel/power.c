@@ -12,3 +12,20 @@ void system_shutdown(void) {
         __asm__ volatile("cli; hlt");
     }
 }
+
+void system_reboot(void) {
+    uint8_t temp = 0x02;
+    
+    // Klavye denetleyicisi giriş tamponu boşalana kadar bekle
+    while (temp & 0x02) {
+        temp = inb(0x64);
+    }
+    
+    // 0x64 portuna reset komutu (0xFE) göndererek CPU'yu yeniden başlat
+    outb(0x64, 0xFE);
+    
+    // Donanım anında reset atmazsa işlemciyi durdur
+    while(1) {
+        __asm__ volatile("cli; hlt");
+    }
+}
