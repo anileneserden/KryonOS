@@ -5,6 +5,7 @@
 #include <kernel/string.h>
 #include <ui/wm.h>
 #include <kernel/drivers/video/gfx.h>
+#include <ui/desktop.h>
 
 #define WM_TITLEBAR_HEIGHT 24
 
@@ -92,6 +93,62 @@ static int kef_button_create(int x, int y, int w, int h, uint32_t bg_color, uint
     return 1;
 }
 
+static int kef_input_create(int x, int y, int w, int h, 
+                            const char* text, const char* placeholdertext, 
+                            uint32_t backcolor, uint32_t color, 
+                            uint32_t placeholder_color, uint32_t border_color, 
+                            int border_thickness, uint8_t anchor) {
+    window_t* win = wm_get_active_window();
+    if (!win) return -1;
+
+    // Pencere yapındaki input sınır kontrolü (Örn: MAX_INPUTS veya benzeri bir limit)
+    if (win->input_count >= MAX_INPUTS) return -1;
+
+    text_input_t* inp = &win->inputs[win->input_count++];
+    inp->x = x; inp->y = y; inp->width = w; inp->height = h;
+    inp->bg_color = backcolor; 
+    inp->text_color = color;
+    inp->placeholder_color = placeholder_color;
+    inp->border_color = border_color;
+    inp->border_thickness = border_thickness;
+    inp->anchor = anchor;
+    
+    inp->init_x = x; inp->init_y = y; 
+    inp->init_width = w; inp->init_height = h;
+    inp->init_win_w = win->width; inp->init_win_h = win->height;
+
+    // Metni kopyala
+    int i = 0;
+    if (text) {
+        while (text[i] != '\0' && i < 127) { inp->text[i] = text[i]; i++; }
+    }
+    inp->text[i] = '\0';
+
+    // Placeholder metnini kopyala
+    int j = 0;
+    if (placeholdertext) {
+        while (placeholdertext[j] != '\0' && j < 127) { inp->placeholder[j] = placeholdertext[j]; j++; }
+    }
+    inp->placeholder[j] = '\0';
+
+    wm_draw_window(win);
+    return 1;
+}
+
+static int kef_input_get_text(int input_id, char* out_buf, int max_len) {
+    window_t* win = wm_get_active_window();
+    if (!win || input_id < 0 || input_id >= win->input_count) return -1;
+
+    text_input_t* inp = &win->inputs[input_id];
+    int i = 0;
+    while (inp->text[i] != '\0' && i < max_len - 1) {
+        out_buf[i] = inp->text[i];
+        i++;
+    }
+    out_buf[i] = '\0';
+    return i;
+}
+
 static int kef_get_directory_files(const char* full_path, vfs_file_info_t* out_list, int max_count) {
     serial_write("KEF API: get_directory_files called -> ");
     serial_write((char*)full_path);
@@ -163,6 +220,8 @@ static void kef_install_api(void) {
     api->label_create = kef_label_create;
     api->panel_create = kef_panel_create;
     api->button_create = kef_button_create;
+    api->input_create = kef_input_create;
+    api->input_get_text = kef_input_get_text;
     api->get_directory_files = kef_get_directory_files;
     api->read_file = kef_read_file;
     api->strcmp = kef_strcmp;

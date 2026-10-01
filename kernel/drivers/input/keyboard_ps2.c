@@ -9,6 +9,9 @@ static bool keyboard_debug_mode = false;
 static bool keyboard_log_enabled = false; 
 static uint8_t last_scancode = 0;
 
+// Pencere yöneticisi tuş işleme fonksiyonu prototipi
+extern void wm_handle_key_press(char c);
+
 static const char* scancode_utf8[128] = {
     [0x01] = "[ESC]",
     [0x02] = "1", [0x03] = "2", [0x04] = "3", [0x05] = "4", 
@@ -84,6 +87,23 @@ void keyboard_handler(void) {
 
     if (scancode < 128) {
         last_scancode = scancode; // Save the last key pressed
+
+        // --- KLAVYE GİRDİSİNİ PENCERE YÖNETİCİSİNE İLET ---
+        if (scancode == 0x0E) {
+            wm_handle_key_press('\b'); // Backspace tuşu
+        } 
+        else if (scancode == 0x39) {
+            wm_handle_key_press(' ');  // Space (Boşluk) tuşu
+        }
+        else {
+            const char* str = scancode_utf8[scancode];
+            // Tek karakterlik (ASCII) yazdırılabilir tuşları gönder
+            if (str != 0 && str[0] != '[' && str[1] == '\0') {
+                wm_handle_key_press(str[0]);
+            }
+        }
+        // ------------------------------------------------
+
         if (keyboard_debug_mode) {
             print_hex(scancode);
         } else if (keyboard_log_enabled) {

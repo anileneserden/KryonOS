@@ -43,6 +43,7 @@ typedef struct {
                         uint32_t backcolor, uint32_t color, 
                         uint32_t placeholder_color, uint32_t border_color, 
                         int border_thickness, uint8_t anchor);
+    int (*input_get_text)(int input_id, char* out_buf, int max_len);
     int (*get_directory_files)(const char* full_path, vfs_file_info_t* out_list, int max_count);
     void* (*read_file)(const char* full_path, uint32_t* out_size);
 

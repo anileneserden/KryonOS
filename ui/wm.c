@@ -31,6 +31,7 @@ typedef enum {
 static window_t window_list[MAX_WINDOWS];
 static int window_count = 0;
 static window_t* active_window = 0;
+static text_input_t* active_input = 0;
 static window_t* dragged_window = 0;
 static window_t* resized_window = 0;
 static window_t* hovered_window = 0;
@@ -49,6 +50,7 @@ void wm_init(void) {
     resized_window = 0;
     hovered_window = 0;
     hovered_close_button = 0;
+    active_input = 0;
     resize_direction = RESIZE_NONE;
     prev_buttons = 0;
     for (int i = 0; i < MAX_WINDOWS; i++) {
@@ -250,6 +252,59 @@ void wm_draw_window(window_t* win) {
 
                 if (cw > 0 && ch > 0) {
                     gfx_draw_buffer(win->x + rel_x, win->y + rel_y, cw, ch, win->canvas_buffer, win->canvas_w);
+                }
+            }
+        }
+    }
+
+    // 8. Draw text inputs (Metin Kutuları)
+    for (int i = 0; i < win->input_count; i++) {
+        text_input_t* inp = &win->inputs[i];
+        int rel_x = inp->x;
+        int rel_y = 24 + inp->y;
+        int iw = inp->width;
+        int ih = inp->height;
+
+        // Kırpma (Clipping) kontrolleri
+        if (rel_x < 0) { iw += rel_x; rel_x = 0; }
+        if (rel_y < 24) { ih += (rel_y - 24); rel_y = 24; }
+
+        if (rel_x < win->width && rel_y < win->height) {
+            if (rel_x + iw > win->width) iw = win->width - rel_x;
+            if (rel_y + ih > win->height) ih = win->height - rel_y;
+
+            if (iw > 0 && ih > 0) {
+                int abs_x = win->x + rel_x;
+                int abs_y = win->y + rel_y;
+
+                // Kutunun arkaplanını çiz
+                gfx_fill_rect(abs_x, abs_y, iw, ih, inp->bg_color);
+
+                // Kenarlık varsa çiz
+                if (inp->border_thickness > 0) {
+                    // Dört bir kenara ince kenarlık çizgisi çizebilirsin veya etrafını sarabilirsin
+                    gfx_fill_rect(abs_x, abs_y, iw, inp->border_thickness, inp->border_color); // Üst
+                    gfx_fill_rect(abs_x, abs_y + ih - inp->border_thickness, iw, inp->border_thickness, inp->border_color); // Alt
+                    gfx_fill_rect(abs_x, abs_y, inp->border_thickness, ih, inp->border_color); // Sol
+                    gfx_fill_rect(abs_x + iw - inp->border_thickness, abs_y, inp->border_thickness, ih, inp->border_color); // Sağ
+                }
+
+                // Metin veya Placeholder çizimi
+                if (inp->text[0] != '\0') {
+                    gfx_draw_text_utf8(abs_x + 6, abs_y + 6, inp->text_color, inp->text);
+                } else if (inp->placeholder[0] != '\0') {
+                    gfx_draw_text_utf8(abs_x + 6, abs_y + 6, inp->placeholder_color, inp->placeholder);
+                }
+
+                // Eğer bu kutu şu an odaktaysa (active_input ise) sonuna imleç çizgisi (|) koy
+                if (active_input == inp) {
+                    // Metin uzunluğuna göre imlecin X koordinatını kaba taslak hesaplayabiliriz (her karakter ortalama 8 piksel)
+                    int text_len = 0;
+                    while(inp->text[text_len] != '\0') text_len++;
+                    int cursor_pos_x = abs_x + 6 + (text_len * 8);
+                    if (cursor_pos_x < abs_x + iw - 8) {
+                        gfx_fill_rect(cursor_pos_x, abs_y + 6, 2, ih - 12, inp->text_color);
+                    }
                 }
             }
         }
@@ -482,7 +537,7 @@ void wm_process_input(void) {
                 int abs_bx = target->x + b->x;
                 int abs_by = target->y + 24 + b->y;
 
-                if (mouse_x >= abs_bx && mouse_x < abs_bx + b->width &&
+                if (mouse_x >= abs_bx && mouse_x < abs_bx + b->width && // Dikkat: b->width
                     mouse_y >= abs_by && mouse_y < abs_by + b->height) {
                     
                     serial_write("WM: In-window button clicked: ");
@@ -498,6 +553,29 @@ void wm_process_input(void) {
                 }
             }
 
+            // --- IN-WINDOW TEXT INPUT FOCUS CHECK ---
+            bool clicked_on_input = false;
+            for (int i = 0; i < target->input_count; i++) {
+                text_input_t* inp = &target->inputs[i];
+                int abs_ix = target->x + inp->x;
+                int abs_iy = target->y + 24 + inp->y;
+
+                if (mouse_x >= abs_ix && mouse_x < abs_ix + inp->width &&
+                    mouse_y >= abs_iy && mouse_y < abs_iy + inp->height) {
+                    
+                    active_input = inp; // Metin kutusunu odaklı hale getir
+                    clicked_on_input = true;
+                    serial_write("WM: Text input focused\n");
+                    break;
+                }
+            }
+
+            // Eğer ne bir butona ne de bir input kutusuna tıklandıysa, 
+            // pencere içinde boş bir yere tıklandığında odaklı input seçimini kaldırabiliriz:
+            if (!clicked_on_input && !clicked_on_button) {
+                active_input = 0; 
+            }
+
             // Resize check
             int dir = get_resize_direction(target, mouse_x, mouse_y);
             if (dir != RESIZE_NONE) {
@@ -509,7 +587,7 @@ void wm_process_input(void) {
                 resize_old_y = target->y;
                 resize_old_w = target->width;
                 resize_old_h = target->height;
-            } else if (!clicked_on_button) {
+            } else if (!clicked_on_button && !clicked_on_input) {
                 if (mouse_y >= target->y && mouse_y < target->y + WM_TITLEBAR_HEIGHT) {
                     dragged_window = front_win;
                     dragged_window->is_dragging = true;
@@ -523,6 +601,9 @@ void wm_process_input(void) {
             cursor_show();
         } 
         else {
+            // Pencere dışına (masaüstüne) tıklandığında aktif inputu da sıfırla
+            active_input = 0;
+
             if (active_window != 0) {
                 cursor_prepare_redraw();
                 
@@ -545,6 +626,7 @@ void wm_process_input(void) {
             }
         }
     }
+
     // 3. The left button is held and the mouse is moving (dragging or resizing continues)
     else if (left_pressed && prev_left) {
         if (resized_window && resize_direction != RESIZE_NONE) {
@@ -749,6 +831,31 @@ void wm_process_input(void) {
     }
 
     prev_buttons = mouse_buttons;
+}
+
+void wm_handle_key_press(char c) {
+    if (!active_input) return;
+
+    int len = 0;
+    while (active_input->text[len] != '\0') len++;
+
+    // Backspace (Geri silme tuşu)
+    if (c == '\b' || c == 127) {
+        if (len > 0) {
+            active_input->text[len - 1] = '\0';
+            damage_union_rect(0, 0, fb_get_width(), fb_get_height());
+            desktop_redraw();
+        }
+        return;
+    }
+
+    // Normal yazdırılabilir karakterler
+    if (c >= 32 && c < 127 && len < 126) {
+        active_input->text[len] = c;
+        active_input->text[len + 1] = '\0';
+        damage_union_rect(0, 0, fb_get_width(), fb_get_height());
+        desktop_redraw();
+    }
 }
 
 window_t* wm_get_active_window(void) {
