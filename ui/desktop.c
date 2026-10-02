@@ -130,13 +130,13 @@ void desktop_redraw(void) {
         }
     }
 
-    // 4. Draw open windows
-    wm_draw_all();
-
-    // 4.5. MASAÜSTÜ İKONLARINI ÇİZ
+    // 4. --- MASAÜSTÜ İKONLARINI ÇİZ (Pencerelerin altında kalması için önce çiziliyor) ---
     int cur_x = cursor_get_x();
     int cur_y = cursor_get_y();
     desktop_icons_draw(cur_x, cur_y, false);
+
+    // 4.5. Draw open windows (İkonların üzerine çizilir)
+    wm_draw_all();
 
     // 5. Bottom taskbar - draw it on the topmost layer (above windows)
     int taskbar_h = 36;
