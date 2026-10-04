@@ -7,6 +7,7 @@
 #include <kernel/drivers/video/gfx.h>
 #include <ui/desktop.h>
 #include <kernel/power.h>
+#include <kernel/drivers/input/keyboard_ps2.h>
 
 #define WM_TITLEBAR_HEIGHT 24
 
@@ -221,6 +222,10 @@ static void kef_shutdown_system(void) {
     system_shutdown();
 }
 
+static bool kef_is_key_pressed(int key_code) {
+    return keyboard_is_key_pressed(key_code);
+}
+
 static void kef_install_api(void) {
     volatile kef_api_t* api = (volatile kef_api_t*)KEF_API_ADDRESS;
     api->window_create = kef_window_create;
@@ -241,6 +246,7 @@ static void kef_install_api(void) {
     api->background_color = kef_background_color;
     api->reboot_system = kef_reboot_system;
     api->shutdown_system = kef_shutdown_system;
+    api->is_key_pressed = kef_is_key_pressed;
 }
 
 bool kef_load_and_run(const char* path) {
