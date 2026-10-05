@@ -39,6 +39,43 @@ static void format_fat_name(const uint8_t* fat_name, char* out_name) {
     out_name[pos] = '\0';
 }
 
+// Read a FAT entry (cluster chain value)
+static uint32_t get_fat_entry(uint32_t cluster) {
+    if (!is_fat32_initialized) return 0;
+
+    uint32_t fat_offset = cluster * 4;
+    uint32_t fat_sector = fat_start_sector + (fat_offset / 512);
+    uint32_t ent_offset = fat_offset % 512;
+
+    uint8_t sector_buffer[512];
+    ata_read_sectors(current_drive, fat_sector, 1, sector_buffer);
+
+    uint32_t table_value = *(uint32_t*)&sector_buffer[ent_offset];
+    return table_value & 0x0FFFFFFF; // Mask top 4 bits for FAT32
+}
+
+// Set a FAT entry (cluster chain value) for write operations
+static void set_fat_entry(uint32_t cluster, uint32_t value) {
+    if (!is_fat32_initialized) return;
+
+    uint32_t fat_offset = cluster * 4;
+    uint32_t fat_sector = fat_start_sector + (fat_offset / 512);
+    uint32_t ent_offset = fat_offset % 512;
+
+    uint8_t sector_buffer[512];
+    ata_read_sectors(current_drive, fat_sector, 1, sector_buffer);
+
+    // Preserve upper 4 bits while updating value
+    uint32_t* entry = (uint32_t*)&sector_buffer[ent_offset];
+    *entry = (*entry & 0xF0000000) | (value & 0x0FFFFFFF);
+
+    // Write to all FAT copies (typically 2 FAT tables)
+    for (int i = 0; i < bpb.num_fats; i++) {
+        uint32_t target_sector = fat_sector + (i * bpb.table_size_32);
+        ata_write_sectors(current_drive, target_sector, 1, sector_buffer);
+    }
+}
+
 // Initialize the FAT32 partition (Drive 0: Master, Drive 1: Slave)
 bool fat32_init_disk(uint8_t drive, uint32_t lba_start) {
     current_drive = drive;
