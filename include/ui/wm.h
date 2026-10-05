@@ -9,6 +9,7 @@
 #define MAX_LABELS   32
 #define MAX_BUTTONS  24
 #define MAX_INPUTS   8
+#define MAX_COMBOBOXES 8
 
 typedef struct {
     int x, y;
@@ -65,6 +66,22 @@ typedef struct {
 typedef struct {
     int x, y;
     int width, height;
+    const char** items;
+    int item_count;
+    int selected_index;
+    bool is_open;
+    uint32_t bg_color;
+    uint32_t text_color;
+    uint32_t border_color;
+    uint8_t anchor;
+    
+    int init_x, init_y, init_width, init_height;
+    int init_win_w, init_win_h;
+} combobox_t;
+
+typedef struct {
+    int x, y;
+    int width, height;
     
     int min_width;
     int min_height;
@@ -91,6 +108,9 @@ typedef struct {
 
     text_input_t inputs[MAX_INPUTS];
     int input_count;
+
+    combobox_t comboboxes[MAX_COMBOBOXES];
+    int combobox_count;
 
     bool has_canvas;
     int canvas_x, canvas_y;
