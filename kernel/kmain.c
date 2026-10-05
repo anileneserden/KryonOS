@@ -80,6 +80,17 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     serial_write("--------------------------------\n");
     // ------------------------------------
 
+    // --- FAT32 / VFS FILE WRITE TEST ---
+    serial_write("---- FAT32 Write Test (D:/hello.txt) ----\n");
+    const char* write_content = "Hello from KryonOS FAT32 Write Engine!\n";
+    if (vfs_write_file("D:/hello.txt", write_content, 39)) {
+        serial_write("VFS: hello.txt successfully written to FAT32!\n");
+    } else {
+        serial_write("[ERROR] hello.txt could not be written to FAT32!\n");
+    }
+    serial_write("-----------------------------------------\n");
+    // -----------------------------------
+
     // --- VFS DIRECTORY LISTING TEST ---
     serial_write("---- VFS Directory Listing Test (C:/) ----\n");
     vfs_file_info_t root_files[16];
