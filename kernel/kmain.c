@@ -23,6 +23,12 @@
 #include <arch/x86/io.h>
 #include <kernel/hexdump.h>
 #include <kernel/kef.h>
+#include <kernel/installer.h>
+#include <kernel/string.h>
+
+#ifndef MULTIBOOT_INFO_CMDLINE
+#define MULTIBOOT_INFO_CMDLINE (1 << 2)
+#endif
 
 void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     serial_init();
@@ -45,6 +51,21 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     uhci_init();
     fb_init(mboot);
     ata_init();
+
+    // --- COMMAND LINE ARGUMENT CHECK (--installer) ---
+    if ((mboot->flags & MULTIBOOT_INFO_CMDLINE) && mboot->cmdline) {
+        char* cmdline = (char*)mboot->cmdline;
+        serial_write("Boot command line: ");
+        serial_write(cmdline);
+        serial_write("\n");
+
+        if (strstr(cmdline, "--installer") != NULL) {
+            serial_write("[INFO] --installer parameter detected. Launching installer...\n");
+            installer_main();
+            return;
+        }
+    }
+    // ------------------------------------------------
 
     // 3. Filesystems and input drivers
     vfs_init();

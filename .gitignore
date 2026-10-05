@@ -2,6 +2,7 @@ build/
 isodir/
 kryonos.bin
 kryonos.iso
+kryonos-installer.iso
 *.o
 *.txt
 .vscode/

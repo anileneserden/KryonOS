@@ -20,6 +20,20 @@ int strncmp(const char* s1, const char* s2, size_t n) {
     return *(const unsigned char*)s1 - *(const unsigned char*)s2;
 }
 
+char* strstr(const char* haystack, const char* needle) {
+    if (!*needle) return (char*)haystack;
+    for (const char* h = haystack; *h; h++) {
+        const char* n = needle;
+        const char* temp = h;
+        while (*temp && *n && (*temp == *n)) {
+            temp++;
+            n++;
+        }
+        if (!*n) return (char*)h;
+    }
+    return NULL;
+}
+
 int memcmp(const void* s1, const void* s2, size_t n) {
     const uint8_t* p1 = (const uint8_t*)s1;
     const uint8_t* p2 = (const uint8_t*)s2;

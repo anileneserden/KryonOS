@@ -21,6 +21,7 @@ SRC_C = \
     kernel/audio/wav.c \
     kernel/app_manager.c \
     kernel/hexdump.c \
+    kernel/installer.c \
     kernel/kef_loader.c \
     kernel/kmain.c \
     kernel/power.c \
@@ -73,7 +74,7 @@ $(BUILD)/%.o: %.S
 	$(AS) $< -o $@
 
 clean:
-	rm -rf $(BUILD) isodir kryonos.iso
+	rm -rf $(BUILD) isodir isodir_installer kryonos.iso kryonos-installer.iso
 
 iso: $(TARGET)
 	mkdir -p isodir/boot/grub
@@ -86,6 +87,19 @@ iso: $(TARGET)
 	echo '}' >> isodir/boot/grub/grub.cfg
 	grub-mkrescue -o kryonos.iso isodir
 
+# --- Installer ISO Targets ---
+installer: $(TARGET)
+	mkdir -p isodir_installer/boot/grub
+	cp $(TARGET) isodir_installer/boot/kryonos.elf
+	echo 'set timeout=0' > isodir_installer/boot/grub/grub.cfg
+	echo 'set gfxpayload=1920x1080x32' >> isodir_installer/boot/grub/grub.cfg
+	echo 'menuentry "KryonOS Installer" {' >> isodir_installer/boot/grub/grub.cfg
+	echo '    multiboot /boot/kryonos.elf --installer' >> isodir_installer/boot/grub/grub.cfg
+	echo '    boot' >> isodir_installer/boot/grub/grub.cfg
+	echo '}' >> isodir_installer/boot/grub/grub.cfg
+	grub-mkrescue -o kryonos-installer.iso isodir_installer
+	rm -rf isodir_installer
+
 # Dosyalar yoksa otomatik boş imaj oluşturan kural
 $(DISK_KRYFS):
 	@mkdir -p $(dir $@)
@@ -97,6 +111,16 @@ $(DISK_FAT32):
 
 run: iso $(DISK_KRYFS) $(DISK_FAT32)
 	qemu-system-i386 -cdrom kryonos.iso \
+	   -drive format=raw,file=$(DISK_KRYFS),index=0,media=disk \
+	   -drive format=raw,file=$(DISK_FAT32),index=1,media=disk \
+	   -audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
+	   -machine pcspk-audiodev=audio0 \
+	   -device piix3-usb-uhci,id=uhci \
+	   -device usb-mouse,bus=uhci.0 \
+	   -serial stdio -vga std -display sdl,gl=on
+
+run-installer: installer $(DISK_KRYFS) $(DISK_FAT32)
+	qemu-system-i386 -cdrom kryonos-installer.iso \
 	   -drive format=raw,file=$(DISK_KRYFS),index=0,media=disk \
 	   -drive format=raw,file=$(DISK_FAT32),index=1,media=disk \
 	   -audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
