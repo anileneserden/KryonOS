@@ -6,7 +6,7 @@ CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra -Iinclude
 LDFLAGS = -T linker.ld -nostdlib
 
 BUILD = build
-TARGET = $(BUILD)/kryonos.bin
+TARGET = $(BUILD)/kryonos.elf
 
 # --- Disk Image Definitions ---
 DISK_KRYFS ?= $(HOME)/KryonOS/main/disk-kryfs.img
@@ -77,11 +77,11 @@ clean:
 
 iso: $(TARGET)
 	mkdir -p isodir/boot/grub
-	cp $(TARGET) isodir/boot/kryonos.bin
+	cp $(TARGET) isodir/boot/kryonos.elf
 	echo 'set timeout=0' > isodir/boot/grub/grub.cfg
 	echo 'set gfxpayload=1920x1080x32' >> isodir/boot/grub/grub.cfg
 	echo 'menuentry "KryonOS" {' >> isodir/boot/grub/grub.cfg
-	echo '    multiboot /boot/kryonos.bin' >> isodir/boot/grub/grub.cfg
+	echo '    multiboot /boot/kryonos.elf' >> isodir/boot/grub/grub.cfg
 	echo '    boot' >> isodir/boot/grub/grub.cfg
 	echo '}' >> isodir/boot/grub/grub.cfg
 	grub-mkrescue -o kryonos.iso isodir
