@@ -2,7 +2,7 @@ CC = i686-elf-gcc
 AS = i686-elf-as
 LD = i686-elf-ld
 
-CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra -Iinclude
+CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra -Iinclude -Iinclude/libc
 LDFLAGS = -T linker.ld -nostdlib
 
 BUILD = build
@@ -45,6 +45,7 @@ SRC_C = \
     kernel/mem/heap.c \
     kernel/mem/pmm.c \
     kernel/mem/vmm.c \
+    libc/stdlib.c \
     ui/cursor.c \
     ui/desktop_icons.c \
     ui/desktop.c \
