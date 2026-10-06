@@ -10,6 +10,7 @@
 #define MAX_BUTTONS  24
 #define MAX_INPUTS   8
 #define MAX_COMBOBOXES 8
+#define MAX_PICTUREBOXES 8
 
 typedef struct {
     int x, y;
@@ -82,6 +83,18 @@ typedef struct {
 typedef struct {
     int x, y;
     int width, height;
+    char image_path[64];
+    uint8_t anchor;
+    int init_x, init_y, init_width, init_height;
+    int init_win_w, init_win_h;
+    
+    uint32_t* pixels; 
+    int img_width, img_height;
+} picturebox_t;
+
+typedef struct {
+    int x, y;
+    int width, height;
     
     int min_width;
     int min_height;
@@ -111,6 +124,9 @@ typedef struct {
 
     combobox_t comboboxes[MAX_COMBOBOXES];
     int combobox_count;
+
+    picturebox_t pictureboxes[MAX_PICTUREBOXES];
+    int picturebox_count;
 
     bool has_canvas;
     int canvas_x, canvas_y;

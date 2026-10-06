@@ -265,7 +265,33 @@ void wm_draw_window(window_t* win) {
         }
     }
 
-    // 8. Draw text inputs (Metin Kutuları)
+    // 8. Draw pictureboxes (Resim Kutuları)
+    for (int i = 0; i < win->picturebox_count; i++) {
+        picturebox_t* p = &win->pictureboxes[i];
+        int rel_x = p->x;
+        int rel_y = 24 + p->y;
+        int pw = p->width;
+        int ph = p->height;
+
+        // Kırpma (Clipping) kontrolleri
+        if (rel_x < 0) { pw += rel_x; rel_x = 0; }
+        if (rel_y < 24) { ph += (rel_y - 24); rel_y = 24; }
+
+        if (rel_x < win->width && rel_y < win->height) {
+            if (rel_x + pw > win->width) pw = win->width - rel_x;
+            if (rel_y + ph > win->height) ph = win->height - rel_y;
+
+            if (pw > 0 && ph > 0 && p->pixels) {
+                int abs_x = win->x + rel_x;
+                int abs_y = win->y + rel_y;
+
+                // Eğer resim verisi yüklendiyse framebuffer/grafik arabelleğine çiz
+                gfx_draw_buffer(abs_x, abs_y, pw, ph, p->pixels, p->img_width);
+            }
+        }
+    }
+
+    // 9. Draw text inputs (Metin Kutuları)
     for (int i = 0; i < win->input_count; i++) {
         text_input_t* inp = &win->inputs[i];
         int rel_x = inp->x;
@@ -318,7 +344,7 @@ void wm_draw_window(window_t* win) {
         }
     }
 
-    // 9. Draw comboboxes (Açılır Menüler)
+    // 10. Draw comboboxes (Açılır Menüler)
     for (int i = 0; i < win->combobox_count; i++) {
         combobox_t* cb = &win->comboboxes[i];
         int rel_x = cb->x;

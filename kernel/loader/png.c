@@ -61,6 +61,38 @@ png_image_t* png_load_from_file(const char* filepath) {
     return image;
 }
 
+png_image_t* png_load_from_memory(const void* data, uint32_t size) {
+    if (!data || size == 0) return NULL;
+
+    int width, height, channels;
+    unsigned char* img_data = stbi_load_from_memory(
+        (const unsigned char*)data, 
+        size, 
+        &width, 
+        &height, 
+        &channels, 
+        4
+    );
+
+    if (!img_data) {
+        serial_write("[PNG ERROR] stb_image bellekten resmi decode edemedi!\n");
+        return NULL;
+    }
+
+    png_image_t* image = (png_image_t*)malloc(sizeof(png_image_t));
+    if (!image) {
+        stbi_image_free(img_data);
+        return NULL;
+    }
+
+    image->width = width;
+    image->height = height;
+    image->channels = 4;
+    image->pixels = (uint32_t*)img_data;
+
+    return image;
+}
+
 void png_free_image(png_image_t* img) {
     if (img) {
         if (img->pixels) {

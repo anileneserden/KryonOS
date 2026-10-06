@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <kernel/fs/vfs.h> // vfs_file_info_t tanımı için eklendi
 
 #define KEF2_MAGIC 0x3246454B
 #define KEF2_VERSION 2
@@ -41,6 +42,7 @@ typedef struct {
     int (*label_create)(int x, int y, uint32_t color, const char* text, uint8_t anchor);
     int (*panel_create)(int x, int y, int w, int h, uint32_t color, uint32_t hover_color, void (*on_click)(void), void (*on_hover)(void), uint8_t anchor);
     int (*button_create)(int x, int y, int w, int h, uint32_t bg_color, uint32_t text_color, const char* text, void (*on_click)(void), uint8_t anchor);
+    int (*picturebox_create)(int x, int y, int w, int h, const char* img_path, uint8_t anchor);
     int (*input_create)(int x, int y, int w, int h, 
                         const char* text, const char* placeholdertext, 
                         uint32_t backcolor, uint32_t color, 
@@ -48,7 +50,7 @@ typedef struct {
                         int border_thickness, uint8_t anchor);
     int (*input_get_text)(int input_id, char* out_buf, int max_len);
     int (*combobox_create)(int x, int y, int w, int h, const char** items, int item_count, int default_index, uint32_t bg_color, uint32_t text_color, uint32_t border_color, uint8_t anchor);
-    int (*get_directory_files)(const char* full_path, void* out_list, int max_count);
+    int (*get_directory_files)(const char* full_path, vfs_file_info_t* out_list, int max_count);
     void* (*read_file)(const char* full_path, uint32_t* out_size);
     int (*strcmp)(const char* s1, const char* s2);
     size_t (*strlen)(const char* str);

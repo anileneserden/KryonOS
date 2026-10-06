@@ -8,8 +8,13 @@
 #include <ui/desktop.h>
 #include <kernel/power.h>
 #include <kernel/drivers/input/keyboard_ps2.h>
+#include <kernel/loader/png.h>
 
 #define WM_TITLEBAR_HEIGHT 24
+
+// Aktif KEF dosyasını ve kaynak tablosunu bellekte tutmak için global değişkenler
+static uint8_t* current_kef_file_buffer = 0;
+static uint32_t current_kef_file_size = 0;
 
 static void kef_print(const char* str) {
     serial_write(str);
@@ -84,6 +89,125 @@ static int kef_button_create(int x, int y, int w, int h, uint32_t bg_color, uint
     int i = 0;
     while (text[i] != '\0' && i < 31) { b->text[i] = text[i]; i++; }
     b->text[i] = '\0';
+
+    wm_draw_window(win);
+    return 1;
+}
+
+static uint8_t* kef_find_resource_in_memory(const char* target_filename, uint32_t* out_size) {
+    if (!current_kef_file_buffer || current_kef_file_size < sizeof(kef2_header_t)) return 0;
+
+    serial_write("[KEF DEBUG] Aranan kaynak: ");
+    serial_write(target_filename);
+    serial_write("\n");
+
+    kef2_header_t* header = (kef2_header_t*)current_kef_file_buffer;
+    uint32_t current_offset = sizeof(kef2_header_t);
+
+    for (uint32_t i = 0; i < header->section_count; i++) {
+        if (current_offset + sizeof(kef2_section_header_t) > current_kef_file_size) break;
+        kef2_section_header_t* sec = (kef2_section_header_t*)(current_kef_file_buffer + current_offset);
+        current_offset += sizeof(kef2_section_header_t);
+
+        if (sec->type == KEF2_SECTION_RESOURCES) {
+            uint8_t* section_ptr = current_kef_file_buffer + sec->offset;
+            uint32_t section_left = sec->size;
+
+            while (section_left > sizeof(uint32_t)) {
+                char* fname = (char*)section_ptr;
+                size_t fname_len = strlen(fname);
+                if (fname_len == 0) break;
+
+                serial_write("[KEF DEBUG] Paketteki kaynak: ");
+                serial_write(fname);
+                serial_write("\n");
+
+                uint8_t* cursor = section_ptr + fname_len + 1;
+                uint32_t consumed = fname_len + 1;
+
+                if (consumed + sizeof(uint32_t) > section_left) break;
+
+                uint32_t data_size = *(uint32_t*)cursor;
+                cursor += sizeof(uint32_t);
+                consumed += sizeof(uint32_t);
+
+                if (consumed + data_size > section_left) break;
+
+                uint8_t* data_ptr = cursor;
+                cursor += data_size;
+                consumed += data_size;
+
+                if (consumed + 6 <= section_left) {
+                    if (cursor[0] == 'I' && cursor[1] == 'M' && cursor[2] == 'G' &&
+                        cursor[3] == 'E' && cursor[4] == 'N' && cursor[5] == 'D') {
+                        cursor += 6;
+                        consumed += 6;
+                    }
+                }
+
+                section_left -= consumed;
+                section_ptr = cursor;
+
+                if (strcmp(fname, target_filename) == 0 || strstr(fname, target_filename) != NULL) {
+                    serial_write("[KEF DEBUG] Kaynak basariyla eslesti!\n");
+                    *out_size = data_size;
+                    return data_ptr;
+                }
+            }
+        }
+    }
+    serial_write("[KEF DEBUG] Kaynak bulunamadi!\n");
+    return 0;
+}
+
+static int kef_picturebox_create(int x, int y, int w, int h, const char* img_path, uint8_t anchor) {
+    window_t* win = wm_get_active_window();
+    if (!win) return -1;
+    if (win->picturebox_count >= MAX_PICTUREBOXES) return -1;
+
+    picturebox_t* p = &win->pictureboxes[win->picturebox_count++];
+    p->x = x; p->y = y; p->width = w; p->height = h;
+    p->anchor = anchor;
+    p->init_x = x; p->init_y = y; p->init_width = w; p->init_height = h;
+    p->init_win_w = win->width; p->init_win_h = win->height;
+    p->pixels = 0;
+    p->img_width = 0;
+    p->img_height = 0;
+    
+    int i = 0;
+    while (img_path[i] != '\0' && i < 63) { p->image_path[i] = img_path[i]; i++; }
+    p->image_path[i] = '\0';
+
+    // 1. KEF paketinin içinden resmi bul
+    uint32_t img_data_size = 0;
+    uint8_t* img_raw_data = kef_find_resource_in_memory(img_path, &img_data_size);
+
+    if (!img_raw_data || img_data_size == 0) {
+        serial_write("[KEF ERROR] Picturebox resmi KEF paketinde bulunamadı: ");
+        serial_write(img_path);
+        serial_write("\n");
+        return -1;
+    }
+
+    // 2. Ham PNG verisini bellekten decode et
+    png_image_t* img = png_load_from_memory(img_raw_data, img_data_size);
+    if (!img) {
+        serial_write("[KEF ERROR] PNG bellekten decode edilemedi!\n");
+        return -1;
+    }
+
+    // 3. Çözülen pikselleri ve boyutları picturebox yapısına aktar
+    p->img_width = img->width;
+    p->img_height = img->height;
+    
+    // Pikseller için bellek ayır ve kopyala
+    size_t pixel_buf_size = img->width * img->height * sizeof(uint32_t);
+    p->pixels = (uint32_t*)kmalloc(pixel_buf_size);
+    if (p->pixels && img->pixels) {
+        memcpy(p->pixels, img->pixels, pixel_buf_size);
+    }
+
+    png_free_image(img);
 
     wm_draw_window(win);
     return 1;
@@ -222,6 +346,7 @@ static void kef_install_api(void) {
     api->label_create = kef_label_create;
     api->panel_create = kef_panel_create;
     api->button_create = kef_button_create;
+    api->picturebox_create = kef_picturebox_create;
     api->input_create = kef_input_create;
     api->input_get_text = kef_input_get_text;
     api->combobox_create = kef_combobox_create;
@@ -255,34 +380,33 @@ bool kef2_load_and_run(const char* path) {
         return false;
     }
 
-    uint32_t current_offset = sizeof(kef2_header_t); // 8 byte
+    // Eski KEF buffer'ı varsa temizle, yenisini sakla
+    if (current_kef_file_buffer) {
+        kfree(current_kef_file_buffer);
+    }
+    current_kef_file_buffer = file;
+    current_kef_file_size = file_size;
+
+    uint32_t current_offset = sizeof(kef2_header_t);
     bool text_loaded = false;
 
     for (uint32_t i = 0; i < header->section_count; i++) {
         if (current_offset + sizeof(kef2_section_header_t) > file_size) {
             serial_write("KEFV2: Section header out of bounds.\n");
-            kfree(file);
             return false;
         }
 
         kef2_section_header_t* sec = (kef2_section_header_t*)(file + current_offset);
         current_offset += sizeof(kef2_section_header_t);
 
-        // Debug için seri porttan okunan tipi yazdırabilirsin:
-        // char dbg_buf[64];
-        // sprintf(dbg_buf, "KEFV2: Found section type: %u\n", sec->type);
-        // serial_write(dbg_buf);
-
         if (sec->type == KEF2_SECTION_TEXT) {
             if (sec->offset + sec->size > file_size) {
                 serial_write("KEFV2: Text section out of bounds.\n");
-                kfree(file);
                 return false;
             }
 
             if (KEF2_LOAD_ADDRESS + sec->size >= KEF_API_ADDRESS) {
                 serial_write("KEFV2: Payload overlaps the API address.\n");
-                kfree(file);
                 return false;
             }
 
@@ -297,7 +421,6 @@ bool kef2_load_and_run(const char* path) {
 
     if (!text_loaded) {
         serial_write("KEFV2: No TEXT section found in package!\n");
-        kfree(file);
         return false;
     }
 
@@ -315,6 +438,5 @@ bool kef2_load_and_run(const char* path) {
     }
 
     serial_write("KEFV2: Application returned.\n");
-    kfree(file);
     return true;
 }
