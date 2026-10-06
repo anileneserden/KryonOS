@@ -22,7 +22,7 @@
 #include <kernel/mem/vmm.h>
 #include <arch/x86/io.h>
 #include <kernel/hexdump.h>
-#include <kernel/loader/kef.h>
+#include <kernel/loader/kef2.h>
 
 void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     serial_init();
@@ -131,15 +131,15 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         desktop_init(); 
     }
 
-    /*
+    
     serial_write("---- Starting KEF Application ----\n");
-    if (kef_load_and_run("C:/Program Files/comboBoxTest/comboBoxTest.kef")) {
+    if (kef2_load_and_run("C:/Program Files/test4/test4.kef")) {
         serial_write("KEF: Application successfully executed and terminated.\n");
     } else {
         serial_write("[ERROR] KEF application could not be started!\n");
     }
     serial_write("-------------------------------------\n");
-    */
+    
 
     app_manager_init();
     fb_swap();
