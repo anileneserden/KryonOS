@@ -4,7 +4,7 @@
 #include <kernel/drivers/video/gfx.h>
 #include <kernel/serial.h>
 #include <ui/cursor.h>
-#include <kernel/kef.h>
+#include <kernel/loader/kef.h>
 #include <stddef.h>
 
 extern int32_t mouse_x;

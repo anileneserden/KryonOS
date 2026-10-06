@@ -22,7 +22,7 @@
 #include <kernel/mem/vmm.h>
 #include <arch/x86/io.h>
 #include <kernel/hexdump.h>
-#include <kernel/kef.h>
+#include <kernel/loader/kef.h>
 
 void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     serial_init();

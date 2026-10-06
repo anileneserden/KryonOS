@@ -21,7 +21,6 @@ SRC_C = \
     kernel/audio/wav.c \
     kernel/app_manager.c \
     kernel/hexdump.c \
-    kernel/kef_loader.c \
     kernel/kmain.c \
     kernel/power.c \
     kernel/serial.c \
@@ -42,6 +41,7 @@ SRC_C = \
     kernel/fs/fat32.c \
     kernel/fs/kryfs.c \
     kernel/fs/vfs.c \
+    kernel/loader/kef.c \
     kernel/mem/heap.c \
     kernel/mem/pmm.c \
     kernel/mem/vmm.c \
