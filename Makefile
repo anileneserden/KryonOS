@@ -42,9 +42,11 @@ SRC_C = \
     kernel/fs/kryfs.c \
     kernel/fs/vfs.c \
     kernel/loader/kef.c \
+    kernel/loader/png.c \
     kernel/mem/heap.c \
     kernel/mem/pmm.c \
     kernel/mem/vmm.c \
+    libc/math.c \
     libc/stdlib.c \
     ui/cursor.c \
     ui/desktop_icons.c \

@@ -322,13 +322,12 @@ void desktop_init(void) {
             }
         }
 
-        // 2. Desktop Background Color Parse Etme (Örn: backcolor=0xFF2B4C7E veya backcolor=0x2B4C7E)
+        // 2. Desktop Background Color Parse Etme
         for (uint32_t i = 0; i < cfg_size - 9; i++) {
             if (strncmp(&cfg_content[i], "backcolor=", 10) == 0) {
                 int idx = i + 10;
                 uint32_t parsed_color = 0;
 
-                // Eğer "0x" veya "0X" ile başlıyorsa atlayalım
                 if (cfg_content[idx] == '0' && (cfg_content[idx+1] == 'x' || cfg_content[idx+1] == 'X')) {
                     idx += 2;
                 }
@@ -339,13 +338,12 @@ void desktop_init(void) {
                     if (c >= '0' && c <= '9') nibble = c - '0';
                     else if (c >= 'a' && c <= 'f') nibble = c - 'a' + 10;
                     else if (c >= 'A' && c <= 'F') nibble = c - 'A' + 10;
-                    else break; // Hex karakter bittiğinde çık
+                    else break;
 
                     parsed_color = (parsed_color << 4) | nibble;
                     idx++;
                 }
 
-                // Eğer alpha kanalı belirtilmemişse (örneğin 6 haneliyse, örn: 0x1E1E1E), otomatik FF ekleyelim
                 if ((parsed_color & 0xFF000000) == 0) {
                     parsed_color |= 0xFF000000;
                 }
@@ -359,18 +357,18 @@ void desktop_init(void) {
     }
     // ----------------------------------------------
 
-    // Initialize the grid here using the screen dimensions
+    // 1. ÖNCE imleci başlat (PNG yüklenir, boyutlar oturur ve cursor_visible = false olur)
+    cursor_init();
+    cursor_sync_position();
+
+    // 2. Grid, ikonlar ve pencere yöneticisini başlat
     grid_init(width, height, 100, 100);
     desktop_icons_init();
     wm_init();
 
+    // 3. Ekranı ilk kez çizime hazırla ve tetikle
     damage_union_rect(0, 0, width, height);
     desktop_redraw();
-
-    cursor_init();
-    cursor_sync_position();
-    cursor_show();
-    cursor_refresh_background();
 }
 
 void desktop_process_input(void) {
