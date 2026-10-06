@@ -131,7 +131,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         desktop_init(); 
     }
 
-    
+    /*
     serial_write("---- Starting KEF Application ----\n");
     if (kef_load_and_run("C:/Program Files/comboBoxTest/comboBoxTest.kef")) {
         serial_write("KEF: Application successfully executed and terminated.\n");
@@ -139,7 +139,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         serial_write("[ERROR] KEF application could not be started!\n");
     }
     serial_write("-------------------------------------\n");
-    
+    */
 
     app_manager_init();
     fb_swap();
