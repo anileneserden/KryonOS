@@ -23,6 +23,8 @@
 #include <arch/x86/io.h>
 #include <kernel/hexdump.h>
 #include <kernel/loader/kef2.h>
+#include <kernel/ksym.h>
+#include <kernel/loader/kdf.h>
 
 void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     serial_init();
@@ -64,6 +66,11 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     } else {
         serial_write("KRYFS: Driver could not be started!\n");
     }
+
+    // --- KSYM & KDF MODULE SYSTEM INITIALIZATION ---
+    ksym_init();
+    kdf_init_autoload();
+    // -----------------------------------------------
 
     // --- KRYFS / VFS FILE READ TEST ---
     uint32_t test_size = 0;
@@ -137,8 +144,6 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     uint32_t kef_debug_size = 0;
     void* kef_debug_data = vfs_read_file("C:/Program Files/test4/test4.kef", &kef_debug_size);
     if (kef_debug_data && kef_debug_size > 0) {
-        // Dosyanın tamamı büyükse ilk 512 veya 1024 baytını dump etmek log kirliliğini önler
-        // İstersen kef_debug_size kadar da verebilirsin. İlk 512 bayt başlıklar ve kaynak isimleri için genelde yeterlidir.
         uint32_t dump_len = kef_debug_size > 1024 ? 1024 : kef_debug_size;
         kernel_hexdump(kef_debug_data, dump_len);
         kfree(kef_debug_data);
