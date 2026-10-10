@@ -16,7 +16,6 @@
 #include <kernel/power.h>
 #include <kernel/drivers/rtc.h>
 
-// Eğer kernel/string.h içinde snprintf prototipi yoksa uyarıyı önlemek için:
 int snprintf(char *str, size_t size, const char *format, ...);
 
 static int timezone_offset = 3;
@@ -58,8 +57,6 @@ static void get_unique_filename(const char *base_dir, const char *base_name, con
             snprintf(out_path, max_len, "%s/%s (%d)%s", base_dir, base_name, counter, ext);
         }
 
-        // KRYFS tarafında vfs_read_file veya vfs_open varlığı doğrulayamıyorsa 
-        // file_exists sürekli false döner ve döngüden hemen çıkıp aynı isimle yazar.
         if (!file_exists(out_path)) {
             break;
         }
@@ -111,7 +108,6 @@ void desktop_redraw(void) {
 
     gfx_fill_rect(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h, desktop_bg_color);
 
-    // 3. Grid lines
     int screen_w = fb_get_width();
     int screen_h = fb_get_height();
     int cell_w = grid_get_cell_width();
@@ -130,25 +126,30 @@ void desktop_redraw(void) {
         }
     }
 
-    // 4. --- MASAÜSTÜ İKONLARINI ÇİZ (Pencerelerin altında kalması için önce çiziliyor) ---
     int cur_x = cursor_get_x();
     int cur_y = cursor_get_y();
     desktop_icons_draw(cur_x, cur_y, false);
 
-    // 4.5. Draw open windows (İkonların üzerine çizilir)
     wm_draw_all();
 
-    // 5. Bottom taskbar - draw it on the topmost layer (above windows)
+    // --- SOL ÜST KÖŞE FARE KOORDİNAT PANELİ ---
+    char coord_str[32];
+    snprintf(coord_str, sizeof(coord_str), "mouse-x: %d mouse-y: %d", cur_x, cur_y);
+    
+    // Arka plan kutusu ve çerçevesi
+    gfx_fill_rect(8, 8, 220, 24, 0xEE181818);
+    gfx_draw_rect(8, 8, 220, 24, 0xFF444444);
+    // Koordinat metni
+    gfx_draw_text(14, 12, 0xFFFFFFFF, coord_str);
+    // ------------------------------------------
+
     int taskbar_h = 36;
     int taskbar_y = screen_h - taskbar_h;
     if (screen_damage.y + screen_damage.h >= taskbar_y) {
-        // Taskbar background (dark gray / black tone)
         gfx_fill_rect(screen_damage.x, taskbar_y > screen_damage.y ? taskbar_y : screen_damage.y, 
                       screen_damage.w, taskbar_h, 0xFF181818);
-        // Taskbar top border
         gfx_fill_rect(screen_damage.x, taskbar_y, screen_damage.w, 1, 0xFF333333);
 
-        // --- START BUTTON ---
         int btn_x = 4;
         int btn_y = taskbar_y + 4;
         int btn_w = 70;
@@ -157,12 +158,11 @@ void desktop_redraw(void) {
         uint32_t btn_bg = start_menu_open ? 0xFF2A2A2A : 0xFF3A3A3A;
         gfx_fill_rect(btn_x, btn_y, btn_w, btn_h, btn_bg);
         
-        gfx_fill_rect(btn_x, btn_y, btn_w, 1, 0xFF555555); // Top
-        gfx_fill_rect(btn_x, btn_y, 1, btn_h, 0xFF555555); // Left
-        gfx_fill_rect(btn_x + btn_w - 1, btn_y, 1, btn_h, 0xFF111111); // Right
-        gfx_fill_rect(btn_x, btn_y + btn_h - 1, btn_w, 1, 0xFF111111); // Bottom
+        gfx_fill_rect(btn_x, btn_y, btn_w, 1, 0xFF555555);
+        gfx_fill_rect(btn_x, btn_y, 1, btn_h, 0xFF555555);
+        gfx_fill_rect(btn_x + btn_w - 1, btn_y, 1, btn_h, 0xFF111111);
+        gfx_fill_rect(btn_x, btn_y + btn_h - 1, btn_w, 1, 0xFF111111);
 
-        // --- SAĞ TARAFA RTC SAAT ALANI VE OFFSET UYGULAMA ---
         rtc_time_t t;
         rtc_get_time(&t);
 
@@ -172,18 +172,15 @@ void desktop_redraw(void) {
 
         int clock_w = 70;
         int clock_h = 24;
-        int clock_x = screen_w - clock_w - 8; // Sağ kenardan 8px içeride
-        int clock_y = taskbar_y + 6;          // Dikeyde ortalanmış
+        int clock_x = screen_w - clock_w - 8;
+        int clock_y = taskbar_y + 6;
 
-        // Saat kutusu arkaplanı
         gfx_fill_rect(clock_x, clock_y, clock_w, clock_h, 0xFF2A2A2A);
-        // 3D çerçeve efekti
-        gfx_fill_rect(clock_x, clock_y, clock_w, 1, 0xFF111111); // Üst
-        gfx_fill_rect(clock_x, clock_y, 1, clock_h, 0xFF111111); // Sol
-        gfx_fill_rect(clock_x + clock_w - 1, clock_y, 1, clock_h, 0xFF555555); // Sağ
-        gfx_fill_rect(clock_x, clock_y + clock_h - 1, clock_w, 1, 0xFF555555); // Alt
+        gfx_fill_rect(clock_x, clock_y, clock_w, 1, 0xFF111111);
+        gfx_fill_rect(clock_x, clock_y, 1, clock_h, 0xFF111111);
+        gfx_fill_rect(clock_x + clock_w - 1, clock_y, 1, clock_h, 0xFF555555);
+        gfx_fill_rect(clock_x, clock_y + clock_h - 1, clock_w, 1, 0xFF555555);
 
-        // Saat metni (HH:MM formatı - Offset eklenmiş saat ile)
         char time_str[6];
         time_str[0] = '0' + (adjusted_hour / 10);
         time_str[1] = '0' + (adjusted_hour % 10);
@@ -195,94 +192,72 @@ void desktop_redraw(void) {
         gfx_draw_text(clock_x + 10, clock_y + 6, 0xFFFFFFFF, time_str);
     }
 
-    // 6. --- START MENU (Drawn if open) ---
     if (start_menu_open) {
         int menu_x = 4;
         int menu_w = MENU_W;
         int menu_h = MENU_H;
         int menu_y = taskbar_y - menu_h;
 
-        // Menu main background
         gfx_fill_rect(menu_x, menu_y, menu_w, menu_h, 0xFF222222);
-
-        // Classic Windows-style side strip (Gray decorative panel)
         gfx_fill_rect(menu_x, menu_y, 24, menu_h, 0xFF333333);
 
-        // --- SHUTDOWN BUTTON (Aligned to bottom-right with text added) ---
-        int shut_w = 100; // Button width
-        int shut_h = 32;  // Button height
-        int shut_x = menu_x + menu_w - shut_w - 12; // 12px inside from the right of the menu
-        int shut_y = menu_y + menu_h - shut_h - 12; // 12px above from the bottom of the menu
+        int shut_w = 100;
+        int shut_h = 32;
+        int shut_x = menu_x + menu_w - shut_w - 12;
+        int shut_y = menu_y + menu_h - shut_h - 12;
 
-        // Button background (Reddish / Dark tone)
         gfx_fill_rect(shut_x, shut_y, shut_w, shut_h, 0xFF4A2222);
-        // Button 3D border
-        gfx_fill_rect(shut_x, shut_y, shut_w, 1, 0xFF663333); // Top
-        gfx_fill_rect(shut_x, shut_y, 1, shut_h, 0xFF663333); // Left
-        gfx_fill_rect(shut_x + shut_w - 1, shut_y, 1, shut_h, 0xFF221111); // Right
-        gfx_fill_rect(shut_x, shut_y + shut_h - 1, shut_w, 1, 0xFF221111); // Bottom
+        gfx_fill_rect(shut_x, shut_y, shut_w, 1, 0xFF663333);
+        gfx_fill_rect(shut_x, shut_y, 1, shut_h, 0xFF663333);
+        gfx_fill_rect(shut_x + shut_w - 1, shut_y, 1, shut_h, 0xFF221111);
+        gfx_fill_rect(shut_x, shut_y + shut_h - 1, shut_w, 1, 0xFF221111);
 
-        // Button Text ("Shut Down" - White color)
         gfx_draw_text(shut_x + 22, shut_y + 8, 0xFFFFFFFF, "Shut Down");
 
-        // Menu outer border
-        gfx_fill_rect(menu_x, menu_y, menu_w, 1, 0xFF666666); // Top
-        gfx_fill_rect(menu_x, menu_y, 1, menu_h, 0xFF666666); // Left
-        gfx_fill_rect(menu_x + menu_w - 1, menu_y, 1, menu_h, 0xFF111111); // Right
-        gfx_fill_rect(menu_x, menu_y + menu_h - 1, menu_w, 1, 0xFF111111); // Bottom
+        gfx_fill_rect(menu_x, menu_y, menu_w, 1, 0xFF666666);
+        gfx_fill_rect(menu_x, menu_y, 1, menu_h, 0xFF666666);
+        gfx_fill_rect(menu_x + menu_w - 1, menu_y, 1, menu_h, 0xFF111111);
+        gfx_fill_rect(menu_x, menu_y + menu_h - 1, menu_w, 1, 0xFF111111);
     }
 
-    // 6.5. --- RIGHT-CLICK MENU (Drawn if open and Hover Check is Performed) ---
     if (right_menu_open) {
         int r_w = RIGHT_MENU_W;
         int r_h = RIGHT_MENU_H;
         int r_x = right_menu_x;
         int r_y = right_menu_y;
 
-        // Prevent overflowing screen boundaries
         if (r_x + r_w > screen_w) r_x = screen_w - r_w;
         if (r_y + r_h > screen_h) r_y = screen_h - r_h;
 
-        // Menu background
         gfx_fill_rect(r_x, r_y, r_w, r_h, 0xFF222222);
 
-        int cur_x = cursor_get_x();
-        int cur_y = cursor_get_y();
-
-        // Option 1: Refresh
         bool hover_yenile = (cur_x >= r_x + 4 && cur_x <= r_x + r_w - 4 &&
                              cur_y >= r_y + 6 && cur_y <= r_y + 30);
-        uint32_t bg_yenile = hover_yenile ? 0xFF3A3A3A : 0xFF2A2A2A; // Lighter color if hovered
+        uint32_t bg_yenile = hover_yenile ? 0xFF3A3A3A : 0xFF2A2A2A;
         
         gfx_fill_rect(r_x + 4, r_y + 6, r_w - 8, 24, bg_yenile);
         gfx_draw_text(r_x + 12, r_y + 10, 0xFFFFFFFF, "Refresh");
 
-        // Option 2: Terminal
         bool hover_terminal = (cur_x >= r_x + 4 && cur_x <= r_x + r_w - 4 &&
                                cur_y >= r_y + 34 && cur_y <= r_y + 58);
-        uint32_t bg_terminal = hover_terminal ? 0xFF3A3A3A : 0xFF2A2A2A; // Lighter color if hovered
+        uint32_t bg_terminal = hover_terminal ? 0xFF3A3A3A : 0xFF2A2A2A;
 
         gfx_fill_rect(r_x + 4, r_y + 34, r_w - 8, 24, bg_terminal);
         gfx_draw_text(r_x + 12, r_y + 38, 0xFFFFFFFF, "Terminal");
 
-        // Option 3: New File
         bool hover_newfile = (cur_x >= r_x + 4 && cur_x <= r_x + r_w - 4 &&
                               cur_y >= r_y + 62 && cur_y <= r_y + 86);
         uint32_t bg_newfile = hover_newfile ? 0xFF3A3A3A : 0xFF2A2A2A;
         gfx_fill_rect(r_x + 4, r_y + 62, r_w - 8, 24, bg_newfile);
         gfx_draw_text(r_x + 12, r_y + 66, 0xFFFFFFFF, "New File");
 
-        // Menu Outer Border (Classic 3D look)
-        gfx_fill_rect(r_x, r_y, r_w, 1, 0xFF666666); // Top
-        gfx_fill_rect(r_x, r_y, 1, r_h, 0xFF666666); // Left
-        gfx_fill_rect(r_x + r_w - 1, r_y, 1, r_h, 0xFF111111); // Right
-        gfx_fill_rect(r_x, r_y + r_h - 1, r_w, 1, 0xFF111111); // Bottom
+        gfx_fill_rect(r_x, r_y, r_w, 1, 0xFF666666);
+        gfx_fill_rect(r_x, r_y, 1, r_h, 0xFF666666);
+        gfx_fill_rect(r_x + r_w - 1, r_y, 1, r_h, 0xFF111111);
+        gfx_fill_rect(r_x, r_y + r_h - 1, r_w, 1, 0xFF111111);
     }
 
-    // 7. Draw the cursor at its new back-buffer position (blit=false because we perform one combined blit)
     cursor_show_internal(false);
-
-    // 8. Blit the entire damaged region to the screen
     fb_blit_region(screen_damage.x, screen_damage.y, screen_damage.w, screen_damage.h);
     
     damage_clear();
@@ -294,12 +269,9 @@ void desktop_init(void) {
 
     if (width == 0 || height == 0) return;
 
-    // --- SETTINGS.CFG DOSYASINDAN AYARLARI OKUMA ---
     uint32_t cfg_size = 0;
     char* cfg_content = (char*)vfs_read_file("C:/Kryon/System32/settings.cfg", &cfg_size);
     if (cfg_content && cfg_size > 0) {
-        
-        // 1. Timezone Offset Parse Etme
         for (uint32_t i = 0; i < cfg_size - 6; i++) {
             if (strncmp(&cfg_content[i], "offset=", 7) == 0) {
                 int val = 0;
@@ -322,13 +294,11 @@ void desktop_init(void) {
             }
         }
 
-        // 2. Desktop Background Color Parse Etme (Örn: backcolor=0xFF2B4C7E veya backcolor=0x2B4C7E)
         for (uint32_t i = 0; i < cfg_size - 9; i++) {
             if (strncmp(&cfg_content[i], "backcolor=", 10) == 0) {
                 int idx = i + 10;
                 uint32_t parsed_color = 0;
 
-                // Eğer "0x" veya "0X" ile başlıyorsa atlayalım
                 if (cfg_content[idx] == '0' && (cfg_content[idx+1] == 'x' || cfg_content[idx+1] == 'X')) {
                     idx += 2;
                 }
@@ -339,13 +309,12 @@ void desktop_init(void) {
                     if (c >= '0' && c <= '9') nibble = c - '0';
                     else if (c >= 'a' && c <= 'f') nibble = c - 'a' + 10;
                     else if (c >= 'A' && c <= 'F') nibble = c - 'A' + 10;
-                    else break; // Hex karakter bittiğinde çık
+                    else break;
 
                     parsed_color = (parsed_color << 4) | nibble;
                     idx++;
                 }
 
-                // Eğer alpha kanalı belirtilmemişse (örneğin 6 haneliyse, örn: 0x1E1E1E), otomatik FF ekleyelim
                 if ((parsed_color & 0xFF000000) == 0) {
                     parsed_color |= 0xFF000000;
                 }
@@ -357,9 +326,7 @@ void desktop_init(void) {
 
         kfree(cfg_content);
     }
-    // ----------------------------------------------
 
-    // Initialize the grid here using the screen dimensions
     grid_init(width, height, 100, 100);
     desktop_icons_init();
     wm_init();
@@ -370,29 +337,25 @@ void desktop_init(void) {
     cursor_init();
     cursor_sync_position();
     cursor_show();
-    cursor_refresh_background();
 }
 
 void desktop_process_input(void) {
-    // --- KLAVYE KISAYOL KONTROLÜ (SUPER TUŞU -> BAŞLAT MENÜSÜ) ---
     uint8_t scancode = keyboard_get_last_scancode();
-    if (scancode == 0x5B) { // 0x5B: Super / Windows tuşu
+    if (scancode == 0x5B) {
         start_menu_open = !start_menu_open;
-        right_menu_open = false; // Çakışmayı önlemek için sağ tık menüsünü kapat
+        right_menu_open = false;
 
         int screen_w = fb_get_width();
         int screen_h = fb_get_height();
         damage_union_rect(0, 0, screen_w, screen_h);
         desktop_redraw();
 
-        keyboard_clear_last_scancode(); // Tuşun tekrar tetiklenmesini önle
+        keyboard_clear_last_scancode();
     }
 
-    // 1. Get the previous cursor position (if the cursor module stores it)
     int old_x = cursor_get_old_x();
     int old_y = cursor_get_old_y();
 
-    // 2. Process input and window events (mouse/keyboard positions are updated)
     wm_process_input();
 
     int new_x = cursor_get_x();
@@ -404,7 +367,6 @@ void desktop_process_input(void) {
     int screen_h = fb_get_height();
     int taskbar_y = screen_h - 36;
 
-    // 3. Left Click Check (Detection of clicks on start button, menu, right-click menu and shutdown button)
     bool current_mouse_left = (mouse_buttons & 1);
     if (current_mouse_left && !prev_mouse_left) {
         int btn_x = 4;
@@ -412,18 +374,15 @@ void desktop_process_input(void) {
         int btn_w = 70;
         int btn_h = 28;
 
-        // --- SAĞ TIK MENÜSÜ AÇIKKEN SOL TIKLANDIYSAYSA ---
         if (right_menu_open) {
             int r_w = RIGHT_MENU_W;
             int r_h = RIGHT_MENU_H;
             int r_x = right_menu_x;
             int r_y = right_menu_y;
 
-            // Ekran sınırlarına taşmayı engelle (Redraw mantığıyla birebir aynı)
             if (r_x + r_w > screen_w) r_x = screen_w - r_w;
             if (r_y + r_h > screen_h) r_y = screen_h - r_h;
 
-            // "New File" butonuna basildiginda:
             if (new_x >= r_x + 4 && new_x <= r_x + r_w - 4 &&
                 new_y >= r_y + 62 && new_y <= r_y + 86) {
 
@@ -432,47 +391,38 @@ void desktop_process_input(void) {
 
                 get_unique_filename(desktop_dir, "Metin Belgesi", ".txt", target_path, sizeof(target_path));
                 
-                // 1. Dosyayı diske/VFS'e yaz
                 if (vfs_create_file(target_path) == 0) {
-                    // 2. Bütün ekranı yenilenmeye zorla ki yeni dosya ikonu anında belirsin
                     damage_union_rect(0, 0, screen_w, screen_h);
                 }
             }
 
-            // Seçim yapılsın veya dışarı tıklansın, sağ tık menüsünü kapat ve ekranı yenile
             right_menu_open = false;
             damage_union_rect(0, 0, screen_w, screen_h);
             desktop_redraw();
         }
-        // --- BAŞLAT BUTONUNA TIKLANDI MI? ---
         else if (new_x >= btn_x && new_x <= btn_x + btn_w &&
                  new_y >= btn_y && new_y <= btn_y + btn_h) {
             start_menu_open = !start_menu_open;
             
-            // Mark the entire screen as damaged and trigger a redraw since the menu will open/close
             damage_union_rect(0, 0, screen_w, screen_h);
             desktop_redraw();
         }
-        // --- BAŞLAT MENÜSÜ AÇIKKEN TIKLAMA KONTROLÜ ---
         else if (start_menu_open) {
             int menu_x = 4;
             int menu_w = MENU_W; 
             int menu_h = MENU_H; 
             int menu_y = taskbar_y - menu_h;
 
-            // Shutdown button coordinates (Must be identical to the drawing)
             int shut_w = 100;
             int shut_h = 32;
             int shut_x = menu_x + menu_w - shut_w - 12;
             int shut_y = menu_y + menu_h - shut_h - 12;
 
-            // Did the user click the Shutdown button?
             if (new_x >= shut_x && new_x <= shut_x + shut_w &&
                 new_y >= shut_y && new_y <= shut_y + shut_h) {
-                system_shutdown(); // Shut down the system
+                system_shutdown();
             }
             else {
-                // Close the menu if clicked outside
                 bool inside_menu = (new_x >= menu_x && new_x <= menu_x + menu_w &&
                                     new_y >= menu_y && new_y <= menu_y + menu_h);
 
@@ -486,16 +436,13 @@ void desktop_process_input(void) {
     }
     prev_mouse_left = current_mouse_left;
 
-    // 4. --- RIGHT-CLICK CHECK ---
-    bool current_mouse_right = (mouse_buttons & 0x02); // Bit 1 = Right Click
+    bool current_mouse_right = (mouse_buttons & 0x02);
     if (current_mouse_right && !prev_mouse_right) {
-        // Open the menu if the desktop is right-clicked outside the taskbar area
         if (new_y < taskbar_y) {
             right_menu_open = true;
             right_menu_x = new_x;
             right_menu_y = new_y;
             
-            // Close the start menu to avoid conflicts
             start_menu_open = false;
 
             damage_union_rect(0, 0, screen_w, screen_h);
@@ -504,17 +451,19 @@ void desktop_process_input(void) {
     }
     prev_mouse_right = current_mouse_right;
 
-    // 5. If the cursor moved, mark its old and new positions as damaged
+    // Fare hareket ettiğinde eski ve yeni konumunu hasarlı bölge olarak işaretle ve yeniden çiz
     if (old_x != new_x || old_y != new_y) {
-        damage_union_rect(old_x, old_y, cursor_w, cursor_h); // Clear the old position
-        damage_union_rect(new_x, new_y, cursor_w, cursor_h); // Draw the new position
+        damage_union_rect(old_x, old_y, cursor_w, cursor_h); // Eski konumu temizle
+        damage_union_rect(new_x, new_y, cursor_w, cursor_h); // Yeni konuma imleci çiz
         
-        // Ensure the menu also refreshes when the mouse moves while the right-click menu is open (for hover)
+        // --- KRİTİK: Sol üstteki koordinat alanını da tazeleme bölgesine ekle ---
+        damage_union_rect(8, 8, 220, 24);
+        
+        // Sağ tık menüsü açıkken fare hareket ederse (hover efekti için) menüyü de tazele
         if (right_menu_open) {
             damage_union_rect(right_menu_x, right_menu_y, RIGHT_MENU_W, RIGHT_MENU_H);
         }
 
-        // Trigger a redraw
         desktop_redraw();
     }
 }

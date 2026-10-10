@@ -46,7 +46,6 @@ void mouse_handler(void) {
         switch (mouse_cycle) {
             case 0:
                 mouse_bytes[0] = byte;
-                if (!(byte & 0x08)) break; 
                 mouse_cycle++;
                 break;
             case 1:

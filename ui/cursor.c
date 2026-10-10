@@ -11,21 +11,13 @@ static bool cursor_visible = true;
 extern void fb_blit_region(uint32_t x, uint32_t y, uint32_t width, uint32_t height);
 
 void cursor_init(void) {
-    // Use the mouse driver's current position directly
+    // Fare sürücüsünün o anki güncel koordinatlarını al
     old_mouse_x = mouse_x;
     old_mouse_y = mouse_y;
-    cursor_visible = true;
+    cursor_visible = false; // Başlangıçta false yapıyoruz ki üst üste binmesin
     
-    // Safely save the background beneath the cursor at startup
-    for (int y = 0; y < CURSOR_HEIGHT; y++) {
-        for (int x = 0; x < CURSOR_WIDTH; x++) {
-            int px = old_mouse_x + x;
-            int py = old_mouse_y + y;
-            if (px >= 0 && (uint32_t)px < fb_get_width() && py >= 0 && (uint32_t)py < fb_get_height()) {
-                cursor_bg_buffer[y * CURSOR_WIDTH + x] = fb_getpixel(px, py);
-            }
-        }
-    }
+    // Doğru arka planı yakalamak için buffer'ı tazele
+    cursor_refresh_background();
 }
 
 void cursor_get_position(int32_t* x, int32_t* y) {
@@ -102,28 +94,35 @@ extern void damage_union_rect(int x, int y, int w, int h);
 extern void desktop_redraw(void);
 
 void cursor_update_and_redraw(void) {
+    int32_t mouse_x, mouse_y;
+    cursor_get_position(&mouse_x, &mouse_y);
+    
+    // Fare butonlarını doğrudan global değişkenden okuyoruz (cursor_get_buttons yerine)
+    extern uint8_t mouse_buttons; 
+    uint8_t current_buttons = mouse_buttons;
+
     bool position_changed = (mouse_x != old_mouse_x || mouse_y != old_mouse_y);
-    bool buttons_changed = (mouse_buttons != old_mouse_buttons);
+    bool buttons_changed = (current_buttons != old_mouse_buttons);
 
-    if (!position_changed && !buttons_changed) {
-        return;
-    }
-
-    old_mouse_buttons = mouse_buttons;
+    old_mouse_buttons = current_buttons;
 
     if (position_changed) {
-        // 1. Mark the cursor's old area as damaged so its background is restored
+        // 1. Eski konumdaki imlecin arkasını temizlemek için damage ekle
         damage_union_rect(old_mouse_x, old_mouse_y, CURSOR_WIDTH, CURSOR_HEIGHT);
         
-        // 2. Mark the cursor's new area as damaged so it is drawn there
+        // 2. Yeni konumdaki alanı damage ekle ki imleç orada yeniden çizilsin
         damage_union_rect(mouse_x, mouse_y, CURSOR_WIDTH, CURSOR_HEIGHT);
+
+        old_mouse_x = mouse_x;
+        old_mouse_y = mouse_y;
     } else if (buttons_changed) {
-        // Refresh the cursor area only when a click occurs (for example, on a window title bar)
         damage_union_rect(old_mouse_x, old_mouse_y, CURSOR_WIDTH, CURSOR_HEIGHT);
     }
 
-    // 3. Manage all drawing and blit operations through one central function (desktop_redraw)
-    desktop_redraw();
+    // Eğer konum veya buton değiştiyse masaüstü yeniden çizimini tetikle
+    if (position_changed || buttons_changed) {
+        desktop_redraw();
+    }
 }
 
 // Refresh the background beneath the cursor from the current screen (prevents ghosting)

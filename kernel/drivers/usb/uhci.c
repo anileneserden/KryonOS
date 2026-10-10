@@ -471,6 +471,33 @@ static int uhci_set_configuration(uint8_t address, uint8_t configuration_value) 
     return 1;
 }
 
+static int uhci_set_boot_protocol(uint8_t address) {
+    setup_pkt.bmRequestType = 0x21; // Host-to-device, Class, Recipient: Interface
+    setup_pkt.bRequest = 0x0B;    // SET_PROTOCOL
+    setup_pkt.wValue = 0x0000;    // 0 = Boot Protocol
+    setup_pkt.wIndex = 0x0000;    // Interface index (genelde 0)
+    setup_pkt.wLength = 0x0000;
+
+    setup_td.link = virt_to_phys(&status_td) | UHCI_LINK_DEPTH_FIRST;
+    setup_td.status = TD_STAT_ACTIVED | uhci_td_speed_flags | (3 << 27);
+    setup_td.token = (7 << 21) | ((uint32_t)address << 8) | USB_PID_SETUP;
+    setup_td.buffer = virt_to_phys(&setup_pkt);
+
+    status_td.link = 1;
+    status_td.status = TD_STAT_ACTIVED | TD_STAT_IOC | uhci_td_speed_flags | (3 << 27);
+    status_td.token = (0x7FF << 21) | (1 << 19) | ((uint32_t)address << 8) | USB_PID_IN;
+    status_td.buffer = 0;
+    
+    uhci_dispatch_control_transfer();
+
+    int timeout = 800000;
+    while ((status_td.status & TD_STAT_ACTIVED) && timeout > 0) {
+        timeout--;
+        __asm__ volatile("nop");
+    }
+    return !(status_td.status & TD_STAT_ACTIVED);
+}
+
 static void uhci_start_mouse_interrupt(uint8_t address) {
     if (usb_interrupt_max_packet == 0 || usb_interrupt_max_packet > 8) {
         serial_write("UHCI: Unsupported mouse interrupt packet size.\n");
@@ -578,19 +605,27 @@ static void uhci_check_ports(void) {
                 }
                 
                 if (uhci_get_device_descriptor()) {
-                    uint8_t device_address = (uint8_t)(i + 1);
+                    uint8_t device_address = 1; // Sabit 1 numaralı adres verelim
                     uint8_t max_packet_size = device_descriptor[7];
+                    
+                    // 1. Adım 0 üzerinden tam descriptor al
                     uhci_get_full_device_descriptor(0, max_packet_size);
-                    uhci_set_address((uint8_t)i, device_address);
-                    for (volatile int delay = 0; delay < 100000; delay++) {
+                    
+                    // 2. Cihaza adres (1) ata (Fonksiyona i yerine doğrudan hedef adresi verelim)
+                    uhci_set_address(0, device_address);
+                    
+                    for (volatile int delay = 0; delay < 200000; delay++) {
                         __asm__ volatile("nop");
                     }
+                    
+                    // 3. Artık yeni adres (1) üzerinden iletişim kurmaya devam et!
                     uhci_get_full_device_descriptor(device_address, max_packet_size);
+                    
                     if (uhci_get_config_descriptor(device_address, max_packet_size)) {
                         uint16_t total_length = (uint16_t)config_descriptor[2]
                             | ((uint16_t)config_descriptor[3] << 8);
-                        if (uhci_get_full_config_descriptor(device_address, max_packet_size,
-                                                            total_length)) {
+                            
+                        if (uhci_get_full_config_descriptor(device_address, max_packet_size, total_length)) {
                             if (uhci_set_configuration(device_address, config_descriptor[5])) {
                                 if (usb_interrupt_endpoint != 0) {
                                     uhci_start_mouse_interrupt(device_address);

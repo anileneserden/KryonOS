@@ -116,30 +116,20 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     uint32_t height = fb_get_height();
 
     if (width > 0 && height > 0) {
-        fb_clear(0xFF0000FF); // Navy blue desktop background
-        desktop_init(); 
+        desktop_init(); // fb_clear yerine doğrudan masaüstünü başlatıyoruz (ayarlardan rengi okur)
     }
-
-    
-    serial_write("---- Starting KEF Application ----\n");
-    if (kef_load_and_run("C:/Kryon/System32/altf4.kef")) {
-        serial_write("KEF: Application successfully executed and terminated.\n");
-    } else {
-        serial_write("[ERROR] KEF application could not be started!\n");
-    }
-    serial_write("-------------------------------------\n");
-    
 
     app_manager_init();
-    fb_swap();
 
-    // 6. AC97 audio driver initialization
+    // AC97 Ses Sürücüsü Başlatma
     if (ac97_init() == 0) {
         ac97_set_master_volume(100);
         serial_write("AC97: Driver initialized and ready.\n");
     }
 
-    // 7. Main event loop (GUI active loop)
+    fb_swap(); // İlk ekran hazırlığı bitti, ekrana yansıt
+
+    // 6. Main event loop (GUI active loop)
     while (1) {
         uint8_t input_updated = uhci_poll();
         if (inb(0x64) & 1) {
