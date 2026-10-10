@@ -1,5 +1,7 @@
 #include <math.h>
 
+#define PI 3.14159265358979323846
+
 // Basit bir pow implementasyonu (integervari üsler veya temel yaklaşım için)
 double pow(double base, double exp) {
     if (exp == 0.0) return 1.0;
@@ -62,10 +64,49 @@ double ldexp(double x, int exp) {
     }
 }
 
+// Açı normalizasyonu yardımcı fonksiyonu (-PI ile PI aralığına getirir)
+static double normalize_angle(double x) {
+    while (x > PI) x -= 2.0 * PI;
+    while (x < -PI) x += 2.0 * PI;
+    return x;
+}
+
+// Taylor Serisi ile Sinüs Hesaplama
+double sin(double x) {
+    x = normalize_angle(x);
+    double val = x;
+    double numer = x * x * x;
+    double denom = 6.0; // 3!
+    val -= numer / denom;
+    
+    numer *= x * x;
+    denom *= 20.0; // 5! (6 * 4 * 5)
+    val += numer / denom;
+    
+    numer *= x * x;
+    denom *= 42.0; // 7! (120 * 6 * 7)
+    val -= numer / denom;
+    
+    return val;
+}
+
+// Taylor Serisi / Özdeşlik ile Kosinüs Hesaplama (cos(x) = sin(x + PI/2))
+double cos(double x) {
+    return sin(x + (PI / 2.0));
+}
+
 float powf(float base, float exp) {
     return (float)pow((double)base, (double)exp);
 }
 
 float sqrtf(float x) {
     return (float)sqrt((double)x);
+}
+
+float sinf(float x) {
+    return (float)sin((double)x);
+}
+
+float cosf(float x) {
+    return (float)cos((double)x);
 }

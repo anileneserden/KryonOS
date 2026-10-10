@@ -265,6 +265,32 @@ void wm_draw_window(window_t* win) {
         }
     }
 
+    // [YENİ / DÜZELTİLMİŞ] 7.5. Draw Canvas (3D Oyun / Piksel Tamponu)
+    if (win->has_canvas && win->canvas_buffer) {
+        int rel_x = win->canvas_x;
+        int rel_y = 24 + win->canvas_y; // 24 piksel başlık çubuğu payı
+        int cw = win->canvas_w;
+        int ch = win->canvas_h;
+
+        // Sol/Üst kırpma (clipping)
+        if (rel_x < 0) { cw += rel_x; rel_x = 0; }
+        if (rel_y < 24) { ch += (rel_y - 24); rel_y = 24; }
+
+        // Sağ/Alt kırpma
+        if (rel_x < win->width && rel_y < win->height) {
+            if (rel_x + cw > win->width) cw = win->width - rel_x;
+            if (rel_y + ch > win->height) ch = win->height - rel_y;
+
+            if (cw > 0 && ch > 0) {
+                int abs_x = win->x + rel_x;
+                int abs_y = win->y + rel_y;
+
+                // Ham piksel buffer'ını ekrana / grafik alt sistemine aktar
+                gfx_draw_buffer(abs_x, abs_y, cw, ch, win->canvas_buffer, win->canvas_w);
+            }
+        }
+    }
+
     // 8. Draw pictureboxes (Resim Kutuları)
     for (int i = 0; i < win->picturebox_count; i++) {
         picturebox_t* p = &win->pictureboxes[i];

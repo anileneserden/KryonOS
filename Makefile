@@ -107,4 +107,5 @@ run: iso $(DISK_KRYFS) $(DISK_FAT32)
 	   -machine pcspk-audiodev=audio0 \
 	   -device piix3-usb-uhci,id=uhci \
 	   -device usb-mouse,bus=uhci.0 \
-	   -serial stdio -vga std -display sdl,gl=on
+	   -serial stdio -vga std -display sdl,gl=on \
+       -no-shutdown -no-reboot
