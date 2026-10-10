@@ -22,7 +22,7 @@
 #include <kernel/mem/vmm.h>
 #include <arch/x86/io.h>
 #include <kernel/hexdump.h>
-#include <kernel/kef.h>
+#include <kernel/loader/kef2.h>
 
 void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     serial_init();
@@ -80,6 +80,17 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     serial_write("--------------------------------\n");
     // ------------------------------------
 
+    // --- FAT32 / VFS FILE WRITE TEST ---
+    serial_write("---- FAT32 Write Test (D:/hello.txt) ----\n");
+    const char* write_content = "Hello from KryonOS FAT32 Write Engine!\n";
+    if (vfs_write_file("D:/hello.txt", write_content, 39)) {
+        serial_write("VFS: hello.txt successfully written to FAT32!\n");
+    } else {
+        serial_write("[ERROR] hello.txt could not be written to FAT32!\n");
+    }
+    serial_write("-----------------------------------------\n");
+    // -----------------------------------
+
     // --- VFS DIRECTORY LISTING TEST ---
     serial_write("---- VFS Directory Listing Test (C:/) ----\n");
     vfs_file_info_t root_files[16];
@@ -118,6 +129,29 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     if (width > 0 && height > 0) {
         desktop_init(); // fb_clear yerine doğrudan masaüstünü başlatıyoruz (ayarlardan rengi okur)
     }
+
+    serial_write("---- Starting KEF Application ----\n");
+    
+    // --- KEF FILE HEXDUMP DEBUG ---
+    uint32_t kef_debug_size = 0;
+    void* kef_debug_data = vfs_read_file("C:/Program Files/test4/test4.kef", &kef_debug_size);
+    if (kef_debug_data && kef_debug_size > 0) {
+        uint32_t dump_len = kef_debug_size > 1024 ? 1024 : kef_debug_size;
+        kernel_hexdump(kef_debug_data, dump_len);
+        kfree(kef_debug_data);
+    } else {
+        serial_write("[DEBUG ERROR] test4.kef could not be read for hexdump!\n");
+    }
+    // -----------------------------
+
+    /*
+    if (kef2_load_and_run("C:/Program Files/test4/test4.kef")) {
+        serial_write("KEF: Application successfully executed and terminated.\n");
+    } else {
+        serial_write("[ERROR] kef application could not be started!\n");
+    }
+    serial_write("-------------------------------------\n");
+    */
 
     app_manager_init();
 

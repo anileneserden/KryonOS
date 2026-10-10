@@ -136,10 +136,8 @@ void desktop_redraw(void) {
     char coord_str[32];
     snprintf(coord_str, sizeof(coord_str), "mouse-x: %d mouse-y: %d", cur_x, cur_y);
     
-    // Arka plan kutusu ve çerçevesi
     gfx_fill_rect(8, 8, 220, 24, 0xEE181818);
     gfx_draw_rect(8, 8, 220, 24, 0xFF444444);
-    // Koordinat metni
     gfx_draw_text(14, 12, 0xFFFFFFFF, coord_str);
     // ------------------------------------------
 
@@ -294,6 +292,7 @@ void desktop_init(void) {
             }
         }
 
+        // 2. Desktop Background Color Parse Etme
         for (uint32_t i = 0; i < cfg_size - 9; i++) {
             if (strncmp(&cfg_content[i], "backcolor=", 10) == 0) {
                 int idx = i + 10;
@@ -327,16 +326,18 @@ void desktop_init(void) {
         kfree(cfg_content);
     }
 
+    // 1. ÖNCE imleci başlat (PNG yüklenir, boyutlar oturur ve cursor_visible = false olur)
+    cursor_init();
+    cursor_sync_position();
+
+    // 2. Grid, ikonlar ve pencere yöneticisini başlat
     grid_init(width, height, 100, 100);
     desktop_icons_init();
     wm_init();
 
+    // 3. Ekranı ilk kez çizime hazırla ve tetikle
     damage_union_rect(0, 0, width, height);
     desktop_redraw();
-
-    cursor_init();
-    cursor_sync_position();
-    cursor_show();
 }
 
 void desktop_process_input(void) {
@@ -451,15 +452,12 @@ void desktop_process_input(void) {
     }
     prev_mouse_right = current_mouse_right;
 
-    // Fare hareket ettiğinde eski ve yeni konumunu hasarlı bölge olarak işaretle ve yeniden çiz
     if (old_x != new_x || old_y != new_y) {
-        damage_union_rect(old_x, old_y, cursor_w, cursor_h); // Eski konumu temizle
-        damage_union_rect(new_x, new_y, cursor_w, cursor_h); // Yeni konuma imleci çiz
+        damage_union_rect(old_x, old_y, cursor_w, cursor_h);
+        damage_union_rect(new_x, new_y, cursor_w, cursor_h);
         
-        // --- KRİTİK: Sol üstteki koordinat alanını da tazeleme bölgesine ekle ---
         damage_union_rect(8, 8, 220, 24);
         
-        // Sağ tık menüsü açıkken fare hareket ederse (hover efekti için) menüyü de tazele
         if (right_menu_open) {
             damage_union_rect(right_menu_x, right_menu_y, RIGHT_MENU_W, RIGHT_MENU_H);
         }

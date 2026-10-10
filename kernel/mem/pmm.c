@@ -1,5 +1,5 @@
 #include <kernel/mem/pmm.h>
-#include <kernel/kef.h>
+#include <kernel/loader/kef.h>
 #include <kernel/serial.h>
 
 // Start the bitmap well away from the kernel and initial regions (4MB)

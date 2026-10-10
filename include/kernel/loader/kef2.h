@@ -1,35 +1,39 @@
-#ifndef KERNEL_KEF_H
-#define KERNEL_KEF_H
+#ifndef KERNEL_KEF2_H
+#define KERNEL_KEF2_H
 
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <kernel/fs/vfs.h>
+#include <kernel/fs/vfs.h> // vfs_file_info_t tanımı için eklendi
 
-#define KEF_MAGIC 0x0046454B
-#define KEF_VERSION 1
-#define KEF_ARCH_I386 1
-#define KEF_MAX_SIZE 16384
-#define KEF_LOAD_ADDRESS 0x400000
-#define KEF_API_ADDRESS 0x501000
+#define KEF2_MAGIC 0x3246454B
+#define KEF2_VERSION 2
+#define KEF2_ARCH_I386 1
+#define KEF2_LOAD_ADDRESS ((uint32_t)0x400000)
+#define KEF_API_ADDRESS   ((uint32_t)0x501000)
 
-#define ANCHOR_NONE     0
-#define ANCHOR_LEFT     (1 << 0)
-#define ANCHOR_RIGHT    (1 << 1)
-#define ANCHOR_TOP      (1 << 2)
-#define ANCHOR_BOTTOM   (1 << 3)
+#define KEF2_SECTION_TEXT      1
+#define KEF2_SECTION_RESOURCES 2
 
 typedef struct {
     uint32_t magic;
     uint16_t version;
     uint16_t architecture;
-    uint32_t entry_offset;
-    uint32_t payload_size;
+    uint32_t section_count;
     uint32_t flags;
-    uint32_t header_size;
-} __attribute__((packed)) kef_header_t;
+} __attribute__((packed)) kef2_header_t;
 
-typedef int (*kef_entry_t)(void);
+typedef struct {
+    uint32_t type;
+    uint32_t offset;
+    uint32_t size;
+} __attribute__((packed)) kef2_section_header_t;
+
+typedef struct {
+    char name[64];
+    uint32_t offset;
+    uint32_t size;
+} __attribute__((packed)) kef2_resource_entry_t;
 
 typedef struct {
     int (*window_create)(const char* title, int width, int height);
@@ -38,31 +42,29 @@ typedef struct {
     int (*label_create)(int x, int y, uint32_t color, const char* text, uint8_t anchor);
     int (*panel_create)(int x, int y, int w, int h, uint32_t color, uint32_t hover_color, void (*on_click)(void), void (*on_hover)(void), uint8_t anchor);
     int (*button_create)(int x, int y, int w, int h, uint32_t bg_color, uint32_t text_color, const char* text, void (*on_click)(void), uint8_t anchor);
+    int (*picturebox_create)(int x, int y, int w, int h, const char* img_path, uint8_t anchor);
     int (*input_create)(int x, int y, int w, int h, 
                         const char* text, const char* placeholdertext, 
                         uint32_t backcolor, uint32_t color, 
                         uint32_t placeholder_color, uint32_t border_color, 
                         int border_thickness, uint8_t anchor);
     int (*input_get_text)(int input_id, char* out_buf, int max_len);
+    int (*combobox_create)(int x, int y, int w, int h, const char** items, int item_count, int default_index, uint32_t bg_color, uint32_t text_color, uint32_t border_color, uint8_t anchor);
     int (*get_directory_files)(const char* full_path, vfs_file_info_t* out_list, int max_count);
     void* (*read_file)(const char* full_path, uint32_t* out_size);
-
     int (*strcmp)(const char* s1, const char* s2);
     size_t (*strlen)(const char* str);
     void (*yield)(void);
-
     uint32_t* (*canvas_create)(int x, int y, int w, int h, uint8_t anchor, int* out_canvas_id);
     void (*canvas_update_buffer)(int canvas_id);
-    
-    // Yeni eklenen arkaplan fonksiyonu
     void (*background_color)(uint32_t color);
-
     void (*reboot_system)(void);
     void (*shutdown_system)(void);
-
     bool (*is_key_pressed)(int key_code);
 } kef_api_t;
 
-bool kef_load_and_run(const char* path);
+typedef int (*kef_entry_t)(void);
+
+bool kef2_load_and_run(const char* path);
 
 #endif

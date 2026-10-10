@@ -1,4 +1,4 @@
-#include <kernel/kef.h>
+#include <kernel/loader/kef.h>
 #include <kernel/fs/vfs.h>
 #include <kernel/mem/heap.h>
 #include <kernel/serial.h>
@@ -151,6 +151,31 @@ static int kef_input_get_text(int input_id, char* out_buf, int max_len) {
     return i;
 }
 
+static int kef_combobox_create(int x, int y, int w, int h, const char** items, int item_count, int default_index, uint32_t bg_color, uint32_t text_color, uint32_t border_color, uint8_t anchor) {
+    window_t* win = wm_get_active_window();
+    if (!win) return -1;
+
+    if (win->combobox_count >= MAX_COMBOBOXES) return -1;
+
+    combobox_t* cb = &win->comboboxes[win->combobox_count++];
+    cb->x = x; cb->y = y; cb->width = w; cb->height = h;
+    cb->items = items;
+    cb->item_count = item_count;
+    cb->selected_index = (default_index >= 0 && default_index < item_count) ? default_index : 0;
+    cb->is_open = false;
+    cb->bg_color = bg_color;
+    cb->text_color = text_color;
+    cb->border_color = border_color;
+    cb->anchor = anchor;
+    
+    cb->init_x = x; cb->init_y = y; 
+    cb->init_width = w; cb->init_height = h;
+    cb->init_win_w = win->width; cb->init_win_h = win->height;
+
+    wm_draw_window(win);
+    return 1;
+}
+
 static int kef_get_directory_files(const char* full_path, vfs_file_info_t* out_list, int max_count) {
     serial_write("KEF API: get_directory_files called -> ");
     serial_write((char*)full_path);
@@ -236,6 +261,7 @@ static void kef_install_api(void) {
     api->button_create = kef_button_create;
     api->input_create = kef_input_create;
     api->input_get_text = kef_input_get_text;
+    api->combobox_create = kef_combobox_create;
     api->get_directory_files = kef_get_directory_files;
     api->read_file = kef_read_file;
     api->strcmp = kef_strcmp;

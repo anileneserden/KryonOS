@@ -4,7 +4,7 @@
 #include <kernel/drivers/video/gfx.h>
 #include <kernel/serial.h>
 #include <ui/cursor.h>
-#include <kernel/kef.h>
+#include <kernel/loader/kef.h>
 #include <stddef.h>
 
 extern int32_t mouse_x;
@@ -79,17 +79,15 @@ window_t* wm_create_window(int width, int height, const char* title) {
     }
     win->title[title_len] = '\0';
 
-    // Calculate based on title length, but enforce a safe base minimum 
-    // of 340 pixels (or a safe width suited for your project) to prevent content corruption.
     int calculated_min_w = (title_len * 8) + 50;
-    int global_min_w = 340; // Safe width to prevent content from overlapping or compressing
+    int global_min_w = 340; 
     
     if (calculated_min_w < global_min_w) {
         calculated_min_w = global_min_w;
     }
 
     win->min_width = calculated_min_w;
-    win->min_height = 240; // Minimum height for panels and bottom status bar to fit properly
+    win->min_height = 240;
 
     win->width = width < win->min_width ? win->min_width : width;
     win->height = height < win->min_height ? win->min_height : height;
@@ -111,6 +109,16 @@ window_t* wm_create_window(int width, int height, const char* title) {
         win->labels[l].init_y = win->labels[l].y;
         win->labels[l].init_win_w = win->width;
         win->labels[l].init_win_h = win->height;
+    }
+
+    // Combobox başlangıç (init) referans değerlerini kaydet
+    for (int c = 0; c < win->combobox_count; c++) {
+        win->comboboxes[c].init_x = win->comboboxes[c].x;
+        win->comboboxes[c].init_y = win->comboboxes[c].y;
+        win->comboboxes[c].init_width = win->comboboxes[c].width;
+        win->comboboxes[c].init_height = win->comboboxes[c].height;
+        win->comboboxes[c].init_win_w = win->width;
+        win->comboboxes[c].init_win_h = win->height;
     }
 
     damage_union_rect(0, 0, fb_get_width(), fb_get_height());
@@ -257,7 +265,33 @@ void wm_draw_window(window_t* win) {
         }
     }
 
-    // 8. Draw text inputs (Metin Kutuları)
+    // 8. Draw pictureboxes (Resim Kutuları)
+    for (int i = 0; i < win->picturebox_count; i++) {
+        picturebox_t* p = &win->pictureboxes[i];
+        int rel_x = p->x;
+        int rel_y = 24 + p->y;
+        int pw = p->width;
+        int ph = p->height;
+
+        // Kırpma (Clipping) kontrolleri
+        if (rel_x < 0) { pw += rel_x; rel_x = 0; }
+        if (rel_y < 24) { ph += (rel_y - 24); rel_y = 24; }
+
+        if (rel_x < win->width && rel_y < win->height) {
+            if (rel_x + pw > win->width) pw = win->width - rel_x;
+            if (rel_y + ph > win->height) ph = win->height - rel_y;
+
+            if (pw > 0 && ph > 0 && p->pixels) {
+                int abs_x = win->x + rel_x;
+                int abs_y = win->y + rel_y;
+
+                // Eğer resim verisi yüklendiyse framebuffer/grafik arabelleğine çiz
+                gfx_draw_buffer(abs_x, abs_y, pw, ph, p->pixels, p->img_width);
+            }
+        }
+    }
+
+    // 9. Draw text inputs (Metin Kutuları)
     for (int i = 0; i < win->input_count; i++) {
         text_input_t* inp = &win->inputs[i];
         int rel_x = inp->x;
@@ -304,6 +338,72 @@ void wm_draw_window(window_t* win) {
                     int cursor_pos_x = abs_x + 6 + (text_len * 8);
                     if (cursor_pos_x < abs_x + iw - 8) {
                         gfx_fill_rect(cursor_pos_x, abs_y + 6, 2, ih - 12, inp->text_color);
+                    }
+                }
+            }
+        }
+    }
+
+    // 10. Draw comboboxes (Açılır Menüler)
+    for (int i = 0; i < win->combobox_count; i++) {
+        combobox_t* cb = &win->comboboxes[i];
+        int rel_x = cb->x;
+        int rel_y = 24 + cb->y;
+        int cw = cb->width;
+        int ch = cb->height;
+
+        // Kırpma (Clipping) kontrolleri
+        if (rel_x < 0) { cw += rel_x; rel_x = 0; }
+        if (rel_y < 24) { ch += (rel_y - 24); rel_y = 24; }
+
+        if (rel_x < win->width && rel_y < win->height) {
+            if (rel_x + cw > win->width) cw = win->width - rel_x;
+            if (rel_y + ch > win->height) ch = win->height - rel_y;
+
+            if (cw > 0 && ch > 0) {
+                int abs_x = win->x + rel_x;
+                int abs_y = win->y + rel_y;
+
+                // Ana combobox kutusu arka planı ve çerçevesi
+                gfx_fill_rect(abs_x, abs_y, cw, ch, cb->bg_color);
+                
+                // Basit çerçeve çizgileri
+                gfx_fill_rect(abs_x, abs_y, cw, 1, cb->border_color); // Üst
+                gfx_fill_rect(abs_x, abs_y + ch - 1, cw, 1, cb->border_color); // Alt
+                gfx_fill_rect(abs_x, abs_y, 1, ch, cb->border_color); // Sol
+                gfx_fill_rect(abs_x + cw - 1, abs_y, 1, ch, cb->border_color); // Sağ
+
+                // Seçili öğe metnini çiz
+                if (cb->items && cb->selected_index >= 0 && cb->selected_index < cb->item_count) {
+                    gfx_draw_text_utf8(abs_x + 6, abs_y + 6, cb->text_color, cb->items[cb->selected_index]);
+                }
+
+                // Sağ tarafa ok işareti simgesi
+                gfx_draw_text_utf8(abs_x + cw - 16, abs_y + 6, cb->text_color, "v");
+
+                // Eğer menü açıksa (is_open == true), açılır listeyi çiz
+                if (cb->is_open && cb->item_count > 0) {
+                    int item_height = 20;
+                    int list_height = cb->item_count * item_height;
+                    int list_y = abs_y + ch;
+
+                    // Liste arka planı (örneğin beyaz veya koyu tema rengi)
+                    gfx_fill_rect(abs_x, list_y, cw, list_height, 0xFFFFFFFF);
+                    
+                    // Liste dış çerçevesi
+                    gfx_fill_rect(abs_x, list_y, cw, list_height, cb->border_color);
+
+                    // Öğeleri listele
+                    for (int j = 0; j < cb->item_count; j++) {
+                        int cur_item_y = list_y + (j * item_height);
+                        
+                        // Eğer fare bu öğenin üzerindeyse arka planı renklendirebilirsin
+                        if (j == cb->selected_index) {
+                            gfx_fill_rect(abs_x + 1, cur_item_y, cw - 2, item_height, 0xFF007ACC);
+                            gfx_draw_text_utf8(abs_x + 6, cur_item_y + 4, 0xFFFFFFFF, cb->items[j]);
+                        } else {
+                            gfx_draw_text_utf8(abs_x + 6, cur_item_y + 4, 0xFF000000, cb->items[j]);
+                        }
                     }
                 }
             }
@@ -445,6 +545,29 @@ static void wm_update_hover_state(void) {
                 }
             }
         }
+
+        // wm_update_hover_state fonksiyonunun uygun bir yerine veya sonuna ekleyin:
+        for (int i = 0; i < window_count; i++) {
+            window_t* win = &window_list[i];
+            if (!win->is_active) continue;
+
+            for (int c = 0; c < win->combobox_count; c++) {
+                combobox_t* cb = &win->comboboxes[c];
+                if (!cb->is_open || cb->item_count <= 0) continue;
+
+                int abs_x = win->x + cb->x;
+                int abs_y = win->y + 24 + cb->y;
+                int item_height = 20;
+                int list_height = cb->item_count * item_height;
+                int list_y = abs_y + cb->height;
+
+                // Fare açık olan açılır menünün üzerindeyse alanı kirli işaretle
+                if (mouse_x >= abs_x && mouse_x < abs_x + cb->width &&
+                    mouse_y >= list_y && mouse_y < list_y + list_height) {
+                    damage_union_rect(abs_x, list_y, cb->width, list_height);
+                }
+            }
+        }
     }
 }
 
@@ -465,7 +588,6 @@ void wm_process_input(void) {
             }
             if (resized_window) {
                 // RESIZING ENDED: Lock reference (init) values to the new size!
-                // This ensures math and right-anchoring will not break on subsequent resize actions.
                 resized_window->init_win_w = resized_window->width;
                 resized_window->init_win_h = resized_window->height;
 
@@ -485,17 +607,22 @@ void wm_process_input(void) {
                     resized_window->buttons[i].init_win_w = resized_window->width;
                     resized_window->buttons[i].init_win_h = resized_window->height;
                 }
-                // Update reference values for labels at completion as well:
                 for (int i = 0; i < resized_window->label_count; i++) {
                     resized_window->labels[i].init_x = resized_window->labels[i].x;
                     resized_window->labels[i].init_y = resized_window->labels[i].y;
                     resized_window->labels[i].init_win_w = resized_window->width;
                     resized_window->labels[i].init_win_h = resized_window->height;
                 }
+                for (int i = 0; i < resized_window->combobox_count; i++) {
+                    resized_window->comboboxes[i].init_x = resized_window->comboboxes[i].x;
+                    resized_window->comboboxes[i].init_y = resized_window->comboboxes[i].y;
+                    resized_window->comboboxes[i].init_width = resized_window->comboboxes[i].width;
+                    resized_window->comboboxes[i].init_height = resized_window->comboboxes[i].height;
+                    resized_window->comboboxes[i].init_win_w = resized_window->width;
+                    resized_window->comboboxes[i].init_win_h = resized_window->height;
+                }
 
-                // --- SOLUTION: Clear the window's OLD and LARGER area before shrinking ---
                 damage_union_rect(resize_old_x, resize_old_y, resize_old_w, resize_old_h);
-                // Mark the window's NEW area as dirty as well
                 damage_union_rect(resized_window->x, resized_window->y, resized_window->width, resized_window->height);
                 
                 resized_window = 0;
@@ -537,7 +664,7 @@ void wm_process_input(void) {
                 int abs_bx = target->x + b->x;
                 int abs_by = target->y + 24 + b->y;
 
-                if (mouse_x >= abs_bx && mouse_x < abs_bx + b->width && // Dikkat: b->width
+                if (mouse_x >= abs_bx && mouse_x < abs_bx + b->width &&
                     mouse_y >= abs_by && mouse_y < abs_by + b->height) {
                     
                     serial_write("WM: In-window button clicked: ");
@@ -563,16 +690,74 @@ void wm_process_input(void) {
                 if (mouse_x >= abs_ix && mouse_x < abs_ix + inp->width &&
                     mouse_y >= abs_iy && mouse_y < abs_iy + inp->height) {
                     
-                    active_input = inp; // Metin kutusunu odaklı hale getir
+                    active_input = inp;
                     clicked_on_input = true;
                     serial_write("WM: Text input focused\n");
                     break;
                 }
             }
 
-            // Eğer ne bir butona ne de bir input kutusuna tıklandıysa, 
-            // pencere içinde boş bir yere tıklandığında odaklı input seçimini kaldırabiliriz:
-            if (!clicked_on_input && !clicked_on_button) {
+            // --- COMBOBOX CLICK CHECK ---
+            bool clicked_on_combobox = false;
+            for (int i = 0; i < target->combobox_count; i++) {
+                combobox_t* cb = &target->comboboxes[i];
+                int abs_cx = target->x + cb->x;
+                int abs_cy = target->y + 24 + cb->y;
+
+                // 1. Ana combobox kutusuna tıklandı mı?
+                if (mouse_x >= abs_cx && mouse_x < abs_cx + cb->width &&
+                    mouse_y >= abs_cy && mouse_y < abs_cy + cb->height) {
+                    
+                    // Diğer açık combobox'ları kapat
+                    for (int k = 0; k < target->combobox_count; k++) {
+                        if (k != i) target->comboboxes[k].is_open = false;
+                    }
+
+                    cb->is_open = !cb->is_open;
+                    clicked_on_combobox = true;
+                    
+                    // BURASI EKLENDİ: Menü açılıp/kapanırken ekranı tazele
+                    damage_union_rect(0, 0, fb_get_width(), fb_get_height());
+                    desktop_redraw();
+
+                    serial_write("WM: Combobox clicked\n");
+                    break;
+                }
+
+                // 2. Menü açıksa ve açılan liste elemanlarına tıklandı mı?
+                if (cb->is_open && cb->item_count > 0) {
+                    int item_height = 20;
+                    int list_height = cb->item_count * item_height;
+                    int list_y = abs_cy + cb->height;
+
+                    if (mouse_x >= abs_cx && mouse_x < abs_cx + cb->width &&
+                        mouse_y >= list_y && mouse_y < list_y + list_height) {
+                        
+                        int clicked_index = (mouse_y - list_y) / item_height;
+                        if (clicked_index >= 0 && clicked_index < cb->item_count) {
+                            cb->selected_index = clicked_index;
+                            cb->is_open = false;
+                            
+                            damage_union_rect(0, 0, fb_get_width(), fb_get_height());
+                            desktop_redraw();
+
+                            serial_write("WM: Combobox item selected\n");
+                        }
+                        clicked_on_combobox = true;
+                        break;
+                    }
+                }
+            }
+
+            // Eğer combobox dışına tıklandıysa açık olanları kapat
+            if (!clicked_on_combobox) {
+                for (int k = 0; k < target->combobox_count; k++) {
+                    target->comboboxes[k].is_open = false;
+                }
+            }
+
+            // Eğer ne bir butona, ne bir inputa ne de bir combobox'a tıklandıysa aktif inputu sıfırla
+            if (!clicked_on_input && !clicked_on_button && !clicked_on_combobox) {
                 active_input = 0; 
             }
 
@@ -582,12 +767,11 @@ void wm_process_input(void) {
                 resized_window = target;
                 resize_direction = dir;
                 
-                // RESIZING STARTED: Save the old/large dimensions at that moment
                 resize_old_x = target->x;
                 resize_old_y = target->y;
                 resize_old_w = target->width;
                 resize_old_h = target->height;
-            } else if (!clicked_on_button && !clicked_on_input) {
+            } else if (!clicked_on_button && !clicked_on_input && !clicked_on_combobox) {
                 if (mouse_y >= target->y && mouse_y < target->y + WM_TITLEBAR_HEIGHT) {
                     dragged_window = front_win;
                     dragged_window->is_dragging = true;
@@ -601,8 +785,23 @@ void wm_process_input(void) {
             cursor_show();
         } 
         else {
-            // Pencere dışına (masaüstüne) tıklandığında aktif inputu da sıfırla
+            // Pencere dışına (masaüstüne) tıklandığında aktif inputu ve tüm açık combobox'ları kontrol et
             active_input = 0;
+            bool any_combobox_was_open = false;
+            
+            for (int i = 0; i < window_count; i++) {
+                for (int c = 0; c < window_list[i].combobox_count; c++) {
+                    if (window_list[i].comboboxes[c].is_open) {
+                        window_list[i].comboboxes[c].is_open = false;
+                        any_combobox_was_open = true;
+                    }
+                }
+            }
+
+            // Eğer açık bir combobox dışarı tıklanarak kapatıldıysa tüm ekranı yenile
+            if (any_combobox_was_open) {
+                damage_union_rect(0, 0, fb_get_width(), fb_get_height());
+            }
 
             if (active_window != 0) {
                 cursor_prepare_redraw();
@@ -620,6 +819,11 @@ void wm_process_input(void) {
                 cursor_get_position(&cur_x, &cur_y);
                 damage_union_rect(cur_x, cur_y, CURSOR_WIDTH, CURSOR_HEIGHT);
 
+                desktop_redraw();
+                cursor_sync_position();
+                cursor_show();
+            } else if (any_combobox_was_open) {
+                // Eğer etkin bir pencere yok ama sadece açık bir combobox kapatıldıysa yine de ekranı yeniden çiz
                 desktop_redraw();
                 cursor_sync_position();
                 cursor_show();

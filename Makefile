@@ -2,11 +2,11 @@ CC = i686-elf-gcc
 AS = i686-elf-as
 LD = i686-elf-ld
 
-CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra -Iinclude
+CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra -Iinclude -Iinclude/libc
 LDFLAGS = -T linker.ld -nostdlib
 
 BUILD = build
-TARGET = $(BUILD)/kryonos.bin
+TARGET = $(BUILD)/kryonos.elf
 
 # --- Disk Image Definitions ---
 DISK_KRYFS ?= $(HOME)/KryonOS/main/disk-kryfs.img
@@ -21,7 +21,6 @@ SRC_C = \
     kernel/audio/wav.c \
     kernel/app_manager.c \
     kernel/hexdump.c \
-    kernel/kef_loader.c \
     kernel/kmain.c \
     kernel/power.c \
     kernel/serial.c \
@@ -42,9 +41,14 @@ SRC_C = \
     kernel/fs/fat32.c \
     kernel/fs/kryfs.c \
     kernel/fs/vfs.c \
+    kernel/loader/kef.c \
+    kernel/loader/kef2.c \
+    kernel/loader/png.c \
     kernel/mem/heap.c \
     kernel/mem/pmm.c \
     kernel/mem/vmm.c \
+    libc/math.c \
+    libc/stdlib.c \
     ui/cursor.c \
     ui/desktop_icons.c \
     ui/desktop.c \
@@ -77,11 +81,11 @@ clean:
 
 iso: $(TARGET)
 	mkdir -p isodir/boot/grub
-	cp $(TARGET) isodir/boot/kryonos.bin
+	cp $(TARGET) isodir/boot/kryonos.elf
 	echo 'set timeout=0' > isodir/boot/grub/grub.cfg
 	echo 'set gfxpayload=1920x1080x32' >> isodir/boot/grub/grub.cfg
 	echo 'menuentry "KryonOS" {' >> isodir/boot/grub/grub.cfg
-	echo '    multiboot /boot/kryonos.bin' >> isodir/boot/grub/grub.cfg
+	echo '    multiboot /boot/kryonos.elf' >> isodir/boot/grub/grub.cfg
 	echo '    boot' >> isodir/boot/grub/grub.cfg
 	echo '}' >> isodir/boot/grub/grub.cfg
 	grub-mkrescue -o kryonos.iso isodir
