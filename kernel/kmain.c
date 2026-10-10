@@ -147,12 +147,14 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     }
     // -----------------------------
 
+    /*
     if (kef2_load_and_run("C:/Program Files/test4/test4.kef")) {
         serial_write("KEF: Application successfully executed and terminated.\n");
     } else {
         serial_write("[ERROR] kef application could not be started!\n");
     }
     serial_write("-------------------------------------\n");
+    */
 
     app_manager_init();
     fb_swap();
