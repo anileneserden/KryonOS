@@ -78,6 +78,9 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     } else {
         serial_write("EHCI: Initialization failed or controller not found.\n");
     }
+
+    // Start the USB 1.1 companion for full/low-speed devices.
+    uhci_init();
     
     ata_init();
 

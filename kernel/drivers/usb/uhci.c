@@ -33,6 +33,8 @@
 #define TD_STAT_IOC          (1 << 24) // Interrupt on Completion
 #define TD_STAT_LOW_SPEED    (1 << 26) // Low-speed device
 #define TD_STAT_SPD          (1 << 29) // Short Packet Detect
+#define TD_STAT_ERROR_MASK   ((1 << 22) | (1 << 21) | (1 << 20) \
+                              | (1 << 19) | (1 << 18) | (1 << 17))
 
 // UHCI link pointer flags
 #define UHCI_LINK_DEPTH_FIRST (1 << 2)
@@ -83,6 +85,7 @@ static uhci_qh_t mouse_interrupt_qh __attribute__((aligned(16)));
 static uhci_td_t mouse_interrupt_tds[USB_MOUSE_TD_COUNT] __attribute__((aligned(16)));
 static uint8_t mouse_interrupt_buffers[USB_MOUSE_TD_COUNT][8] __attribute__((aligned(16)));
 static uint8_t usb_mouse_ready = 0;
+static uint8_t mouse_interrupt_error_logged = 0;
 
 static void uhci_dispatch_control_transfer(void) {
     control_qh.head_link = 1;
@@ -507,13 +510,29 @@ uint8_t uhci_poll(void) {
     if (!usb_mouse_ready) return 0;
 
     for (int i = 0; i < USB_MOUSE_TD_COUNT; i++) {
-        if (!(mouse_interrupt_tds[i].status & TD_STAT_ACTIVED)) {
-            usb_mouse_process_report(mouse_interrupt_buffers[i],
-                                     (uint8_t)usb_interrupt_max_packet);
-            mouse_interrupt_tds[i].status = TD_STAT_ACTIVED | TD_STAT_IOC
-                | uhci_td_speed_flags | (3 << 27);
-            return 1;
+        uint32_t td_status = mouse_interrupt_tds[i].status;
+        if (td_status & TD_STAT_ACTIVED) continue;
+
+        uint32_t actual_length_field = td_status & 0x7FF;
+        uint8_t actual_length = actual_length_field == 0x7FF
+            ? 0 : (uint8_t)(actual_length_field + 1);
+        uint8_t report_valid = !(td_status & TD_STAT_ERROR_MASK)
+            && actual_length >= 3
+            && actual_length <= usb_interrupt_max_packet;
+
+        mouse_interrupt_tds[i].status = TD_STAT_ACTIVED | TD_STAT_IOC
+            | uhci_td_speed_flags | (3 << 27);
+
+        if (!report_valid) {
+            if ((td_status & TD_STAT_ERROR_MASK) && !mouse_interrupt_error_logged) {
+                serial_write("UHCI: Ignoring failed mouse interrupt TD.\n");
+                mouse_interrupt_error_logged = 1;
+            }
+            continue;
         }
+
+        usb_mouse_process_report(mouse_interrupt_buffers[i], actual_length);
+        return 1;
     }
     return 0;
 }
@@ -629,30 +648,19 @@ void uhci_init(void) {
 
     int controller_found = 0;
 
-    // Sistemdeki TÜM PCI cihazlarını tarayarak bulduğumuz her USB denetleyicisini başlatalım
+    // Find the UHCI PCI function used for full/low-speed companion traffic.
     for (uint32_t i = 0; i < pci_get_device_count(); i++) {
         pci_device_t* dev = pci_get_device_by_index(i);
-        // Lenovo M81 yonga setinde kontrolcüler ProgIF 0x20 (EHCI) olarak görünüyor
-        if (dev && dev->class_code == 0x0C && dev->subclass == 0x03 && dev->prog_if == 0x20) {
-            serial_write("UHCI: Controller found (EHCI/USB 2.0), enabling PCI Bus Mastering...\n");
+        if (dev && dev->class_code == 0x0C && dev->subclass == 0x03 && dev->prog_if == 0x00) {
+            serial_write("UHCI: Controller found, enabling PCI I/O and bus mastering...\n");
             pci_enable_bus_mastering(dev);
 
-            // EHCI kontrolcülerinde I/O alanı genellikle BAR0 üzerindedir (UHCI'da BAR4'tür)
-            // Eğer sistem EHCI ise BAR0 kullanmak gerekebilir, ancak mevcut yapıyı korumak için 
-            // BAR[0] veya BAR[4] durumunu kontrol edebiliriz:
-            uint32_t bar = dev->bar[0]; // EHCI için genellikle BAR0 kullanılır
-            
-            // Eğer BAR0 boşsa BAR4'ü denetle
-            if (bar == 0) {
-                bar = dev->bar[4];
-            }
-
-            if (!(bar & 0x01) && (bar & ~0x03) == 0) {
-                serial_write("UHCI Error: Valid BAR address not found!\n");
+            uint32_t bar = dev->bar[4];
+            if (!(bar & 0x01) || (bar & ~0x03) == 0) {
+                serial_write("UHCI Error: Valid BAR4 I/O address not found!\n");
                 continue;
             }
 
-            // I/O veya Memory taban adresi
             uhci_io_base = (uint16_t)(bar & ~0x03);
             serial_write("UHCI: Base address successfully obtained.\n");
 
