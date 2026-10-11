@@ -72,14 +72,13 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     // 2. PCI, USB, display, and storage hardware drivers
     pci_init();
     
-    // EHCI (USB 2.0) ve UHCI (USB 1.1) Başlatma Sırası
+    // EHCI (USB 2.0) Başlatma
     if (ehci_init()) {
         serial_write("EHCI: USB 2.0 Controller initialized successfully.\n");
     } else {
         serial_write("EHCI: Initialization failed or controller not found.\n");
     }
     
-    uhci_init();
     ata_init();
 
     // 3. Filesystems and VFS Integration

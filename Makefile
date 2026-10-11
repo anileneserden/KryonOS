@@ -114,5 +114,5 @@ run: iso $(DISK_KRYFS) $(DISK_FAT32)
 	   -machine pcspk-audiodev=audio0 \
 	   -device ich9-usb-ehci1,id=ehci \
 	   -device ich9-usb-uhci1,masterbus=ehci.0,firstport=0,id=uhci1 \
-	   -device usb-mouse,bus=ehci.0 \
+	   -device usb-mouse,bus=ehci.0,port=1 \
 	   -serial stdio -vga std -display sdl,gl=on
