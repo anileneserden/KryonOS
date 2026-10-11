@@ -19,6 +19,9 @@
 // Eğer kernel/string.h içinde snprintf prototipi yoksa uyarıyı önlemek için:
 int snprintf(char *str, size_t size, const char *format, ...);
 
+// USB fare aktiflik durumu fonksiyonu prototipi
+extern uint8_t uhci_mouse_active(void);
+
 static int timezone_offset = 3;
 uint32_t desktop_bg_color = 0xFF1E1E1E;
 
@@ -137,6 +140,39 @@ void desktop_redraw(void) {
 
     // 4.5. Draw open windows (İkonların üzerine çizilir)
     wm_draw_all();
+
+    // --- SOL ÜSTTE GELİŞMİŞ DONANIM VE KOORDİNAT PANELİ ---
+    int info_x = 10;
+    int info_y = 10;
+    int info_w = 240;
+    int info_h = 92;
+
+    // Panel arkaplanı ve çerçevesi
+    gfx_fill_rect(info_x, info_y, info_w, info_h, 0xFF1E1E1E);
+    gfx_draw_rect(info_x, info_y, info_w, info_h, 0xFF505050);
+
+    // Verileri toplama
+    int cur_rx = cursor_get_x();
+    int cur_ry = cursor_get_y();
+    uint8_t last_sc = keyboard_get_last_scancode();
+    uint8_t usb_active = uhci_mouse_active();
+
+    char buf_mouse[64];
+    char buf_key[64];
+    char buf_port[64];
+    char buf_buttons[64];
+    
+    snprintf(buf_mouse, sizeof(buf_mouse), "Mouse: X=%d Y=%d", cur_rx, cur_ry);
+    snprintf(buf_key, sizeof(buf_key), "Key Scancode: 0x%X", last_sc);
+    snprintf(buf_port, sizeof(buf_port), "USB Mouse: %s", usb_active ? "READY" : "WAITING");
+    snprintf(buf_buttons, sizeof(buf_buttons), "Buttons Mask: 0x%X", mouse_buttons);
+
+    // Metinleri ekrana yazdırma (0xFF ön ekiyle tam opak yeşil tonu)
+    gfx_draw_text(info_x + 8, info_y + 8,  0xFF00FF66, buf_mouse);
+    gfx_draw_text(info_x + 8, info_y + 28, 0xFF00FF66, buf_key);
+    gfx_draw_text(info_x + 8, info_y + 48, 0xFF00FF66, buf_port);
+    gfx_draw_text(info_x + 8, info_y + 68, 0xFF00FF66, buf_buttons);
+    // ---------------------------------------
 
     // 5. Bottom taskbar - draw it on the topmost layer (above windows)
     int taskbar_h = 36;
@@ -502,8 +538,8 @@ void desktop_process_input(void) {
     }
     prev_mouse_right = current_mouse_right;
 
-    // 5. If the cursor moved, mark its old and new positions as damaged
-    if (old_x != new_x || old_y != new_y) {
+    // 5. If the cursor moved or actions occurred, mark relevant areas as damaged
+    if (old_x != new_x || old_y != new_y || scancode != 0) {
         damage_union_rect(old_x, old_y, cursor_w, cursor_h); // Clear the old position
         damage_union_rect(new_x, new_y, cursor_w, cursor_h); // Draw the new position
         
@@ -511,6 +547,9 @@ void desktop_process_input(void) {
         if (right_menu_open) {
             damage_union_rect(right_menu_x, right_menu_y, RIGHT_MENU_W, RIGHT_MENU_H);
         }
+
+        // Sol üstteki genişletilmiş donanım panelinin alanını hasarlı bölgeye ekle
+        damage_union_rect(10, 10, 240, 92);
 
         // Trigger a redraw
         desktop_redraw();

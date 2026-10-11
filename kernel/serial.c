@@ -1,6 +1,14 @@
 // kernel/serial.c
 #include <kernel/serial.h>
 #include <arch/x86/io.h>
+#include <ui/serial_screen.h>
+#include <stdbool.h>
+
+static bool serial_screen_mirror_active = false;
+
+void serial_screen_mirror_enable(bool enable) {
+    serial_screen_mirror_active = enable;
+}
 
 void serial_init(void) {
     outb(SERIAL_COM1_PORT + 1, 0x00);    // Disable interrupts
@@ -22,8 +30,14 @@ void serial_write_char(char a) {
 }
 
 void serial_write(const char* str) {
-    while (*str) {
-        serial_write_char(*str++);
+    const char* tmp = str;
+    while (*tmp) {
+        serial_write_char(*tmp++);
+    }
+
+    // Eğer debug ekranı aktifse, yazılan metni ekrana da aynen yansıt
+    if (serial_screen_mirror_active) {
+        serial_screen_write(str);
     }
 }
 

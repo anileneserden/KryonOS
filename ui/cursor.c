@@ -1,5 +1,5 @@
 #include <ui/cursor.h>
-#include <kernel/drivers/input/mouse_ps2.h>
+#include <kernel/drivers/input/mouse_usb.h>
 #include <kernel/drivers/video/fb.h>
 #include <kernel/loader/png.h>
 #include <kernel/serial.h>
@@ -188,7 +188,6 @@ void cursor_show(void) {
     cursor_show_internal(true);
 }
 
-extern uint8_t mouse_buttons; 
 static uint8_t old_mouse_buttons = 0;
 extern void damage_union_rect(int x, int y, int w, int h);
 extern void desktop_redraw(void);
@@ -231,7 +230,7 @@ void cursor_refresh_background(void) {
         for (int x = 0; x < draw_w; x++) {
             int px = render_x + x;
             int py = render_y + y;
-            if (px >= 0 && (uint32_t)px < fb_get_width() && py >= 0 && (uint32_t)px < fb_get_height()) {
+            if (px >= 0 && (uint32_t)px < fb_get_width() && py >= 0 && (uint32_t)py < fb_get_height()) {
                 if (y < bg_buffer_height && x < bg_buffer_width) {
                     cursor_bg_buffer[y * bg_buffer_width + x] = fb_getpixel(px, py);
                 }

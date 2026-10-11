@@ -521,6 +521,14 @@ uint8_t uhci_mouse_active(void) {
     return usb_mouse_ready;
 }
 
+uint8_t uhci_is_port_connected(int port_idx) {
+    if (uhci_io_base == 0) return 0;
+    uint16_t port_reg = uhci_io_base + (port_idx == 0 ? UHCI_PORTSC1 : UHCI_PORTSC2);
+    uint16_t status = inw(port_reg);
+    // PORTSC_CCS (Bit 0): Current Connect Status
+    return (status & 1) ? 1 : 0;
+}
+
 static void uhci_check_ports(void) {
     uint16_t ports[2] = { UHCI_PORTSC1, UHCI_PORTSC2 };
 

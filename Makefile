@@ -53,6 +53,7 @@ SRC_C = \
     ui/desktop_icons.c \
     ui/desktop.c \
     ui/grid.c \
+    ui/serial_screen.c \
     ui/window.c \
     ui/wm.c
 
@@ -82,10 +83,15 @@ clean:
 iso: $(TARGET)
 	mkdir -p isodir/boot/grub
 	cp $(TARGET) isodir/boot/kryonos.elf
-	echo 'set timeout=0' > isodir/boot/grub/grub.cfg
+	echo 'set timeout=3' > isodir/boot/grub/grub.cfg
+	echo 'set default=0' >> isodir/boot/grub/grub.cfg
 	echo 'set gfxpayload=1920x1080x32' >> isodir/boot/grub/grub.cfg
 	echo 'menuentry "KryonOS" {' >> isodir/boot/grub/grub.cfg
 	echo '    multiboot /boot/kryonos.elf' >> isodir/boot/grub/grub.cfg
+	echo '    boot' >> isodir/boot/grub/grub.cfg
+	echo '}' >> isodir/boot/grub/grub.cfg
+	echo 'menuentry "KryonOS (Debug Screen)" {' >> isodir/boot/grub/grub.cfg
+	echo '    multiboot /boot/kryonos.elf debug=yes' >> isodir/boot/grub/grub.cfg
 	echo '    boot' >> isodir/boot/grub/grub.cfg
 	echo '}' >> isodir/boot/grub/grub.cfg
 	grub-mkrescue -o kryonos.iso isodir
