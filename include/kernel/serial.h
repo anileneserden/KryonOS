@@ -9,3 +9,5 @@ void serial_write_char(char a);
 void serial_write(const char* str);
 void serial_write_dec(uint32_t n);
 void serial_write_num(uint32_t n);
+void serial_write_hex8(uint8_t n);
+void serial_write_hex16(uint16_t n);

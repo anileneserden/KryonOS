@@ -213,21 +213,26 @@ static int uhci_get_device_descriptor(void) {
 }
 
 static int uhci_get_full_device_descriptor(uint8_t address, uint8_t max_packet_size) {
-    uint8_t packet_count = max_packet_size >= 18 ? 1 : 3;
-    uint8_t bytes_left = sizeof(device_descriptor);
+    if (max_packet_size == 0) max_packet_size = 8;
+    uint8_t packet_count = (18 + max_packet_size - 1) / max_packet_size;
+    if (packet_count > 4) packet_count = 4;
+    
+    uint8_t bytes_left = 18;
     uint8_t offset = 0;
 
-    serial_write("UHCI: Requesting full Device Descriptor...\n");
+    serial_write("UHCI: Requesting full Device Descriptor for address: ");
+    serial_write_dec(address);
+    serial_write("\n");
 
     setup_pkt.bmRequestType = 0x80;
     setup_pkt.bRequest = 0x06;
     setup_pkt.wValue = 0x0100;
     setup_pkt.wIndex = 0;
-    setup_pkt.wLength = sizeof(device_descriptor);
+    setup_pkt.wLength = 18;
 
     setup_td.link = virt_to_phys(&descriptor_in_tds[0]) | UHCI_LINK_DEPTH_FIRST;
     setup_td.status = TD_STAT_ACTIVED | uhci_td_speed_flags | (3 << 27);
-    setup_td.token = (7 << 21) | (0 << 19) | (address << 8) | USB_PID_SETUP;
+    setup_td.token = (7 << 21) | (0 << 19) | ((uint32_t)address << 8) | USB_PID_SETUP;
     setup_td.buffer = virt_to_phys(&setup_pkt);
 
     for (uint8_t i = 0; i < packet_count; i++) {
@@ -251,7 +256,7 @@ static int uhci_get_full_device_descriptor(uint8_t address, uint8_t max_packet_s
 
     uhci_dispatch_control_transfer();
 
-    int timeout = 2000000;
+    int timeout = 3000000; // Süreyi biraz daha esnettik
     while ((status_td.status & TD_STAT_ACTIVED) && timeout > 0) {
         timeout--;
         __asm__ volatile("nop");
@@ -259,28 +264,24 @@ static int uhci_get_full_device_descriptor(uint8_t address, uint8_t max_packet_s
 
     if (status_td.status & TD_STAT_ACTIVED) {
         serial_write("UHCI: Full Device Descriptor timed out.\n");
-        serial_write("  -> SETUP TD: 0x");
-        serial_write_num(setup_td.status);
-        serial_write(" DATA TD0: 0x");
-        serial_write_num(descriptor_in_tds[0].status);
-        serial_write(" DATA TD1: 0x");
-        serial_write_num(descriptor_in_tds[1].status);
-        serial_write(" DATA TD2: 0x");
-        serial_write_num(descriptor_in_tds[2].status);
-        serial_write(" STATUS TD: 0x");
-        serial_write_num(status_td.status);
-        serial_write("\n");
         return 0;
     }
 
-    serial_write("UHCI: Full Device Descriptor received.\n");
+    serial_write("UHCI: Full Device Descriptor received successfully.\n");
+    
+    // VID, PID ve Class değerlerini doğru bayt sırasıyla (Little-Endian) alıyoruz
+    uint16_t vid = (uint16_t)device_descriptor[8] | ((uint16_t)device_descriptor[9] << 8);
+    uint16_t pid = (uint16_t)device_descriptor[10] | ((uint16_t)device_descriptor[11] << 8);
+    uint8_t dev_class = device_descriptor[4];
+
     serial_write("  -> Vendor ID: 0x");
-    serial_write_num((uint32_t)device_descriptor[8] | ((uint32_t)device_descriptor[9] << 8));
+    serial_write_hex16(vid);
     serial_write(" Product ID: 0x");
-    serial_write_num((uint32_t)device_descriptor[10] | ((uint32_t)device_descriptor[11] << 8));
+    serial_write_hex16(pid);
     serial_write(" Class: 0x");
-    serial_write_num(device_descriptor[4]);
+    serial_write_dec(dev_class); // Sınıf (Class) genelde tek basamaklı sayı/desimaldir
     serial_write("\n");
+
     return 1;
 }
 
@@ -588,12 +589,19 @@ static void uhci_check_ports(void) {
                 if (uhci_get_device_descriptor()) {
                     uint8_t device_address = (uint8_t)(i + 1);
                     uint8_t max_packet_size = device_descriptor[7];
+                    
+                    // Adres 0 üzerinden tam descriptor'ı çekip başlangıç bilgilerini görelim
                     uhci_get_full_device_descriptor(0, max_packet_size);
+                    
+                    // Yeni cihaz adresini ata
                     uhci_set_address((uint8_t)i, device_address);
-                    for (volatile int delay = 0; delay < 100000; delay++) {
+                    for (volatile int delay = 0; delay < 150000; delay++) {
                         __asm__ volatile("nop");
                     }
+                    
+                    // Yeni adres (device_address) üzerinden tam descriptor'ı tekrar çek ve VID/PID değerlerini logla
                     uhci_get_full_device_descriptor(device_address, max_packet_size);
+                    
                     if (uhci_get_config_descriptor(device_address, max_packet_size)) {
                         uint16_t total_length = (uint16_t)config_descriptor[2]
                             | ((uint16_t)config_descriptor[3] << 8);
@@ -619,51 +627,61 @@ static void uhci_check_ports(void) {
 void uhci_init(void) {
     serial_write("UHCI: Initializing driver...\n");
 
-    // Search for UHCI controller on the PCI bus using the helper function
-    pci_device_t* dev = pci_get_device_by_class(0x0C, 0x03, 0x00);
+    int controller_found = 0;
 
-    if (!dev) {
+    // Sistemdeki TÜM PCI cihazlarını tarayarak bulduğumuz her USB denetleyicisini başlatalım
+    for (uint32_t i = 0; i < pci_get_device_count(); i++) {
+        pci_device_t* dev = pci_get_device_by_index(i);
+        // Lenovo M81 yonga setinde kontrolcüler ProgIF 0x20 (EHCI) olarak görünüyor
+        if (dev && dev->class_code == 0x0C && dev->subclass == 0x03 && dev->prog_if == 0x20) {
+            serial_write("UHCI: Controller found (EHCI/USB 2.0), enabling PCI Bus Mastering...\n");
+            pci_enable_bus_mastering(dev);
+
+            // EHCI kontrolcülerinde I/O alanı genellikle BAR0 üzerindedir (UHCI'da BAR4'tür)
+            // Eğer sistem EHCI ise BAR0 kullanmak gerekebilir, ancak mevcut yapıyı korumak için 
+            // BAR[0] veya BAR[4] durumunu kontrol edebiliriz:
+            uint32_t bar = dev->bar[0]; // EHCI için genellikle BAR0 kullanılır
+            
+            // Eğer BAR0 boşsa BAR4'ü denetle
+            if (bar == 0) {
+                bar = dev->bar[4];
+            }
+
+            if (!(bar & 0x01) && (bar & ~0x03) == 0) {
+                serial_write("UHCI Error: Valid BAR address not found!\n");
+                continue;
+            }
+
+            // I/O veya Memory taban adresi
+            uhci_io_base = (uint16_t)(bar & ~0x03);
+            serial_write("UHCI: Base address successfully obtained.\n");
+
+            // 1. Reset the Controller
+            outw(uhci_io_base + UHCI_USBCMD, USBCMD_HCRESET);
+            for (volatile int j = 0; j < 10000; j++) {
+                if (!(inw(uhci_io_base + UHCI_USBCMD) & USBCMD_HCRESET)) break;
+            }
+
+            // 2. Configure Frame List Memory
+            for (int j = 0; j < FRAME_LIST_COUNT; j++) {
+                frame_list[j] = 1;
+            }
+            outl(uhci_io_base + UHCI_FRBASEADD, virt_to_phys(frame_list));
+            outw(uhci_io_base + UHCI_FRNUM, 0);
+
+            // 3. Start the Controller
+            outw(uhci_io_base + UHCI_USBCMD, USBCMD_RS | (1 << 7));
+            serial_write("UHCI: Controller successfully started (Running).\n");
+
+            for (volatile int j = 0; j < 500000; j++);
+
+            // Portları kontrol et
+            uhci_check_ports();
+            controller_found = 1;
+        }
+    }
+
+    if (!controller_found) {
         serial_write("UHCI: No UHCI controller found on PCI bus.\n");
-        return;
     }
-
-    serial_write("UHCI: Controller found, enabling PCI Bus Mastering...\n");
-    pci_enable_bus_mastering(dev);
-
-    // Read BAR4 address for UHCI I/O space (PIIX3 uses BAR4)
-    uint32_t bar4 = dev->bar[4];
-    if (bar4 & 0x01) {
-        uhci_io_base = (uint16_t)(bar4 & ~0x03);
-    } else {
-        serial_write("UHCI Error: BAR4 is not configured as I/O space!\n");
-        return;
-    }
-
-    serial_write("UHCI: I/O Base address successfully obtained.\n");
-
-    // 1. Reset the Controller (Host Controller Reset)
-    outw(uhci_io_base + UHCI_USBCMD, USBCMD_HCRESET);
-    
-    // Wait for the reset bit to clear
-    for (volatile int i = 0; i < 10000; i++) {
-        if (!(inw(uhci_io_base + UHCI_USBCMD) & USBCMD_HCRESET)) break;
-    }
-
-    // 2. Configure Frame List Memory (Terminate bit set)
-    for (int i = 0; i < FRAME_LIST_COUNT; i++) {
-        frame_list[i] = 1; // Terminate bit (T = 1)
-    }
-    // Provide physical address of frame_list to the controller
-    outl(uhci_io_base + UHCI_FRBASEADD, virt_to_phys(frame_list));
-    outw(uhci_io_base + UHCI_FRNUM, 0);
-
-    // 3. Start the Controller (Run/Stop)
-    outw(uhci_io_base + UHCI_USBCMD, USBCMD_RS | (1 << 7));
-
-    serial_write("UHCI: Controller successfully started (Running).\n");
-
-    for (volatile int i = 0; i < 500000; i++);
-
-    // Check port statuses
-    uhci_check_ports();
 }

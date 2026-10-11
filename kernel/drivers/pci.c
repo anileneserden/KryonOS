@@ -110,18 +110,22 @@ static void pci_check_function(uint8_t bus, uint8_t slot, uint8_t func) {
         dev->bar[i] = pci_read_config32(bus, slot, func, 0x10 + (i * 4));
     }
 
-    // Konsola detaylı bilgi yazdıralım (Debug ekranında görünecek)
-    char log_buf[64] = "PCI [";
-    char num_buf[16];
+    // --- DETAYLI PCI USB/KONTROLCÜ LOGU ---
+    serial_write("PCI Dev [Bus: ");
+    serial_write_dec(bus);
+    serial_write(", Slot: ");
+    serial_write_dec(slot);
+    serial_write("] Class: 0x");
+    serial_write_hex8(dev->class_code);
+    serial_write(" Sub: 0x");
+    serial_write_hex8(dev->subclass);
+    serial_write(" ProgIF: 0x");
+    serial_write_hex8(dev->prog_if);
     
-    append_hex(bus, 2, num_buf);
-    // Basit bir formatla birleştirme
-    serial_write("PCI: Device detected (Vendor: ");
-    // Vendor ID ve Class kodunu serial üzerinden akıtıyoruz
     if (dev->class_code == 0x0C && dev->subclass == 0x03) {
-        serial_write("USB Controller found!]\n");
+        serial_write(" -> USB Controller Found!\n");
     } else {
-        serial_write("Standard Device)\n");
+        serial_write("\n");
     }
 }
 

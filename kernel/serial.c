@@ -43,7 +43,7 @@ void serial_write(const char* str) {
 
 void serial_write_dec(uint32_t n) {
     if (n == 0) {
-        serial_write_char('0');
+        serial_write("0");
         return;
     }
     
@@ -54,12 +54,40 @@ void serial_write_dec(uint32_t n) {
         buf[i++] = '0' + (n % 10);
         n /= 10;
     }
+    buf[i] = '\0';
     
-    while (i > 0) {
-        serial_write_char(buf[--i]);
+    // Diziyi ters çevir
+    for (int j = 0; j < i / 2; j++) {
+        char temp = buf[j];
+        buf[j] = buf[i - 1 - j];
+        buf[i - 1 - j] = temp;
     }
+    
+    serial_write(buf);
 }
 
 void serial_write_num(uint32_t n) {
     serial_write_dec(n);
+}
+
+void serial_write_hex8(uint8_t n) {
+    char hex_chars[] = "0123456789ABCDEF";
+    char buf[3];
+    buf[0] = hex_chars[(n >> 4) & 0xF];
+    buf[1] = hex_chars[n & 0xF];
+    buf[2] = '\0';
+    
+    serial_write(buf);
+}
+
+void serial_write_hex16(uint16_t n) {
+    char hex_chars[] = "0123456789ABCDEF";
+    char buf[5];
+    buf[0] = hex_chars[(n >> 12) & 0xF];
+    buf[1] = hex_chars[(n >> 8) & 0xF];
+    buf[2] = hex_chars[(n >> 4) & 0xF];
+    buf[3] = hex_chars[n & 0xF];
+    buf[4] = '\0';
+    
+    serial_write(buf);
 }
