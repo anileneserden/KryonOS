@@ -15,6 +15,7 @@
 #include <kernel/drivers/input/keyboard_ps2.h>
 #include <kernel/drivers/pci.h>
 #include <kernel/drivers/usb/uhci.h>
+#include <kernel/drivers/usb/ehci.h> // EHCI Sürücü Başlığı Eklendi
 #include <ui/cursor.h>
 #include <ui/desktop.h>
 #include <ui/serial_screen.h>
@@ -68,50 +69,39 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         serial_screen_write("DEBUG MODE ACTIVE: Screen & Mirror initialized.\n");
     }
 
-    // 2. PCI, display, and speaker hardware drivers
+    // 2. PCI, USB, display, and storage hardware drivers
     pci_init();
+    
+    // EHCI (USB 2.0) ve UHCI (USB 1.1) Başlatma Sırası
+    if (ehci_init()) {
+        serial_write("EHCI: USB 2.0 Controller initialized successfully.\n");
+    } else {
+        serial_write("EHCI: Initialization failed or controller not found.\n");
+    }
+    
     uhci_init();
     ata_init();
 
-    // 3. Filesystems and input drivers
-    //vfs_init();
+    // 3. Filesystems and VFS Integration
+    vfs_init();
     
-    /*
+    // FAT32 Mount (D Sürücüsü)
     if (fat32_init_disk(1, 0)) {
         fs_driver_t fat32_driver = fat32_get_driver();
         vfs_mount('D', "FAT32_VOL", fat32_driver);
         serial_write("FAT32 mounted to D:\\\n");
     } else {
         serial_write("FAT32: Driver could not be started!\n");
-    }*/
+    }
 
-    /*
-    // KRYFS Mount and VFS Integration (C Drive)
+    // KRYFS Mount ve VFS Entegrasyonu (C Sürücüsü)
     if (kryfs_mount() == 0) {
         fs_driver_t kryfs_driver = kryfs_get_driver();
         vfs_mount('C', "KRYFS_VOL", kryfs_driver);
         serial_write("KRYFS mounted successfully and registered to VFS on C:\\.\n");
     } else {
         serial_write("KRYFS: Driver could not be started!\n");
-    }*/
-
-    /*
-    // --- KRYFS / VFS FILE READ TEST ---
-    uint32_t test_size = 0;
-    void* file_data = vfs_read_file("C:/test.txt", &test_size);
-    */
-
-    /*
-    serial_write("---- test.txt File Content ----\n");
-    if (file_data && test_size > 0) {
-        serial_write((char*)file_data);
-        serial_write("\n");
-        kfree(file_data);
-    } else {
-        serial_write("[ERROR] test.txt could not be read or found!\n");
     }
-    serial_write("--------------------------------\n");
-    */
 
     // 4. Input drivers status check
     if (uhci_mouse_active()) {
@@ -128,7 +118,6 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         if (debug_mode) {
             serial_screen_write("Debug screen fully loaded. Press any key to test...\n");
             
-            // hlt kaldırıldı: Tuşları anlık ve kesintisiz tarayan aktif polling döngüsü
             while (1) {
                 if (inb(0x64) & 1) {
                     uint8_t scancode = inb(0x60);
@@ -140,19 +129,6 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
             desktop_init(); 
         }
     }
-
-    /*
-    serial_write("---- Starting KEF Application ----\n");
-    
-    uint32_t kef_debug_size = 0;
-    void* kef_debug_data = vfs_read_file("C:/Program Files/test4/test4.kef", &kef_debug_size);
-    if (kef_debug_data && kef_debug_size > 0) {
-        uint32_t dump_len = kef_debug_size > 1024 ? 1024 : kef_debug_size;
-        kernel_hexdump(kef_debug_data, dump_len);
-        kfree(kef_debug_data);
-    } else {
-        serial_write("[DEBUG ERROR] test4.kef could not be read for hexdump!\n");
-    }*/
 
     app_manager_init();
     fb_swap();
