@@ -5,5 +5,7 @@
 #include <stdbool.h>
 
 bool ehci_init(void);
+uint8_t ehci_poll(void);
+uint8_t ehci_mouse_active(void);
 
 #endif

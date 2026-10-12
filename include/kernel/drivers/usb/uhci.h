@@ -20,5 +20,6 @@ typedef struct {
 void uhci_init(void);
 uint8_t uhci_poll(void);
 uint8_t uhci_mouse_active(void);
+uint8_t uhci_keyboard_active(void);
 
 #endif

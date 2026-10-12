@@ -2,6 +2,7 @@
 #include <kernel/drivers/pci.h>
 #include <kernel/serial.h>
 #include <kernel/drivers/input/mouse_usb.h>
+#include <kernel/drivers/input/keyboard_usb.h>
 #include <arch/x86/io.h>
 
 // UHCI I/O Register Offsets
@@ -86,6 +87,33 @@ static uhci_td_t mouse_interrupt_tds[USB_MOUSE_TD_COUNT] __attribute__((aligned(
 static uint8_t mouse_interrupt_buffers[USB_MOUSE_TD_COUNT][8] __attribute__((aligned(16)));
 static uint8_t usb_mouse_ready = 0;
 static uint8_t mouse_interrupt_error_logged = 0;
+static uint8_t usb_keyboard_interrupt_endpoint = 0;
+static uint16_t usb_keyboard_interrupt_max_packet = 0;
+static uhci_qh_t keyboard_interrupt_qh __attribute__((aligned(16)));
+#define USB_KEYBOARD_TD_COUNT 4
+static uhci_td_t keyboard_interrupt_tds[USB_KEYBOARD_TD_COUNT] __attribute__((aligned(16)));
+static uint8_t keyboard_interrupt_buffers[USB_KEYBOARD_TD_COUNT][8] __attribute__((aligned(16)));
+static uint8_t usb_keyboard_ready = 0;
+static uint8_t keyboard_interrupt_error_logged = 0;
+
+static void uhci_rebuild_interrupt_schedule(void) {
+    uint32_t first_qh = 1;
+
+    if (usb_mouse_ready) {
+        mouse_interrupt_qh.head_link = usb_keyboard_ready
+            ? virt_to_phys(&keyboard_interrupt_qh) | 0x02 : 1;
+        first_qh = virt_to_phys(&mouse_interrupt_qh) | 0x02;
+    }
+
+    if (usb_keyboard_ready) {
+        keyboard_interrupt_qh.head_link = 1;
+        if (!usb_mouse_ready) first_qh = virt_to_phys(&keyboard_interrupt_qh) | 0x02;
+    }
+
+    for (int frame = 0; frame < FRAME_LIST_COUNT; frame++) {
+        frame_list[frame] = first_qh;
+    }
+}
 
 static void uhci_dispatch_control_transfer(void) {
     control_qh.head_link = 1;
@@ -407,37 +435,56 @@ static int uhci_get_full_config_descriptor(uint8_t address, uint8_t max_packet_s
 
     usb_interrupt_endpoint = 0;
     usb_interrupt_max_packet = 0;
+    usb_keyboard_interrupt_endpoint = 0;
+    usb_keyboard_interrupt_max_packet = 0;
 
     uint16_t descriptor_offset = 0;
-    uint8_t hid_interface_found = 0;
+    uint8_t hid_interface_protocol = 0;
     while (descriptor_offset + 2 <= total_length) {
         uint8_t length = config_descriptor[descriptor_offset];
         uint8_t type = config_descriptor[descriptor_offset + 1];
         if (length < 2 || descriptor_offset + length > total_length) break;
 
         if (type == 0x04 && length >= 9 && config_descriptor[descriptor_offset + 5] == 0x03) {
-            serial_write("UHCI: HID interface found.\n");
-            hid_interface_found = 1;
-            usb_mouse_set_absolute_mode(!(
-                config_descriptor[descriptor_offset + 6] == 0x01
-                && config_descriptor[descriptor_offset + 7] == 0x02));
-        } else if (hid_interface_found && type == 0x05 && length >= 7
+            uint8_t subclass = config_descriptor[descriptor_offset + 6];
+            hid_interface_protocol = config_descriptor[descriptor_offset + 7];
+            if (subclass == 0x01 && hid_interface_protocol == 0x01) {
+                serial_write("UHCI: HID boot keyboard interface found.\n");
+            } else if (subclass == 0x01 && hid_interface_protocol == 0x02) {
+                serial_write("UHCI: HID boot mouse interface found.\n");
+                usb_mouse_set_absolute_mode(0);
+            } else {
+                hid_interface_protocol = 0;
+            }
+        } else if (hid_interface_protocol && type == 0x05 && length >= 7
                    && (config_descriptor[descriptor_offset + 2] & 0x80)
                    && (config_descriptor[descriptor_offset + 3] & 0x03) == 0x03) {
             uint8_t endpoint = config_descriptor[descriptor_offset + 2];
             uint16_t max_packet = (uint16_t)config_descriptor[descriptor_offset + 4]
                 | ((uint16_t)config_descriptor[descriptor_offset + 5] << 8);
-            usb_interrupt_endpoint = endpoint;
-            usb_interrupt_max_packet = max_packet;
-            serial_write("UHCI: Interrupt IN endpoint found: 0x");
-            serial_write_dec(endpoint);
-            serial_write(" MaxPacket: ");
-            serial_write_dec(max_packet);
-            serial_write("\n");
+            if (hid_interface_protocol == 0x01 && max_packet >= 8) {
+                usb_keyboard_interrupt_endpoint = endpoint;
+                usb_keyboard_interrupt_max_packet = max_packet;
+                serial_write("UHCI: Keyboard interrupt IN endpoint found: ");
+                serial_write_dec(endpoint & 0x0F);
+                serial_write(" MaxPacket: ");
+                serial_write_dec(max_packet);
+                serial_write("\n");
+            } else if (hid_interface_protocol == 0x02) {
+                usb_interrupt_endpoint = endpoint;
+                usb_interrupt_max_packet = max_packet;
+                serial_write("UHCI: Mouse interrupt IN endpoint found: ");
+                serial_write_dec(endpoint & 0x0F);
+                serial_write(" MaxPacket: ");
+                serial_write_dec(max_packet);
+                serial_write("\n");
+            }
         }
         descriptor_offset += length;
     }
-    return usb_interrupt_endpoint != 0 && usb_interrupt_max_packet != 0;
+    return (usb_interrupt_endpoint != 0 && usb_interrupt_max_packet != 0)
+        || (usb_keyboard_interrupt_endpoint != 0
+            && usb_keyboard_interrupt_max_packet >= 8);
 }
 
 static int uhci_set_configuration(uint8_t address, uint8_t configuration_value) {
@@ -499,17 +546,43 @@ static void uhci_start_mouse_interrupt(uint8_t address) {
         | UHCI_LINK_DEPTH_FIRST;
 
     usb_mouse_ready = 1;
-    uint32_t qh_phys = virt_to_phys(&mouse_interrupt_qh) | 0x02;
-    for (int i = 0; i < FRAME_LIST_COUNT; i++) {
-        frame_list[i] = qh_phys;
-    }
+    uhci_rebuild_interrupt_schedule();
     serial_write("UHCI: USB mouse interrupt polling started.\n");
 }
 
-uint8_t uhci_poll(void) {
-    if (!usb_mouse_ready) return 0;
+static void uhci_start_keyboard_interrupt(uint8_t address) {
+    if (usb_keyboard_interrupt_max_packet < 8
+        || usb_keyboard_interrupt_max_packet > 8) {
+        serial_write("UHCI: Unsupported boot-keyboard report size.\n");
+        return;
+    }
 
-    for (int i = 0; i < USB_MOUSE_TD_COUNT; i++) {
+    for (int i = 0; i < USB_KEYBOARD_TD_COUNT; i++) {
+        int next = (i + 1) % USB_KEYBOARD_TD_COUNT;
+        keyboard_interrupt_tds[i].link = virt_to_phys(&keyboard_interrupt_tds[next])
+            | UHCI_LINK_DEPTH_FIRST;
+        keyboard_interrupt_tds[i].status = TD_STAT_ACTIVED | TD_STAT_IOC
+            | uhci_td_speed_flags | (3 << 27);
+        keyboard_interrupt_tds[i].token = (7 << 21)
+            | ((uint32_t)(i & 1) << 19)
+            | ((uint32_t)(usb_keyboard_interrupt_endpoint & 0x0F) << 15)
+            | ((uint32_t)address << 8) | USB_PID_IN;
+        keyboard_interrupt_tds[i].buffer = virt_to_phys(keyboard_interrupt_buffers[i]);
+    }
+
+    keyboard_interrupt_qh.head_link = 1;
+    keyboard_interrupt_qh.element_link = virt_to_phys(&keyboard_interrupt_tds[0])
+        | UHCI_LINK_DEPTH_FIRST;
+    usb_keyboard_ready = 1;
+    uhci_rebuild_interrupt_schedule();
+    serial_write("UHCI: USB keyboard interrupt polling started.\n");
+}
+
+uint8_t uhci_poll(void) {
+    if (!usb_mouse_ready && !usb_keyboard_ready) return 0;
+    uint8_t input_updated = 0;
+
+    for (int i = 0; usb_mouse_ready && i < USB_MOUSE_TD_COUNT; i++) {
         uint32_t td_status = mouse_interrupt_tds[i].status;
         if (td_status & TD_STAT_ACTIVED) continue;
 
@@ -532,13 +605,41 @@ uint8_t uhci_poll(void) {
         }
 
         usb_mouse_process_report(mouse_interrupt_buffers[i], actual_length);
-        return 1;
+        input_updated = 1;
     }
-    return 0;
+
+    for (int i = 0; usb_keyboard_ready && i < USB_KEYBOARD_TD_COUNT; i++) {
+        uint32_t td_status = keyboard_interrupt_tds[i].status;
+        if (td_status & TD_STAT_ACTIVED) continue;
+
+        uint32_t actual_length_field = td_status & 0x7FF;
+        uint8_t actual_length = actual_length_field == 0x7FF
+            ? 0 : (uint8_t)(actual_length_field + 1);
+        uint8_t report_valid = !(td_status & TD_STAT_ERROR_MASK)
+            && actual_length == 8;
+
+        keyboard_interrupt_tds[i].status = TD_STAT_ACTIVED | TD_STAT_IOC
+            | uhci_td_speed_flags | (3 << 27);
+        if (!report_valid) {
+            if ((td_status & TD_STAT_ERROR_MASK) && !keyboard_interrupt_error_logged) {
+                serial_write("UHCI: Ignoring failed keyboard interrupt TD.\n");
+                keyboard_interrupt_error_logged = 1;
+            }
+            continue;
+        }
+
+        usb_keyboard_process_report(keyboard_interrupt_buffers[i], actual_length);
+        input_updated = 1;
+    }
+    return input_updated;
 }
 
 uint8_t uhci_mouse_active(void) {
     return usb_mouse_ready;
+}
+
+uint8_t uhci_keyboard_active(void) {
+    return usb_keyboard_ready;
 }
 
 uint8_t uhci_is_port_connected(int port_idx) {
@@ -629,6 +730,9 @@ static void uhci_check_ports(void) {
                             if (uhci_set_configuration(device_address, config_descriptor[5])) {
                                 if (usb_interrupt_endpoint != 0) {
                                     uhci_start_mouse_interrupt(device_address);
+                                }
+                                if (usb_keyboard_interrupt_endpoint != 0) {
+                                    uhci_start_keyboard_interrupt(device_address);
                                 }
                             }
                         }

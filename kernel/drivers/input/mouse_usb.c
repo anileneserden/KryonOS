@@ -22,7 +22,7 @@ void usb_mouse_process_report(const uint8_t* report, uint8_t length) {
     if (!report || length < 3) return;
 
     if (!report_logged) {
-        serial_write("UHCI: USB mouse HID report received.\n");
+        serial_write("USB mouse HID report received.\n");
         report_logged = 1;
     }
 

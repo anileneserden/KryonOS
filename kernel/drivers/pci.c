@@ -115,7 +115,13 @@ static void pci_check_function(uint8_t bus, uint8_t slot, uint8_t func) {
     serial_write_dec(bus);
     serial_write(", Slot: ");
     serial_write_dec(slot);
-    serial_write("] Class: 0x");
+    serial_write(", Func: ");
+    serial_write_dec(func);
+    serial_write("] Vendor: 0x");
+    serial_write_hex16(dev->vendor_id);
+    serial_write(" Device: 0x");
+    serial_write_hex16(dev->device_id);
+    serial_write(" Class: 0x");
     serial_write_hex8(dev->class_code);
     serial_write(" Sub: 0x");
     serial_write_hex8(dev->subclass);

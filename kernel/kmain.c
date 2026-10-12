@@ -106,10 +106,13 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     }
 
     // 4. Input drivers status check
-    if (uhci_mouse_active()) {
+    if (uhci_mouse_active() || ehci_mouse_active()) {
         serial_write("USB mouse active and ready.\n");
     } else {
         serial_write("WARNING: USB mouse not active yet, waiting for polling...\n");
+    }
+    if (uhci_keyboard_active()) {
+        serial_write("USB keyboard active; key presses will be logged.\n");
     }
 
     // 5. Graphical Interface Initialization and Initial Drawing
@@ -121,6 +124,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
             serial_screen_write("Debug screen fully loaded. Press any key to test...\n");
             
             while (1) {
+                uhci_poll();
                 if (inb(0x64) & 1) {
                     uint8_t scancode = inb(0x60);
                     serial_screen_handle_input(scancode);
@@ -144,6 +148,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     // 7. Main event loop (GUI active loop)
     while (1) {
         uint8_t input_updated = uhci_poll();
+        input_updated |= ehci_poll();
         if (inb(0x64) & 1) {
             keyboard_handler();
             input_updated = 1;

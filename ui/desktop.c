@@ -15,6 +15,7 @@
 #include <arch/x86/io.h>
 #include <kernel/power.h>
 #include <kernel/drivers/rtc.h>
+#include <kernel/drivers/usb/ehci.h>
 
 // Eğer kernel/string.h içinde snprintf prototipi yoksa uyarıyı önlemek için:
 int snprintf(char *str, size_t size, const char *format, ...);
@@ -155,7 +156,7 @@ void desktop_redraw(void) {
     int cur_rx = cursor_get_x();
     int cur_ry = cursor_get_y();
     uint8_t last_sc = keyboard_get_last_scancode();
-    uint8_t usb_active = uhci_mouse_active();
+    uint8_t usb_active = uhci_mouse_active() || ehci_mouse_active();
 
     char buf_mouse[64];
     char buf_key[64];
