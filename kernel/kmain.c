@@ -15,6 +15,7 @@
 #include <kernel/drivers/input/keyboard_ps2.h>
 #include <kernel/drivers/pci.h>
 #include <kernel/drivers/usb/uhci.h>
+#include <kernel/drivers/usb/xhci.h>
 #include <ui/cursor.h>
 #include <ui/desktop.h>
 #include <ui/serial_screen.h>
@@ -71,6 +72,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     // 2. PCI, display, and speaker hardware drivers
     pci_init();
     uhci_init();
+    xhci_init();
     ata_init();
 
     // 3. Filesystems and input drivers

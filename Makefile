@@ -32,6 +32,7 @@ SRC_C = \
     kernel/drivers/input/mouse_usb.c \
     kernel/drivers/storage/ata.c \
     kernel/drivers/usb/uhci.c \
+    kernel/drivers/usb/xhci.c \
     kernel/drivers/video/font/font8x8_basic.c \
     kernel/drivers/video/font/font8x16_basic.c \
     kernel/drivers/video/fb.c \
@@ -111,6 +112,6 @@ run: iso $(DISK_KRYFS) $(DISK_FAT32)
 	   -drive format=raw,file=$(DISK_FAT32),index=1,media=disk \
 	   -audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
 	   -machine pcspk-audiodev=audio0 \
-	   -device piix3-usb-uhci,id=uhci \
-	   -device usb-mouse,bus=uhci.0 \
+	   -device qemu-xhci,id=xhci \
+	   -device usb-mouse,bus=xhci.0 \
 	   -serial stdio -vga std -display sdl,gl=on
