@@ -1,13 +1,21 @@
 #include <kernel/drivers/input/mouse_usb.h>
-#include <kernel/drivers/input/mouse_ps2.h>
 #include <kernel/drivers/video/fb.h>
 #include <kernel/serial.h>
 
 static uint8_t report_logged = 0;
 static uint8_t absolute_mode = 0;
 
+// mouse_usb.c içinde:
+int32_t usb_mouse_x = 400;
+int32_t usb_mouse_y = 300;
+uint8_t usb_mouse_buttons = 0;
+
 void usb_mouse_set_absolute_mode(uint8_t new_absolute_mode) {
     absolute_mode = new_absolute_mode;
+}
+
+uint8_t usb_mouse_is_absolute(void) {
+    return absolute_mode;
 }
 
 void usb_mouse_process_report(const uint8_t* report, uint8_t length) {

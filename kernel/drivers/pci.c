@@ -78,6 +78,15 @@ pci_device_t* pci_get_device_by_class(uint8_t class_code, uint8_t subclass, uint
     return 0;
 }
 
+// Yardımcı: Hexadecimal string çevirici
+static void append_hex(uint32_t val, int digits, char* buf) {
+    char hex[] = "0123456789ABCDEF";
+    for (int i = digits - 1; i >= 0; i--) {
+        *buf++ = hex[(val >> (i * 4)) & 0xF];
+    }
+    *buf = '\0';
+}
+
 // --- PCI Bus Scan ---
 
 static void pci_check_function(uint8_t bus, uint8_t slot, uint8_t func) {
@@ -101,7 +110,23 @@ static void pci_check_function(uint8_t bus, uint8_t slot, uint8_t func) {
         dev->bar[i] = pci_read_config32(bus, slot, func, 0x10 + (i * 4));
     }
 
-    serial_write("PCI: Device detected.\n");
+    // --- DETAYLI PCI USB/KONTROLCÜ LOGU ---
+    serial_write("PCI Dev [Bus: ");
+    serial_write_dec(bus);
+    serial_write(", Slot: ");
+    serial_write_dec(slot);
+    serial_write("] Class: 0x");
+    serial_write_hex8(dev->class_code);
+    serial_write(" Sub: 0x");
+    serial_write_hex8(dev->subclass);
+    serial_write(" ProgIF: 0x");
+    serial_write_hex8(dev->prog_if);
+    
+    if (dev->class_code == 0x0C && dev->subclass == 0x03) {
+        serial_write(" -> USB Controller Found!\n");
+    } else {
+        serial_write("\n");
+    }
 }
 
 void pci_init(void) {
@@ -127,4 +152,17 @@ void pci_init(void) {
     }
 
     serial_write("PCI scan complete.\n");
+}
+
+// Tespit edilen PCI cihaz sayısını döndürür
+uint32_t pci_get_device_count(void) {
+    return pci_device_count;
+}
+
+// Belirtilen index'teki PCI cihaz pointer'ını döndürür
+pci_device_t* pci_get_device_by_index(uint32_t index) {
+    if (index < pci_device_count) {
+        return &pci_devices[index];
+    }
+    return 0;
 }
