@@ -167,7 +167,9 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
 
     // 7. Main event loop (GUI active loop)
     while (1) {
-        uint8_t input_updated = uhci_poll();
+        // UHCI yerine xHCI polling fonksiyonunu çağırıyoruz (veya xhci_poll ekleyeceğiz)
+        uint8_t input_updated = 0; // xhci_poll(); 
+        
         if (inb(0x64) & 1) {
             keyboard_handler();
             input_updated = 1;
