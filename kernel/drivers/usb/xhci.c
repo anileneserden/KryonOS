@@ -5,6 +5,9 @@
 #include <stdint.h>
 #include <stddef.h>
 
+// Dışarıdan USB fare rapor işleme fonksiyonunun prototipi
+extern void usb_mouse_process_report(const uint8_t* report, uint8_t length);
+
 // xHCI Class Codes (PCI)
 #define XHCI_CLASS_CODE    0x0C
 #define XHCI_SUBCLASS      0x03
@@ -137,4 +140,25 @@ void xhci_init(void) {
     }
 
     serial_write("[xHCI] xHCI successfully initialized and ports scanned!\n");
+}
+
+uint8_t xhci_poll(void) {
+    volatile uint32_t *port_sc_base = (volatile uint32_t *)(uintptr_t)((uintptr_t)xhci_op + 0x400);
+    uint32_t portsc = port_sc_base[0];
+    
+    // Cihaz bağlı (CCS) ve port aktif (Enabled) durumdaysa
+    if ((portsc & (1 << 0)) && (portsc & (1 << 1))) {
+        // Test amaçlı veya ara geçiş aşamasında imlecin hareket döngüsünü 
+        // tetiklemek için veri paketi işleme yapısı buraya eklenecektir.
+        
+        /*
+        uint8_t mouse_packet[3] = {0};
+        // usb_mouse_process_report(mouse_packet, 3);
+        // return 1;
+        */
+
+        return 0;
+    }
+    
+    return 0;
 }
