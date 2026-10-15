@@ -38,6 +38,9 @@ void usb_mouse_process_report(const uint8_t* report, uint8_t length) {
         if (usb_mouse_y < 0) usb_mouse_y = 0;
         if (width > 0 && usb_mouse_x >= width) usb_mouse_x = width - 1;
         if (height > 0 && usb_mouse_y >= height) usb_mouse_y = height - 1;
+        mouse_x = usb_mouse_x;
+        mouse_y = usb_mouse_y;
+        mouse_buttons = usb_mouse_buttons;
         return;
     }
 
@@ -52,4 +55,7 @@ void usb_mouse_process_report(const uint8_t* report, uint8_t length) {
         usb_mouse_x = ((int32_t)absolute_x * (width - 1)) / 32767;
         usb_mouse_y = ((int32_t)absolute_y * (height - 1)) / 32767;
     }
+    mouse_x = usb_mouse_x;
+    mouse_y = usb_mouse_y;
+    mouse_buttons = usb_mouse_buttons;
 }

@@ -9,6 +9,7 @@
 
 static uint8_t mouse_cycle = 0;
 static int8_t mouse_bytes[3];
+static uint8_t mouse_packet_logged = 0;
 int32_t mouse_x = 400; 
 int32_t mouse_y = 300;
 uint8_t mouse_buttons = 0;
@@ -57,6 +58,11 @@ void mouse_handler(void) {
                 mouse_bytes[2] = byte;
                 mouse_cycle = 0;
 
+                if (!mouse_packet_logged) {
+                    serial_write("PS/2 mouse packet received.\n");
+                    mouse_packet_logged = 1;
+                }
+
                 mouse_buttons = mouse_bytes[0] & 0x07;
                 int8_t dx = mouse_bytes[1];
                 int8_t dy = mouse_bytes[2];
@@ -90,7 +96,7 @@ void mouse_init(void) {
     mouse_wait(1);
     outb(PS2_COMMAND_PORT, 0x20);
     mouse_wait(0);
-    status = (inb(PS2_DATA_PORT) | 2); 
+    status = (inb(PS2_DATA_PORT) | 3);
     
     mouse_wait(1);
     outb(PS2_COMMAND_PORT, 0x60);

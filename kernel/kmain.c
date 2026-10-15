@@ -23,6 +23,7 @@
 #include <kernel/mem/heap.h>
 #include <kernel/mem/pmm.h>
 #include <kernel/mem/vmm.h>
+#include <kernel/interrupts.h>
 #include <arch/x86/io.h>
 #include <kernel/hexdump.h>
 #include <kernel/loader/kef2.h>
@@ -62,6 +63,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
 
     // KLAVYE: Debug ekranı açılmadan hemen önce PS/2 klavyeyi başlatıyoruz ki portlar aktif olsun
     keyboard_init();
+    mouse_init();
 
     if (debug_mode) {
         serial_screen_init();
@@ -95,8 +97,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         serial_write("KRYFS: Driver could not be started!\n");
     }
 
-    // 4. Input drivers status check (xHCI tabanlı kontrol)
-    serial_write("[xHCI] USB mouse controller ready via xHCI.\n");
+    serial_write("[input] PS/2 IRQ input active; xHCI HID input is not implemented.\n");
 
     // 5. Graphical Interface Initialization and Initial Drawing
     uint32_t width = fb_get_width();
@@ -127,13 +128,23 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         serial_write("AC97: Driver initialized and ready.\n");
     }
 
+    interrupts_init();
+    serial_write("PS/2 IRQs enabled; idle loop waits for input with HLT.\n");
+
     // 7. Main event loop (GUI active loop)
     while (1) {
         uint8_t input_updated = xhci_poll();
-        
-        if (inb(0x64) & 1) {
-            keyboard_handler();
-            input_updated = 1;
+
+        if (interrupts_take_input_pending()) {
+            uint8_t ps2_status;
+            while ((ps2_status = inb(0x64)) & 1) {
+                if (ps2_status & (1 << 5)) {
+                    mouse_handler();
+                } else {
+                    keyboard_handler();
+                }
+                input_updated = 1;
+            }
         }
 
         if (input_updated) {
@@ -142,5 +153,6 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         }
 
         cursor_update_and_redraw();
+        interrupts_wait_for_input();
     }
 }
