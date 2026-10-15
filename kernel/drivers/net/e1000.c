@@ -99,12 +99,6 @@ static void e1000_init_tx(void) {
     e1000_write32(E1000_REG_TCTL, tctl);
 }
 
-static void serial_write_hex8(uint8_t val) {
-    const char hex_chars[] = "0123456789ABCDEF";
-    serial_write_char(hex_chars[(val >> 4) & 0x0F]);
-    serial_write_char(hex_chars[val & 0x0F]);
-}
-
 int e1000_init(void) {
     serial_write("[e1000] Looking for Intel e1000 network card in PCI registry...\n");
 
