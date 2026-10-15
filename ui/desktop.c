@@ -19,6 +19,9 @@
 // Eğer kernel/string.h içinde snprintf prototipi yoksa uyarıyı önlemek için:
 int snprintf(char *str, size_t size, const char *format, ...);
 
+// USB fare aktiflik durumu fonksiyonu prototipi
+extern uint8_t uhci_mouse_active(void);
+
 static int timezone_offset = 3;
 uint32_t desktop_bg_color = 0xFF1E1E1E;
 
@@ -130,13 +133,46 @@ void desktop_redraw(void) {
         }
     }
 
-    // 4. Draw open windows
-    wm_draw_all();
-
-    // 4.5. MASAÜSTÜ İKONLARINI ÇİZ
+    // 4. --- MASAÜSTÜ İKONLARINI ÇİZ (Pencerelerin altında kalması için önce çiziliyor) ---
     int cur_x = cursor_get_x();
     int cur_y = cursor_get_y();
     desktop_icons_draw(cur_x, cur_y, false);
+
+    // 4.5. Draw open windows (İkonların üzerine çizilir)
+    wm_draw_all();
+
+    // --- SOL ÜSTTE GELİŞMİŞ DONANIM VE KOORDİNAT PANELİ ---
+    int info_x = 10;
+    int info_y = 10;
+    int info_w = 240;
+    int info_h = 92;
+
+    // Panel arkaplanı ve çerçevesi
+    gfx_fill_rect(info_x, info_y, info_w, info_h, 0xFF1E1E1E);
+    gfx_draw_rect(info_x, info_y, info_w, info_h, 0xFF505050);
+
+    // Verileri toplama
+    int cur_rx = cursor_get_x();
+    int cur_ry = cursor_get_y();
+    uint8_t last_sc = keyboard_get_last_scancode();
+    uint8_t usb_active = uhci_mouse_active();
+
+    char buf_mouse[64];
+    char buf_key[64];
+    char buf_port[64];
+    char buf_buttons[64];
+    
+    snprintf(buf_mouse, sizeof(buf_mouse), "Mouse: X=%d Y=%d", cur_rx, cur_ry);
+    snprintf(buf_key, sizeof(buf_key), "Key Scancode: 0x%X", last_sc);
+    snprintf(buf_port, sizeof(buf_port), "USB Mouse: %s", usb_active ? "READY" : "WAITING");
+    snprintf(buf_buttons, sizeof(buf_buttons), "Buttons Mask: 0x%X", mouse_buttons);
+
+    // Metinleri ekrana yazdırma (0xFF ön ekiyle tam opak yeşil tonu)
+    gfx_draw_text(info_x + 8, info_y + 8,  0xFF00FF66, buf_mouse);
+    gfx_draw_text(info_x + 8, info_y + 28, 0xFF00FF66, buf_key);
+    gfx_draw_text(info_x + 8, info_y + 48, 0xFF00FF66, buf_port);
+    gfx_draw_text(info_x + 8, info_y + 68, 0xFF00FF66, buf_buttons);
+    // ---------------------------------------
 
     // 5. Bottom taskbar - draw it on the topmost layer (above windows)
     int taskbar_h = 36;
@@ -322,13 +358,12 @@ void desktop_init(void) {
             }
         }
 
-        // 2. Desktop Background Color Parse Etme (Örn: backcolor=0xFF2B4C7E veya backcolor=0x2B4C7E)
+        // 2. Desktop Background Color Parse Etme
         for (uint32_t i = 0; i < cfg_size - 9; i++) {
             if (strncmp(&cfg_content[i], "backcolor=", 10) == 0) {
                 int idx = i + 10;
                 uint32_t parsed_color = 0;
 
-                // Eğer "0x" veya "0X" ile başlıyorsa atlayalım
                 if (cfg_content[idx] == '0' && (cfg_content[idx+1] == 'x' || cfg_content[idx+1] == 'X')) {
                     idx += 2;
                 }
@@ -339,13 +374,12 @@ void desktop_init(void) {
                     if (c >= '0' && c <= '9') nibble = c - '0';
                     else if (c >= 'a' && c <= 'f') nibble = c - 'a' + 10;
                     else if (c >= 'A' && c <= 'F') nibble = c - 'A' + 10;
-                    else break; // Hex karakter bittiğinde çık
+                    else break;
 
                     parsed_color = (parsed_color << 4) | nibble;
                     idx++;
                 }
 
-                // Eğer alpha kanalı belirtilmemişse (örneğin 6 haneliyse, örn: 0x1E1E1E), otomatik FF ekleyelim
                 if ((parsed_color & 0xFF000000) == 0) {
                     parsed_color |= 0xFF000000;
                 }
@@ -359,21 +393,35 @@ void desktop_init(void) {
     }
     // ----------------------------------------------
 
-    // Initialize the grid here using the screen dimensions
+    // 1. ÖNCE imleci başlat (PNG yüklenir, boyutlar oturur ve cursor_visible = false olur)
+    cursor_init();
+    cursor_sync_position();
+
+    // 2. Grid, ikonlar ve pencere yöneticisini başlat
     grid_init(width, height, 100, 100);
     desktop_icons_init();
     wm_init();
 
+    // 3. Ekranı ilk kez çizime hazırla ve tetikle
     damage_union_rect(0, 0, width, height);
     desktop_redraw();
-
-    cursor_init();
-    cursor_sync_position();
-    cursor_show();
-    cursor_refresh_background();
 }
 
 void desktop_process_input(void) {
+    // --- KLAVYE KISAYOL KONTROLÜ (SUPER TUŞU -> BAŞLAT MENÜSÜ) ---
+    uint8_t scancode = keyboard_get_last_scancode();
+    if (scancode == 0x5B) { // 0x5B: Super / Windows tuşu
+        start_menu_open = !start_menu_open;
+        right_menu_open = false; // Çakışmayı önlemek için sağ tık menüsünü kapat
+
+        int screen_w = fb_get_width();
+        int screen_h = fb_get_height();
+        damage_union_rect(0, 0, screen_w, screen_h);
+        desktop_redraw();
+
+        keyboard_clear_last_scancode(); // Tuşun tekrar tetiklenmesini önle
+    }
+
     // 1. Get the previous cursor position (if the cursor module stores it)
     int old_x = cursor_get_old_x();
     int old_y = cursor_get_old_y();
@@ -490,8 +538,8 @@ void desktop_process_input(void) {
     }
     prev_mouse_right = current_mouse_right;
 
-    // 5. If the cursor moved, mark its old and new positions as damaged
-    if (old_x != new_x || old_y != new_y) {
+    // 5. If the cursor moved or actions occurred, mark relevant areas as damaged
+    if (old_x != new_x || old_y != new_y || scancode != 0) {
         damage_union_rect(old_x, old_y, cursor_w, cursor_h); // Clear the old position
         damage_union_rect(new_x, new_y, cursor_w, cursor_h); // Draw the new position
         
@@ -499,6 +547,9 @@ void desktop_process_input(void) {
         if (right_menu_open) {
             damage_union_rect(right_menu_x, right_menu_y, RIGHT_MENU_W, RIGHT_MENU_H);
         }
+
+        // Sol üstteki genişletilmiş donanım panelinin alanını hasarlı bölgeye ekle
+        damage_union_rect(10, 10, 240, 92);
 
         // Trigger a redraw
         desktop_redraw();

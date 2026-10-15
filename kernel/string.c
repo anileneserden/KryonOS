@@ -83,6 +83,25 @@ char* strcat(char* dest, const char* src) {
     return dest;
 }
 
+char* strstr(const char* haystack, const char* needle) {
+    if (!*needle) return (char*)haystack;
+
+    for (const char* h = haystack; *h != '\0'; h++) {
+        const char* h_ptr = h;
+        const char* n_ptr = needle;
+
+        while (*h_ptr && *n_ptr && (*h_ptr == *n_ptr)) {
+            h_ptr++;
+            n_ptr++;
+        }
+
+        if (*n_ptr == '\0') {
+            return (char*)h;
+        }
+    }
+    return NULL;
+}
+
 /* --- KERNEL SNPRINTF IMPLEMENTASYONU --- */
 
 static void itoa_simple(int value, char *str, int base) {

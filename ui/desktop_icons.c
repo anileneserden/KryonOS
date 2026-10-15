@@ -111,16 +111,30 @@ void desktop_icons_draw(int32_t mx, int32_t my, bool click_started) {
         int icon_x = box_x + (box_w - icon_w) / 2;
         int icon_y = box_y + 8;
 
-        gfx_fill_rect(icon_x, icon_y, icon_w, icon_h, 0xFFCCCCCC);
-        gfx_fill_rect(icon_x + 3, icon_y + 3, icon_w - 6, icon_h - 6, 0xFFFFFFFF);
-        gfx_fill_rect(icon_x + 7, icon_y + 9, 14, 2, 0xFF555555);
-        gfx_fill_rect(icon_x + 7, icon_y + 15, 18, 2, 0xFF555555);
+        // Dosyanın klasör olup olmadığını kontrol ediyoruz
+        // (Not: vfs_file_info_t yapınızda bu alan 'is_directory' değilse, header dosyanızdaki isme göre güncelleyebilirsiniz)
+        bool is_dir = files[i].is_directory; 
+
+        if (is_dir) {
+            // --- SARI KLASÖR SİMGESİ ---
+            // Klasör sekmesi (üst kısım)
+            gfx_fill_rect(icon_x + 4, icon_y + 6, 12, 5, 0xFFD4AC0D);
+            // Klasör gövdesi (ana sarı alan)
+            gfx_fill_rect(icon_x + 2, icon_y + 10, icon_w - 4, icon_h - 12, 0xFFF1C40F);
+            // Klasör içi detay çizgisi (gölge efekti)
+            gfx_fill_rect(icon_x + 5, icon_y + 15, icon_w - 10, 2, 0xD4AC0DFF);
+        } else {
+            // --- DOSYA / BELGE SİMGESİ (Mevcut tasarımınız) ---
+            gfx_fill_rect(icon_x, icon_y, icon_w, icon_h, 0xFFCCCCCC);
+            gfx_fill_rect(icon_x + 3, icon_y + 3, icon_w - 6, icon_h - 6, 0xFFFFFFFF);
+            gfx_fill_rect(icon_x + 7, icon_y + 9, 14, 2, 0xFF555555);
+            gfx_fill_rect(icon_x + 7, icon_y + 15, 18, 2, 0xFF555555);
+        }
 
         // --- METNİ KISALTMA VE ORTALAMA ---
         char display_name[32];
         int char_width = 8;
-        // Kutunun içine sığabilecek maksimum karakter sayısı (sağdan/soldan 4px padding bırakarak)
-        int max_chars = (box_w - 8) / char_width; // 80 / 8 = 10 karakter
+        int max_chars = (box_w - 8) / char_width; // 10 karakter
 
         truncate_text(files[i].name, display_name, sizeof(display_name), max_chars);
 

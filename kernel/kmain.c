@@ -1,3 +1,4 @@
+// kernel/kmain.c
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -15,15 +16,20 @@
 #include <kernel/drivers/net/e1000.h>
 #include <kernel/drivers/pci.h>
 #include <kernel/drivers/usb/uhci.h>
+#include <kernel/drivers/usb/xhci.h>
 #include <ui/cursor.h>
 #include <ui/desktop.h>
+#include <ui/serial_screen.h>
 #include <kernel/app.h>
 #include <kernel/mem/heap.h>
 #include <kernel/mem/pmm.h>
 #include <kernel/mem/vmm.h>
 #include <arch/x86/io.h>
 #include <kernel/hexdump.h>
-#include <kernel/kef.h>
+#include <kernel/loader/kef2.h>
+
+// serial.c içerisindeki mirror fonksiyonunun prototipi
+extern void serial_screen_mirror_enable(bool enable);
 
 void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     serial_init();
@@ -36,24 +42,48 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
 
     multiboot_info_t* mboot = (multiboot_info_t*)mboot_info_addr;
 
+    bool debug_mode = false;
+    if ((mboot->flags & (1 << 2)) && mboot->cmdline) {
+        char* cmdline = (char*)mboot->cmdline;
+        for (int i = 0; cmdline[i] != '\0'; i++) {
+            if (cmdline[i] == 'd' && cmdline[i+1] == 'e' && cmdline[i+2] == 'b' && cmdline[i+3] == 'u' && cmdline[i+4] == 'g') {
+                debug_mode = true;
+                break;
+            }
+        }
+    }
+
     // 1. Memory and heap initialization
     pmm_init(mboot);
     vmm_init();
     heap_init(0x2000000, 1024 * 1024 * 16);
 
+    // Framebuffer başlatılıyor
+    fb_init(mboot);
+
+    // KLAVYE: Debug ekranı açılmadan hemen önce PS/2 klavyeyi başlatıyoruz ki portlar aktif olsun
+    keyboard_init();
+
+    if (debug_mode) {
+        serial_screen_init();
+        serial_screen_mirror_enable(true); // Tüm serial_write logları ekrana da akacak
+        serial_screen_write("DEBUG MODE ACTIVE: Screen & Mirror initialized.\n");
+    }
+
     // 2. PCI, display, and speaker hardware drivers
     pci_init();
     uhci_init();
-    fb_init(mboot);
+    xhci_init();
     ata_init();
     e1000_init();
 
-    // 3. Filesystems and input drivers
+    // 3. Filesystems and VFS Initialization
     vfs_init();
     
     if (fat32_init_disk(1, 0)) {
         fs_driver_t fat32_driver = fat32_get_driver();
         vfs_mount('D', "FAT32_VOL", fat32_driver);
+        serial_write("FAT32 mounted to D:\\\n");
     } else {
         serial_write("FAT32: Driver could not be started!\n");
     }
@@ -67,70 +97,28 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         serial_write("KRYFS: Driver could not be started!\n");
     }
 
-    // --- KRYFS / VFS FILE READ TEST ---
-    uint32_t test_size = 0;
-    void* file_data = vfs_read_file("C:/test.txt", &test_size);
-    
-    serial_write("---- test.txt File Content ----\n");
-    if (file_data && test_size > 0) {
-        serial_write((char*)file_data);
-        serial_write("\n");
-        kfree(file_data);
-    } else {
-        serial_write("[ERROR] test.txt could not be read or found!\n");
-    }
-    serial_write("--------------------------------\n");
-    // ------------------------------------
-
-    // --- VFS DIRECTORY LISTING TEST ---
-    serial_write("---- VFS Directory Listing Test (C:/) ----\n");
-    vfs_file_info_t root_files[16];
-    int file_count = vfs_get_directory_files("C:/", root_files, 16);
-    
-    if (file_count > 0) {
-        serial_write("Files/folders in C:/ directory:\n");
-        for (int i = 0; i < file_count; i++) {
-            serial_write(" - ");
-            serial_write(root_files[i].name);
-            if (root_files[i].is_directory) {
-                serial_write(" [FOLDER]");
-            } else {
-                serial_write(" [FILE]");
-            }
-            serial_write("\n");
-        }
-    } else {
-        serial_write("VFS Info: C:/ directory is empty or get_dir_files is not supported/returned 0.\n");
-    }
-    serial_write("-------------------------------------------\n");
-    // ------------------------------------------
-
-    // 4. Input drivers
-    if (!uhci_mouse_active()) {
-        mouse_init();
-    } else {
-        serial_write("USB mouse active; PS/2 mouse initialization skipped.\n");
-    }
-    keyboard_init();
+    // 4. Input drivers status check (xHCI tabanlı kontrol)
+    serial_write("[xHCI] USB mouse controller ready via xHCI.\n");
 
     // 5. Graphical Interface Initialization and Initial Drawing
     uint32_t width = fb_get_width();
     uint32_t height = fb_get_height();
 
     if (width > 0 && height > 0) {
-        fb_clear(0xFF0000FF); // Navy blue desktop background
-        desktop_init(); 
+        if (debug_mode) {
+            serial_screen_write("Debug screen fully loaded. Press any key to test...\n");
+            
+            while (1) {
+                if (inb(0x64) & 1) {
+                    uint8_t scancode = inb(0x60);
+                    serial_screen_handle_input(scancode);
+                }
+            }
+        } else {
+            fb_clear(0xFF0000FF);
+            desktop_init(); 
+        }
     }
-
-    /*
-    serial_write("---- Starting KEF Application ----\n");
-    if (kef_load_and_run("C:/Program Files/terminal/terminal.kef")) {
-        serial_write("KEF: Application successfully executed and terminated.\n");
-    } else {
-        serial_write("[ERROR] KEF application could not be started!\n");
-    }
-    serial_write("-------------------------------------\n");
-    */
 
     app_manager_init();
     fb_swap();
@@ -143,7 +131,8 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
 
     // 7. Main event loop (GUI active loop)
     while (1) {
-        uint8_t input_updated = uhci_poll();
+        uint8_t input_updated = xhci_poll();
+        
         if (inb(0x64) & 1) {
             keyboard_handler();
             input_updated = 1;

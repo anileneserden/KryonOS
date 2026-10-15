@@ -42,4 +42,7 @@ pci_device_t* pci_get_device(uint16_t vendor_id, uint16_t device_id);
 pci_device_t* pci_get_device_by_class(uint8_t class_code, uint8_t subclass, uint8_t prog_if);
 void pci_enable_bus_mastering(pci_device_t* dev);
 
+uint32_t pci_get_device_count(void);
+pci_device_t* pci_get_device_by_index(uint32_t index);
+
 #endif

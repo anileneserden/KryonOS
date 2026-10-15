@@ -8,6 +8,9 @@
 #define MAX_PANELS   16
 #define MAX_LABELS   32
 #define MAX_BUTTONS  24
+#define MAX_INPUTS   8
+#define MAX_COMBOBOXES 8
+#define MAX_PICTUREBOXES 8
 
 typedef struct {
     int x, y;
@@ -48,6 +51,50 @@ typedef struct {
 typedef struct {
     int x, y;
     int width, height;
+    char text[128];
+    char placeholder[128];
+    uint32_t bg_color;
+    uint32_t text_color;
+    uint32_t placeholder_color;
+    uint32_t border_color;
+    int border_thickness;
+    uint8_t anchor;
+    
+    int init_x, init_y, init_width, init_height;
+    int init_win_w, init_win_h;
+} text_input_t;
+
+typedef struct {
+    int x, y;
+    int width, height;
+    const char** items;
+    int item_count;
+    int selected_index;
+    bool is_open;
+    uint32_t bg_color;
+    uint32_t text_color;
+    uint32_t border_color;
+    uint8_t anchor;
+    
+    int init_x, init_y, init_width, init_height;
+    int init_win_w, init_win_h;
+} combobox_t;
+
+typedef struct {
+    int x, y;
+    int width, height;
+    char image_path[64];
+    uint8_t anchor;
+    int init_x, init_y, init_width, init_height;
+    int init_win_w, init_win_h;
+    
+    uint32_t* pixels; 
+    int img_width, img_height;
+} picturebox_t;
+
+typedef struct {
+    int x, y;
+    int width, height;
     
     int min_width;
     int min_height;
@@ -61,7 +108,7 @@ typedef struct {
     int init_win_w;
     int init_win_h;
 
-    uint32_t bg_color; // <-- Arka plan rengi alanı buraya eklendi
+    uint32_t bg_color;
 
     panel_t panels[MAX_PANELS];
     int panel_count;
@@ -72,7 +119,15 @@ typedef struct {
     button_t buttons[MAX_BUTTONS];
     int button_count;
 
-    // --- 3D CANVAS / FRAMEBUFFER DESTEĞİ ---
+    text_input_t inputs[MAX_INPUTS];
+    int input_count;
+
+    combobox_t comboboxes[MAX_COMBOBOXES];
+    int combobox_count;
+
+    picturebox_t pictureboxes[MAX_PICTUREBOXES];
+    int picturebox_count;
+
     bool has_canvas;
     int canvas_x, canvas_y;
     int canvas_w, canvas_h;

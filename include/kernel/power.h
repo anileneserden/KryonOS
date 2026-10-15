@@ -2,5 +2,6 @@
 #define KERNEL_POWER_H
 
 void system_shutdown(void);
+void system_reboot(void);
 
 #endif

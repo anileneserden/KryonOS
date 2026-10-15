@@ -2,11 +2,11 @@ CC = i686-elf-gcc
 AS = i686-elf-as
 LD = i686-elf-ld
 
-CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra -Iinclude
+CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra -Iinclude -Iinclude/libc
 LDFLAGS = -T linker.ld -nostdlib
 
 BUILD = build
-TARGET = $(BUILD)/kryonos.bin
+TARGET = $(BUILD)/kryonos.elf
 
 # --- Disk Image Definitions ---
 DISK_KRYFS ?= $(HOME)/KryonOS/main/disk-kryfs.img
@@ -21,7 +21,6 @@ SRC_C = \
     kernel/audio/wav.c \
     kernel/app_manager.c \
     kernel/hexdump.c \
-    kernel/kef_loader.c \
     kernel/kmain.c \
     kernel/power.c \
     kernel/serial.c \
@@ -34,6 +33,7 @@ SRC_C = \
     kernel/drivers/net/e1000.c \
     kernel/drivers/storage/ata.c \
     kernel/drivers/usb/uhci.c \
+    kernel/drivers/usb/xhci.c \
     kernel/drivers/video/font/font8x8_basic.c \
     kernel/drivers/video/font/font8x16_basic.c \
     kernel/drivers/video/fb.c \
@@ -43,13 +43,19 @@ SRC_C = \
     kernel/fs/fat32.c \
     kernel/fs/kryfs.c \
     kernel/fs/vfs.c \
+    kernel/loader/kef.c \
+    kernel/loader/kef2.c \
+    kernel/loader/png.c \
     kernel/mem/heap.c \
     kernel/mem/pmm.c \
     kernel/mem/vmm.c \
+    libc/math.c \
+    libc/stdlib.c \
     ui/cursor.c \
     ui/desktop_icons.c \
     ui/desktop.c \
     ui/grid.c \
+    ui/serial_screen.c \
     ui/window.c \
     ui/wm.c
 
@@ -78,11 +84,16 @@ clean:
 
 iso: $(TARGET)
 	mkdir -p isodir/boot/grub
-	cp $(TARGET) isodir/boot/kryonos.bin
-	echo 'set timeout=0' > isodir/boot/grub/grub.cfg
+	cp $(TARGET) isodir/boot/kryonos.elf
+	echo 'set timeout=3' > isodir/boot/grub/grub.cfg
+	echo 'set default=0' >> isodir/boot/grub/grub.cfg
 	echo 'set gfxpayload=1920x1080x32' >> isodir/boot/grub/grub.cfg
 	echo 'menuentry "KryonOS" {' >> isodir/boot/grub/grub.cfg
-	echo '    multiboot /boot/kryonos.bin' >> isodir/boot/grub/grub.cfg
+	echo '    multiboot /boot/kryonos.elf' >> isodir/boot/grub/grub.cfg
+	echo '    boot' >> isodir/boot/grub/grub.cfg
+	echo '}' >> isodir/boot/grub/grub.cfg
+	echo 'menuentry "KryonOS (Debug Screen)" {' >> isodir/boot/grub/grub.cfg
+	echo '    multiboot /boot/kryonos.elf debug=yes' >> isodir/boot/grub/grub.cfg
 	echo '    boot' >> isodir/boot/grub/grub.cfg
 	echo '}' >> isodir/boot/grub/grub.cfg
 	grub-mkrescue -o kryonos.iso isodir
@@ -102,6 +113,6 @@ run: iso $(DISK_KRYFS) $(DISK_FAT32)
 	   -drive format=raw,file=$(DISK_FAT32),index=1,media=disk \
 	   -audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
 	   -machine pcspk-audiodev=audio0 \
-	   -device piix3-usb-uhci,id=uhci \
-	   -device usb-mouse,bus=uhci.0 \
+	   -device qemu-xhci,id=xhci \
+	   -device usb-mouse,bus=xhci.0 \
 	   -serial stdio -vga std -display sdl,gl=on
