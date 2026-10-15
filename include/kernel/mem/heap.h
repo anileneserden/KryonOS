@@ -6,6 +6,7 @@
 
 void heap_init(uint32_t heap_start, uint32_t heap_size);
 void* kmalloc(size_t size);
+void* kzalloc(size_t size);
 void kfree(void* ptr);
 
 #endif

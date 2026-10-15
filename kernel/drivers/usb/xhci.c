@@ -99,6 +99,28 @@ void xhci_init(void) {
     xhci_op->config = (xhci_op->config & ~0xFF) | max_slots;
     serial_write("[xHCI] Max Slots enabled.\n");
 
+    // 6.1. Allocate and Set DCBAAP (Device Context Base Address Array Pointer)
+    uint64_t *dcbaap = (uint64_t *)kzalloc((max_slots + 1) * sizeof(uint64_t));
+    if (dcbaap) {
+        xhci_op->dcbaap = (uint64_t)(uintptr_t)dcbaap;
+        serial_write("[xHCI] DCBAAP allocated and set successfully.\n");
+    } else {
+        serial_write("[xHCI] ERROR: Failed to allocate memory for DCBAAP!\n");
+        return;
+    }
+
+    // 6.2. Allocate and Set Command Ring (CRCR)
+    // Her biri 16 bayt olan 16 adet TRB'lik komut halkası
+    void *command_ring = kzalloc(16 * 16);
+    if (command_ring) {
+        // CRCR register'ına adres yazılır ve RCS (Ring Cycle State - Bit 0) 1 yapılır
+        xhci_op->crcr = (uint64_t)(uintptr_t)command_ring | 1;
+        serial_write("[xHCI] Command Ring allocated and set successfully.\n");
+    } else {
+        serial_write("[xHCI] ERROR: Failed to allocate memory for Command Ring!\n");
+        return;
+    }
+
     // 7. Start the Controller (Run/Stop = 1)
     xhci_op->usbcmd |= (1 << 0); // RS = 1
     serial_write("[xHCI] Controller set to Run mode.\n");
@@ -130,6 +152,24 @@ void xhci_init(void) {
                 
                 if (*portsc_reg & (1 << 1)) {
                     serial_write("[xHCI] Port successfully enabled!\n");
+                    
+                    // Enable Slot Komutu TRB'si Hazırlanıyor (TRB Type = 9)
+                    volatile uint32_t *cmd_ring = (volatile uint32_t *)(uintptr_t)(xhci_op->crcr & ~0x3F);
+                    if (cmd_ring) {
+                        cmd_ring[0] = 0;          // DWORD 0: Parameter Low
+                        cmd_ring[1] = 0;          // DWORD 1: Parameter High
+                        cmd_ring[2] = 0;          // DWORD 2: Status / Reserved
+                        cmd_ring[3] = (9 << 10) | 1; // DWORD 3: TRB Type (9) ve Cycle Bit (1)
+                        
+                        serial_write("[xHCI] Enable Slot command written to Command Ring.\n");
+                        
+                        // Doorbell tetikleniyor
+                        uint32_t dboff = xhci_caps->dboff;
+                        volatile uint32_t *doorbell_base = (volatile uint32_t *)(uintptr_t)(xhci_mmio_base + dboff);
+                        
+                        doorbell_base[0] = 0; // Host Controller Command Ring (Index 0)
+                        serial_write("[xHCI] Doorbell rung for Host Controller Command Ring.\n");
+                    }
                 } else {
                     serial_write("[xHCI] WARNING: Port enable timed out.\n");
                 }

@@ -62,3 +62,14 @@ void kfree(void* ptr) {
         }
     }
 }
+
+void* kzalloc(size_t size) {
+    void* ptr = kmalloc(size);
+    if (ptr) {
+        uint8_t* p = (uint8_t*)ptr;
+        for (size_t i = 0; i < size; i++) {
+            p[i] = 0;
+        }
+    }
+    return ptr;
+}
