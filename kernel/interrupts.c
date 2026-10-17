@@ -1,3 +1,4 @@
+// kernel/interrupts.c
 #include <kernel/interrupts.h>
 #include <kernel/serial.h>
 #include <arch/x86/io.h>
@@ -18,48 +19,8 @@ typedef struct {
 
 static idt_entry_t idt[256];
 static volatile uint8_t input_pending;
-static uint8_t keyboard_irq_logged;
-static uint8_t mouse_irq_logged;
 
 _Static_assert(sizeof(idt_entry_t) == 8, "IDT entry size");
-
-void keyboard_irq_handler(void) {
-    if (!keyboard_irq_logged) {
-        keyboard_irq_logged = 1;
-        serial_write("[IRQ] First PS/2 keyboard interrupt.\n");
-    }
-    input_pending = 1;
-    outb(0x20, 0x20);
-}
-
-void mouse_irq_handler(void) {
-    if (!mouse_irq_logged) {
-        mouse_irq_logged = 1;
-        serial_write("[IRQ] First PS/2 mouse interrupt.\n");
-    }
-    input_pending = 1;
-    outb(0xA0, 0x20);
-    outb(0x20, 0x20);
-}
-
-__asm__(
-    ".global keyboard_irq_stub\n"
-    "keyboard_irq_stub:\n"
-    "    pusha\n"
-    "    cld\n"
-    "    call keyboard_irq_handler\n"
-    "    popa\n"
-    "    iret\n"
-    ".global mouse_irq_stub\n"
-    "mouse_irq_stub:\n"
-    "    pusha\n"
-    "    cld\n"
-    "    call mouse_irq_handler\n"
-    "    popa\n"
-    "    iret\n");
-
-extern void keyboard_irq_stub(void);
-extern void mouse_irq_stub(void);
 
 static void idt_set_gate(uint8_t vector, void (*handler)(void), uint16_t selector) {
     uintptr_t address = (uintptr_t)handler;
@@ -73,6 +34,7 @@ static void idt_set_gate(uint8_t vector, void (*handler)(void), uint16_t selecto
 void interrupts_init(void) {
     __asm__ volatile("cli");
 
+    // PIC Remap
     outb(0x20, 0x11);
     outb(0xA0, 0x11);
     outb(0x21, 0x20);
@@ -81,13 +43,13 @@ void interrupts_init(void) {
     outb(0xA1, 0x02);
     outb(0x21, 0x01);
     outb(0xA1, 0x01);
+    
+    // Başlangıçta tüm PIC interrupt'larını maskele (kapat)
     outb(0x21, 0xFF);
     outb(0xA1, 0xFF);
 
     uint16_t code_selector;
     __asm__ volatile("mov %%cs, %0" : "=r"(code_selector));
-    idt_set_gate(0x21, keyboard_irq_stub, code_selector);
-    idt_set_gate(0x2C, mouse_irq_stub, code_selector);
 
     idt_pointer_t idt_pointer = {
         .limit = sizeof(idt) - 1,
@@ -96,8 +58,12 @@ void interrupts_init(void) {
     __asm__ volatile("lidt %0" : : "m"(idt_pointer));
 
     input_pending = 0;
-    outb(0x21, 0xF9);
-    outb(0xA1, 0xEF);
+    
+    // PS/2 klavye (IRQ 1) ve fare (IRQ 12) iptal edildi. 
+    // Sadece gerekirse sistem saati (IRQ 0 -> 0xFE) açık kalabilir veya tamamen kapatılabilir.
+    outb(0x21, 0xFF); // Master PIC: Tüm IRQ'lar maskeli (kapalı)
+    outb(0xA1, 0xFF); // Slave PIC: Tüm IRQ'lar maskeli (kapalı)
+    
     __asm__ volatile("sti");
 }
 
@@ -115,5 +81,6 @@ void interrupts_wait_for_input(void) {
         __asm__ volatile("sti");
         return;
     }
+    // HLt komutu ile CPU'yu xHCI event polling döngüsüne kadar boşa yormadan uyutuyoruz
     __asm__ volatile("sti; hlt" ::: "memory");
 }

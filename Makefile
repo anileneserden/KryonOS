@@ -109,9 +109,11 @@ $(DISK_FAT32):
 
 run: iso $(DISK_KRYFS) $(DISK_FAT32)
 	qemu-system-i386 -cdrom kryonos.iso \
-	   -drive format=raw,file=$(DISK_KRYFS),index=0,media=disk \
-	   -drive format=raw,file=$(DISK_FAT32),index=1,media=disk \
-	   -audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
-	   -machine pcspk-audiodev=audio0 \
-	   -device qemu-xhci,id=xhci \
-	   -serial stdio -vga std -display sdl,gl=on
+        -drive format=raw,file=/home/anil/KryonOS/main/disk-kryfs.img,index=0,media=disk \
+        -drive format=raw,file=/home/anil/KryonOS/main/disk-fat32.img,index=1,media=disk \
+        -audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
+        -machine pcspk-audiodev=audio0 \
+        -device qemu-xhci,id=xhci \
+        -device usb-mouse,bus=xhci.0 \
+        -rtc base=localtime \
+        -serial stdio -vga std -display sdl,gl=on

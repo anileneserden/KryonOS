@@ -3,6 +3,7 @@
 #include <kernel/serial.h>
 #include <kernel/drivers/input/mouse_usb.h>
 #include <arch/x86/io.h>
+#include <stddef.h>
 
 // UHCI I/O Register Offsets
 #define UHCI_USBCMD      0x00
@@ -684,4 +685,15 @@ void uhci_init(void) {
     if (!controller_found) {
         serial_write("UHCI: No UHCI controller found on PCI bus.\n");
     }
+}
+
+int uhci_detect_controller(void) {
+    // UHCI Class: 0x0C, Subclass: 0x03, ProgIF: 0x00
+    pci_device_t *pci_dev = pci_get_device_by_class(0x0C, 0x03, 0x00);
+    return (pci_dev != NULL) ? 1 : 0;
+}
+
+uint8_t uhci_is_active(void) {
+    // Eğer UHCI aktif ise 1 döner (şimdilik 0 dönebilir)
+    return 0; 
 }
