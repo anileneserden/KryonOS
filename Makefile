@@ -32,6 +32,7 @@ SRC_C = \
     kernel/drivers/input/mouse_ps2.c \
     kernel/drivers/input/mouse_usb.c \
     kernel/drivers/storage/ata.c \
+    kernel/drivers/usb/ehci.c \
     kernel/drivers/usb/uhci.c \
     kernel/drivers/usb/xhci.c \
     kernel/drivers/video/font/font8x8_basic.c \
@@ -109,11 +110,11 @@ $(DISK_FAT32):
 
 run: iso $(DISK_KRYFS) $(DISK_FAT32)
 	qemu-system-i386 -cdrom kryonos.iso \
-        -drive format=raw,file=/home/anil/KryonOS/main/disk-kryfs.img,index=0,media=disk \
-        -drive format=raw,file=/home/anil/KryonOS/main/disk-fat32.img,index=1,media=disk \
-        -audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
-        -machine pcspk-audiodev=audio0 \
-        -device qemu-xhci,id=xhci \
-        -device usb-tablet,bus=xhci.0 \
-        -rtc base=localtime \
-        -serial stdio -vga std -display gtk,gl=on
+		-drive format=raw,file=/home/anil/KryonOS/main/disk-kryfs.img,index=0,media=disk \
+		-drive format=raw,file=/home/anil/KryonOS/main/disk-fat32.img,index=1,media=disk \
+		-audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
+		-machine pcspk-audiodev=audio0 \
+		-device ich9-usb-ehci1,id=ehci \
+		-device usb-tablet,bus=ehci.0 \
+		-rtc base=localtime \
+		-serial stdio -vga std -display gtk,gl=on

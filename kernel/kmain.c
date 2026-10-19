@@ -12,6 +12,7 @@
 #include <kernel/drivers/audio/ac97.h>
 #include <kernel/drivers/audio/pcspeaker.h>
 #include <kernel/drivers/pci.h>
+#include <kernel/drivers/usb/ehci.h>
 #include <kernel/drivers/usb/uhci.h>
 #include <kernel/drivers/usb/xhci.h>
 #include <ui/cursor.h>
@@ -69,10 +70,13 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     pci_init();
     ata_init();
 
-    // Donanımda hangi USB kontrolcüsü varsa sadece o dinamik olarak başlatılır
+    // Donanımda hangi USB kontrolcüsü varsa dinamik olarak sırayla taranır ve başlatılır
     if (xhci_detect_controller()) {
         serial_write("[USB] xHCI controller detected. Starting xHCI driver...\n");
         xhci_init();
+    } else if (ehci_detect_controller()) {
+        serial_write("[USB] EHCI controller detected. Starting EHCI driver...\n");
+        ehci_init();
     } else if (uhci_detect_controller()) {
         serial_write("[USB] UHCI controller detected. Starting UHCI driver...\n");
         uhci_init();
@@ -128,26 +132,19 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     }
 
     interrupts_init();
-    serial_write("System initialized; idle loop polls USB xHCI events.\n");
+    serial_write("System initialized; idle loop polls USB EHCI events.\n");
 
     // 7. Main event loop (GUI active loop with USB polling)
     while (1) {
         uint8_t input_updated = 0;
 
-        // xHCI event ring'ini doğrudan yokla (global_event_ring kontrolü xhci_poll içinde yapılıyor)
-        input_updated = xhci_poll();
-
-        // Eğer xHCI aktif değilse ve UHCI kullanılıyorsa alternatif kontrol eklenebilir
-        if (!input_updated && uhci_is_active()) {
-            input_updated = uhci_poll();
-        }
+        // EHCI poll mekanizmasını çağırıyoruz
+        input_updated = ehci_poll();
 
         // Masaüstü ve uygulama güncellemelerini tetikle
         desktop_process_input();
         app_manager_update_all();
 
         cursor_update_and_redraw();
-        
-        // interrupts_wait_for_input(); -> HLT ile CPU'yu uyutmak xHCI polling'i engeller, kaldırıyoruz.
     }
 }
