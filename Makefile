@@ -114,6 +114,6 @@ run: iso $(DISK_KRYFS) $(DISK_FAT32)
         -audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
         -machine pcspk-audiodev=audio0 \
         -device qemu-xhci,id=xhci \
-        -device usb-mouse,bus=xhci.0 \
+        -device usb-tablet,bus=xhci.0 \
         -rtc base=localtime \
-        -serial stdio -vga std -display sdl,gl=on
+        -serial stdio -vga std -display gtk,gl=on

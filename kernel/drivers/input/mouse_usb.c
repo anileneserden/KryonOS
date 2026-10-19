@@ -3,7 +3,7 @@
 #include <kernel/serial.h>
 
 static uint8_t report_logged = 0;
-static uint8_t absolute_mode = 0;
+static uint8_t absolute_mode = 1;
 
 // USB mouse state variables
 int32_t usb_mouse_x = 400;
@@ -58,4 +58,18 @@ void usb_mouse_process_report(const uint8_t* report, uint8_t length) {
     mouse_x = usb_mouse_x;
     mouse_y = usb_mouse_y;
     mouse_buttons = usb_mouse_buttons;
+
+    // --- TEST LOGU: Koordinatları Seri Porta Basalım ---
+    static int32_t last_print_x = -1;
+    static int32_t last_print_y = -1;
+    if (usb_mouse_x != last_print_x || usb_mouse_y != last_print_y) {
+        serial_write("[Mouse] X: ");
+        serial_write_dec(usb_mouse_x);
+        serial_write(" | Y: ");
+        serial_write_dec(usb_mouse_y);
+        serial_write("\n");
+        
+        last_print_x = usb_mouse_x;
+        last_print_y = usb_mouse_y;
+    }
 }

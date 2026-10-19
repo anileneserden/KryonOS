@@ -134,20 +134,20 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     while (1) {
         uint8_t input_updated = 0;
 
-        // Hangi kontrolcü aktif ve çalışır durumdaysa sadece onun poll fonksiyonu çağrılır
-        if (xhci_is_active()) { // veya xHCI event ring'inin dolu/aktif olduğu kontrolü
-            input_updated = xhci_poll();
-        } else if (uhci_is_active()) {
+        // xHCI event ring'ini doğrudan yokla (global_event_ring kontrolü xhci_poll içinde yapılıyor)
+        input_updated = xhci_poll();
+
+        // Eğer xHCI aktif değilse ve UHCI kullanılıyorsa alternatif kontrol eklenebilir
+        if (!input_updated && uhci_is_active()) {
             input_updated = uhci_poll();
         }
 
-        if (input_updated) {
-            desktop_process_input();
-            app_manager_update_all();
-        }
+        // Masaüstü ve uygulama güncellemelerini tetikle
+        desktop_process_input();
+        app_manager_update_all();
 
         cursor_update_and_redraw();
         
-        interrupts_wait_for_input();
+        // interrupts_wait_for_input(); -> HLT ile CPU'yu uyutmak xHCI polling'i engeller, kaldırıyoruz.
     }
 }
