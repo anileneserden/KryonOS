@@ -70,7 +70,9 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     pci_init();
     ata_init();
 
-    // Donanımda hangi USB kontrolcüsü varsa dinamik olarak sırayla taranır ve başlatılır
+    e1000_init();
+
+    // Donanımda hangi USB kontrolcüsü varsa sadece o dinamik olarak başlatılır
     if (xhci_detect_controller()) {
         serial_write("[USB] xHCI controller detected. Starting xHCI driver...\n");
         xhci_init();
