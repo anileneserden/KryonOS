@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <kernel/serial.h>
 #include <kernel/multiboot.h>
+#include <kernel/crypto/tls.h>
 #include <kernel/drivers/video/fb.h>
 #include <kernel/drivers/storage/ata.h>
 #include <kernel/fs/kryfs.h>
@@ -32,6 +33,8 @@ extern void serial_screen_mirror_enable(bool enable);
 void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     serial_init();
     serial_write("KryonOS started!\n");
+
+    run_tls_mock_test();
 
     if (mboot_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
         serial_write("ERROR: Invalid magic number!\n");
