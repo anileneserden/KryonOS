@@ -115,13 +115,9 @@ run: iso $(DISK_KRYFS) $(DISK_FAT32)
 		-drive format=raw,file=/home/anil/KryonOS/main/disk-fat32.img,index=1,media=disk \
 		-audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
 		-machine pcspk-audiodev=audio0 \
-<<<<<<< HEAD
-		-device ich9-usb-ehci1,id=ehci \
-		-device usb-tablet,bus=ehci.0 \
-=======
 		-device qemu-xhci,id=xhci \
 		-device usb-tablet,bus=xhci.0 \
+		-device ich9-usb-ehci1,id=ehci \
 		-netdev user,id=net0 -device e1000,netdev=net0 \
->>>>>>> main
 		-rtc base=localtime \
 		-serial stdio -vga std -display gtk,gl=on
