@@ -1,5 +1,6 @@
 #include <kernel/crypto/tls.h>
-#include <kernel/serial.h> // Seri ekrana debug basmak için
+#include <kernel/serial.h>
+#include <kernel/fs/vfs.h> // VFS arayüzünü dahil ediyoruz
 
 void tls_stream_init(TlsStream *stream, TlsSourceType type, const uint8_t *data, size_t size) {
     if (!stream) return;
@@ -51,34 +52,36 @@ int tls_parse_record(TlsStream *stream, TlsRecordHeader *out_header, uint8_t *ou
     return 0; // Başarılı
 }
 
-// Geçici Mock TLS Test Fonksiyonu
+// Disk Üzerinden (KRYFS / VFS) Dosya Okuyarak Test Eden Fonksiyon
 void run_tls_mock_test(void) {
-    serial_write("[TLS] Running mock TLS record parse test...\n");
+    serial_write("[TLS] Reading encrypted TLS file from disk via VFS...\n");
 
-    // Örnek bir TLS 1.2 Handshake Kayıt Başlığı ve Payload (Toplam 9 bayt)
-    // Byte 0: Content Type (0x16 = Handshake)
-    // Byte 1-2: Version (0x03, 0x03 = TLS 1.2)
-    // Byte 3-4: Length (0x00, 0x04 = 4 bayt payload)
-    // Byte 5-8: Payload verisi (Örn: "TEST")
-    const uint8_t mock_packet[] = {
-        0x16, 0x03, 0x03, 0x00, 0x04,
-        'T', 'E', 'S', 'T'
-    };
+    uint32_t file_size = 0;
+    
+    // vfs_read_file doğrudan dosyayı heap'e okuyup adresini ve boyutunu döner
+    void *file_data = vfs_read_file("C:/Users/anil/tls_test.enc", &file_size);
+    
+    if (!file_data || file_size == 0) {
+        serial_write("[TLS] ERROR: Could not read 'C:/Users/anil/tls_test.enc' from disk!\n");
+        return;
+    }
 
+    serial_write("[TLS] File read successfully from disk. Initializing stream...\n");
+
+    // Okunan veriyi TLS Stream yapısına bağlıyoruz
     TlsStream stream;
-    tls_stream_init(&stream, TLS_SOURCE_MOCK, mock_packet, sizeof(mock_packet));
+    tls_stream_init(&stream, TLS_SOURCE_MOCK, (const uint8_t*)file_data, file_size);
 
     TlsRecordHeader header;
     uint8_t payload_buffer[64];
 
     int res = tls_parse_record(&stream, &header, payload_buffer, sizeof(payload_buffer));
     if (res == 0) {
-        serial_write("[TLS] SUCCESS: TLS Record parsed successfully!\n");
-        // Not: serial_write string beklediği için payload'ı güvenli basmak adına kısa log atabiliriz
+        serial_write("[TLS] SUCCESS: TLS Record parsed from disk file!\n");
         if (header.contentType == 0x16) {
             serial_write("[TLS] Content Type: Handshake (0x16)\n");
         }
     } else {
-        serial_write("[TLS] ERROR: Failed to parse mock TLS record!\n");
+        serial_write("[TLS] ERROR: Failed to parse TLS record from disk contents!\n");
     }
 }

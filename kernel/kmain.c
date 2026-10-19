@@ -34,8 +34,6 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     serial_init();
     serial_write("KryonOS started!\n");
 
-    run_tls_mock_test();
-
     if (mboot_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
         serial_write("ERROR: Invalid magic number!\n");
         return;
@@ -92,6 +90,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         fs_driver_t fat32_driver = fat32_get_driver();
         vfs_mount('D', "FAT32_VOL", fat32_driver);
         serial_write("FAT32 mounted to D:\\\n");
+        run_tls_mock_test();
     } else {
         serial_write("FAT32: Driver could not be started!\n");
     }
@@ -101,6 +100,10 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         fs_driver_t kryfs_driver = kryfs_get_driver();
         vfs_mount('C', "KRYFS_VOL", kryfs_driver);
         serial_write("KRYFS mounted successfully and registered to VFS on C:\\.\n");
+        
+        // Bu çağrının bu parantezlerin içinde olduğundan emin olun:
+        run_tls_mock_test();
+
     } else {
         serial_write("KRYFS: Driver could not be started!\n");
     }
