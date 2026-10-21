@@ -111,13 +111,16 @@ $(DISK_FAT32):
 
 run: iso $(DISK_KRYFS) $(DISK_FAT32)
 	qemu-system-i386 -cdrom kryonos.iso \
-		-drive format=raw,file=/home/anil/KryonOS/main/disk-kryfs.img,index=0,media=disk \
-		-drive format=raw,file=/home/anil/KryonOS/main/disk-fat32.img,index=1,media=disk \
-		-audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
-		-machine pcspk-audiodev=audio0 \
-		-device qemu-xhci,id=xhci \
-		-device usb-tablet,bus=xhci.0 \
-		-device ich9-usb-ehci1,id=ehci \
-		-netdev user,id=net0 -device e1000,netdev=net0 \
-		-rtc base=localtime \
-		-serial stdio -vga std -display gtk,gl=on
+       -drive format=raw,file=$(DISK_KRYFS),index=0,media=disk \
+       -drive format=raw,file=$(DISK_FAT32),index=1,media=disk \
+       -audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
+       -machine pcspk-audiodev=audio0 \
+       -device ich9-usb-ehci1,id=ehci,addr=1d.7,multifunction=on \
+       -device ich9-usb-uhci1,id=uhci.0,addr=1d.0,multifunction=on,masterbus=ehci.0,firstport=0 \
+       -device ich9-usb-uhci2,id=uhci.1,addr=1d.1,multifunction=on,masterbus=ehci.0,firstport=2 \
+       -device ich9-usb-uhci3,id=uhci.2,addr=1d.2,multifunction=on,masterbus=ehci.0,firstport=4 \
+       -device usb-hub,id=hub0,bus=ehci.0,port=1 \
+       -device usb-tablet,bus=ehci.0,port=1.1 \
+       -netdev user,id=net0 -device e1000,netdev=net0 \
+       -rtc base=localtime \
+       -serial stdio -vga std -display gtk,gl=on

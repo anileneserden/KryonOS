@@ -22,7 +22,7 @@ void usb_mouse_process_report(const uint8_t* report, uint8_t length) {
     if (!report || length < 3) return;
 
     if (!report_logged) {
-        serial_write("[xHCI] USB mouse HID report received.\n");
+        serial_write("[EHCI] USB mouse HID report received.\n");
         report_logged = 1;
     }
 
@@ -48,6 +48,21 @@ void usb_mouse_process_report(const uint8_t* report, uint8_t length) {
 
     uint16_t absolute_x = (uint16_t)report[1] | ((uint16_t)report[2] << 8);
     uint16_t absolute_y = (uint16_t)report[3] | ((uint16_t)report[4] << 8);
+    
+    // QEMU açılışta ilk raporları zorla 0,0 gönderir. Kullanıcı fareyi 
+    // hareket ettirip sıfırdan farklı bir konuma götürene kadar 400,300 konumunu koruyalım:
+    static uint8_t user_moved_mouse = 0;
+    if (!user_moved_mouse) {
+        if (absolute_x == 0 && absolute_y == 0) {
+            mouse_x = usb_mouse_x;
+            mouse_y = usb_mouse_y;
+            mouse_buttons = usb_mouse_buttons;
+            return;
+        } else {
+            user_moved_mouse = 1; // Artık gerçek hareket başladı
+        }
+    }
+    
     int32_t width = (int32_t)fb_get_width();
     int32_t height = (int32_t)fb_get_height();
 

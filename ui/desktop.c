@@ -21,6 +21,8 @@ int snprintf(char *str, size_t size, const char *format, ...);
 
 // USB fare aktiflik durumu fonksiyonu prototipi
 extern uint8_t uhci_mouse_active(void);
+extern uint8_t ehci_is_active(void);
+extern uint8_t xhci_is_active(void);
 
 static int timezone_offset = 3;
 uint32_t desktop_bg_color = 0xFF1E1E1E;
@@ -155,7 +157,19 @@ void desktop_redraw(void) {
     int cur_rx = cursor_get_x();
     int cur_ry = cursor_get_y();
     uint8_t last_sc = keyboard_get_last_scancode();
-    uint8_t usb_active = uhci_mouse_active();
+    uint8_t usb_active = 0;
+    const char* usb_status_text = "WAITING";
+
+    if (ehci_is_active()) {
+        usb_active = 1;
+        usb_status_text = "EHCI READY";
+    } else if (uhci_is_active()) {
+        usb_active = 1;
+        usb_status_text = "UHCI READY";
+    } else if (xhci_is_active()) {
+        usb_active = 1;
+        usb_status_text = "XHCI READY";
+    }
 
     char buf_mouse[64];
     char buf_key[64];
@@ -164,7 +178,7 @@ void desktop_redraw(void) {
     
     snprintf(buf_mouse, sizeof(buf_mouse), "Mouse: X=%d Y=%d", cur_rx, cur_ry);
     snprintf(buf_key, sizeof(buf_key), "Key Scancode: 0x%X", last_sc);
-    snprintf(buf_port, sizeof(buf_port), "USB Mouse: %s", usb_active ? "READY" : "WAITING");
+    snprintf(buf_port, sizeof(buf_port), "USB Status: %s", usb_status_text);
     snprintf(buf_buttons, sizeof(buf_buttons), "Buttons Mask: 0x%X", mouse_buttons);
 
     // Metinleri ekrana yazdırma (0xFF ön ekiyle tam opak yeşil tonu)

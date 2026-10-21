@@ -72,13 +72,13 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
 
     e1000_init();
 
-    // Donanımda hangi USB kontrolcüsü varsa sadece o dinamik olarak başlatılır
-    if (xhci_detect_controller()) {
-        serial_write("[USB] xHCI controller detected. Starting xHCI driver...\n");
-        xhci_init();
-    } else if (ehci_detect_controller()) {
+    // Donanımda hangi USB kontrolcüsü varsa, EHCI'yi test etmek için önceliği ona veriyoruz
+    if (ehci_detect_controller()) {
         serial_write("[USB] EHCI controller detected. Starting EHCI driver...\n");
         ehci_init();
+    } else if (xhci_detect_controller()) {
+        serial_write("[USB] xHCI controller detected. Starting xHCI driver...\n");
+        xhci_init();
     } else if (uhci_detect_controller()) {
         serial_write("[USB] UHCI controller detected. Starting UHCI driver...\n");
         uhci_init();

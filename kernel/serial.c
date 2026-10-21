@@ -134,6 +134,17 @@ void serial_write_num(uint32_t n) {
     serial_write_dec(n);
 }
 
+void serial_write_hex(uint32_t n) {
+    char hex_chars[] = "0123456789ABCDEF";
+    char buf[9];
+    buf[8] = '\0';
+    for (int i = 7; i >= 0; i--) {
+        buf[i] = hex_chars[n & 0xF];
+        n >>= 4;
+    }
+    serial_write(buf);
+}
+
 void serial_write_hex8(uint8_t n) {
     char hex_chars[] = "0123456789ABCDEF";
     char buf[3];
