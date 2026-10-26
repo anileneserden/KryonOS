@@ -19,6 +19,7 @@ SRC_S = \
 
 SRC_C = \
     kernel/audio/wav.c \
+    kernel/crypto/tls.c \
     kernel/app_manager.c \
     kernel/hexdump.c \
     kernel/kmain.c \

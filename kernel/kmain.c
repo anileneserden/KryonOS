@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <kernel/serial.h>
 #include <kernel/multiboot.h>
+#include <kernel/crypto/tls.h>
 #include <kernel/drivers/video/fb.h>
 #include <kernel/drivers/storage/ata.h>
 #include <kernel/fs/kryfs.h>
@@ -93,6 +94,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         fs_driver_t fat32_driver = fat32_get_driver();
         vfs_mount('D', "FAT32_VOL", fat32_driver);
         serial_write("FAT32 mounted to D:\\\n");
+        run_tls_mock_test();
     } else {
         serial_write("FAT32: Driver could not be started!\n");
     }
@@ -102,6 +104,10 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         fs_driver_t kryfs_driver = kryfs_get_driver();
         vfs_mount('C', "KRYFS_VOL", kryfs_driver);
         serial_write("KRYFS mounted successfully and registered to VFS on C:\\.\n");
+        
+        // Bu çağrının bu parantezlerin içinde olduğundan emin olun:
+        run_tls_mock_test();
+
     } else {
         serial_write("KRYFS: Driver could not be started!\n");
     }
