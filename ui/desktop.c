@@ -482,9 +482,13 @@ void desktop_process_input(void) {
                 
                 // 1. Dosyayı diske/VFS'e yaz
                 if (vfs_create_file(target_path) == 0) {
+                    desktop_icons_refresh();
                     // 2. Bütün ekranı yenilenmeye zorla ki yeni dosya ikonu anında belirsin
                     damage_union_rect(0, 0, screen_w, screen_h);
                 }
+            } else if (new_x >= r_x + 4 && new_x <= r_x + r_w - 4 &&
+                       new_y >= r_y + 6 && new_y <= r_y + 30) {
+                desktop_icons_refresh();
             }
 
             // Seçim yapılsın veya dışarı tıklansın, sağ tık menüsünü kapat ve ekranı yenile

@@ -16,6 +16,14 @@ static uint32_t last_click_tick = 0;
 static uint32_t global_tick_counter = 0;
 
 static int last_hover_index = -1;
+static vfs_file_info_t desktop_files[16];
+static int desktop_file_count = 0;
+
+void desktop_icons_refresh(void) {
+    desktop_file_count = vfs_get_directory_files("C:/Users/anil/Desktop", desktop_files, 16);
+    if (desktop_file_count < 0) desktop_file_count = 0;
+    if (desktop_file_count > 16) desktop_file_count = 16;
+}
 
 void desktop_icons_init(void) {
     selected_icon_index = -1;
@@ -23,6 +31,7 @@ void desktop_icons_init(void) {
     last_click_tick = 0;
     global_tick_counter = 0;
     last_hover_index = -1;
+    desktop_icons_refresh();
 }
 
 int desktop_icons_get_selected(void) {
@@ -50,16 +59,13 @@ static void truncate_text(const char *src, char *dst, size_t max_dst, int max_ch
 void desktop_icons_draw(int32_t mx, int32_t my, bool click_started) {
     (void)click_started;
 
-    vfs_file_info_t files[16];
-    int file_count = vfs_get_directory_files("C:/Users/anil/Desktop", files, 16);
-
     int cell_w = grid_get_cell_width();  // 100 px
     int cell_h = grid_get_cell_height(); // 100 px
 
     int current_hover_index = -1;
 
     // 1. Mouse'un hangi ikon hücresinde olduğunu tespit et
-    for (int i = 0; i < file_count; i++) {
+    for (int i = 0; i < desktop_file_count; i++) {
         int gx = 0, gy = 0;
         grid_get_position(i, &gx, &gy);
 
@@ -72,7 +78,7 @@ void desktop_icons_draw(int32_t mx, int32_t my, bool click_started) {
 
     // 2. Hover değişimi takibi (Damage yönetimi)
     if (current_hover_index != last_hover_index) {
-        if (last_hover_index != -1 && last_hover_index < file_count) {
+        if (last_hover_index != -1 && last_hover_index < desktop_file_count) {
             int prev_gx = 0, prev_gy = 0;
             grid_get_position(last_hover_index, &prev_gx, &prev_gy);
             damage_union_rect(prev_gx, prev_gy, cell_w, cell_h);
@@ -88,7 +94,7 @@ void desktop_icons_draw(int32_t mx, int32_t my, bool click_started) {
     }
 
     // 3. İkonları Çiz
-    for (int i = 0; i < file_count; i++) {
+    for (int i = 0; i < desktop_file_count; i++) {
         int gx = 0, gy = 0;
         grid_get_position(i, &gx, &gy);
 
@@ -113,7 +119,7 @@ void desktop_icons_draw(int32_t mx, int32_t my, bool click_started) {
 
         // Dosyanın klasör olup olmadığını kontrol ediyoruz
         // (Not: vfs_file_info_t yapınızda bu alan 'is_directory' değilse, header dosyanızdaki isme göre güncelleyebilirsiniz)
-        bool is_dir = files[i].is_directory; 
+        bool is_dir = desktop_files[i].is_directory; 
 
         if (is_dir) {
             // --- SARI KLASÖR SİMGESİ ---
@@ -136,7 +142,7 @@ void desktop_icons_draw(int32_t mx, int32_t my, bool click_started) {
         int char_width = 8;
         int max_chars = (box_w - 8) / char_width; // 10 karakter
 
-        truncate_text(files[i].name, display_name, sizeof(display_name), max_chars);
+        truncate_text(desktop_files[i].name, display_name, sizeof(display_name), max_chars);
 
         int text_w = strlen(display_name) * char_width;
         int text_x = box_x + (box_w - text_w) / 2;
