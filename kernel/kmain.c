@@ -24,6 +24,7 @@
 #include <kernel/mem/pmm.h>
 #include <kernel/mem/vmm.h>
 #include <kernel/interrupts.h>
+#include <kernel/power.h>
 #include <arch/x86/io.h>
 #include <kernel/hexdump.h>
 #include <kernel/loader/kef2.h>
@@ -54,6 +55,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     }
 
     // 1. Memory and heap initialization
+    power_init(mboot);
     pmm_init(mboot);
     vmm_init();
     heap_init(0x2000000, 1024 * 1024 * 16);
