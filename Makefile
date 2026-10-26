@@ -86,16 +86,11 @@ clean:
 
 iso: $(TARGET)
 	mkdir -p isodir/boot/grub
-	cp $(TARGET) isodir/boot/kryonos.elf
-	echo 'set timeout=3' > isodir/boot/grub/grub.cfg
-	echo 'set default=0' >> isodir/boot/grub/grub.cfg
-	echo 'set gfxpayload=1920x1080x32' >> isodir/boot/grub/grub.cfg
-	echo 'menuentry "KryonOS" {' >> isodir/boot/grub/grub.cfg
-	echo '    multiboot /boot/kryonos.elf' >> isodir/boot/grub/grub.cfg
-	echo '    boot' >> isodir/boot/grub/grub.cfg
-	echo '}' >> isodir/boot/grub/grub.cfg
-	echo 'menuentry "KryonOS (Debug Screen)" {' >> isodir/boot/grub/grub.cfg
-	echo '    multiboot /boot/kryonos.elf debug=yes' >> isodir/boot/grub/grub.cfg
+	cp $(TARGET) isodir/boot/kryonos.bin
+	echo 'set timeout=0' > isodir/boot/grub/grub.cfg
+	echo 'insmod all_video' >> isodir/boot/grub/grub.cfg
+	echo 'menuentry "KryonOS UEFI/BIOS" {' >> isodir/boot/grub/grub.cfg
+	echo '    multiboot /boot/kryonos.bin' >> isodir/boot/grub/grub.cfg
 	echo '    boot' >> isodir/boot/grub/grub.cfg
 	echo '}' >> isodir/boot/grub/grub.cfg
 	grub-mkrescue -o kryonos.iso isodir
@@ -109,8 +104,12 @@ $(DISK_FAT32):
 	@mkdir -p $(dir $@)
 	dd if=/dev/zero of=$@ bs=1M count=16
 
+# QEMU'yu UEFI modunda çalıştırmak için -bios ekledik
 run: iso $(DISK_KRYFS) $(DISK_FAT32)
-	qemu-system-i386 -cdrom kryonos.iso \
+	qemu-system-x86_64 \
+       -bios /usr/share/edk2/x64/OVMF.4m.fd \
+       -cdrom kryonos.iso \
+       -m 2G \
        -drive format=raw,file=$(DISK_KRYFS),index=0,media=disk \
        -drive format=raw,file=$(DISK_FAT32),index=1,media=disk \
        -audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
