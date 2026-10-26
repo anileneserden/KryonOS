@@ -118,8 +118,7 @@ run: iso $(DISK_KRYFS) $(DISK_FAT32)
        -device ich9-usb-uhci1,id=uhci.0,addr=1d.0,multifunction=on,masterbus=ehci.0,firstport=0 \
        -device ich9-usb-uhci2,id=uhci.1,addr=1d.1,multifunction=on,masterbus=ehci.0,firstport=2 \
        -device ich9-usb-uhci3,id=uhci.2,addr=1d.2,multifunction=on,masterbus=ehci.0,firstport=4 \
-       -device usb-hub,id=hub0,bus=ehci.0,port=1 \
-       -device usb-tablet,bus=ehci.0,port=1.1 \
+       -device usb-tablet,bus=ehci.0,port=1 \
        -netdev user,id=net0 -device e1000,netdev=net0 \
        -rtc base=localtime \
        -serial stdio -vga std -display gtk,gl=on
