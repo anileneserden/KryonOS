@@ -30,6 +30,7 @@ SRC_C = \
     kernel/drivers/audio/ac97.c \
     kernel/drivers/audio/pcspeaker.c \
     kernel/drivers/input/keyboard_ps2.c \
+    kernel/drivers/input/keyboard_usb.c \
     kernel/drivers/input/mouse_ps2.c \
     kernel/drivers/input/mouse_usb.c \
     kernel/drivers/net/e1000.c \
@@ -120,6 +121,7 @@ run: iso $(DISK_KRYFS) $(DISK_FAT32)
        -device ich9-usb-uhci2,id=uhci.1,addr=1d.1,multifunction=on,masterbus=ehci.0,firstport=2 \
        -device ich9-usb-uhci3,id=uhci.2,addr=1d.2,multifunction=on,masterbus=ehci.0,firstport=4 \
        -device usb-tablet,bus=ehci.0,port=1 \
+       -device usb-kbd,bus=ehci.0,port=2 \
        -netdev user,id=net0 -device e1000,netdev=net0 \
        -rtc base=localtime \
        -serial stdio -vga std -display gtk,gl=on

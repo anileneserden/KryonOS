@@ -3,6 +3,7 @@
 #include <kernel/serial.h>
 #include <kernel/mem/heap.h>
 #include <kernel/drivers/input/mouse_usb.h>
+#include <kernel/drivers/input/keyboard_usb.h>
 #include <arch/x86/io.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -103,12 +104,21 @@ static ehci_qtd_t *ctrl_qtd; // [0]=setup, [1]=data, [2]=status
 static uint8_t *ctrl_setup;
 static uint8_t *ctrl_buf;
 
-static ehci_qh_t *int_qh;
-static ehci_qtd_t *int_qtd;
-static uint8_t *int_buf;
-static uint16_t int_len;
-static uint8_t int_toggle;
-static uint8_t int_ready;
+typedef struct {
+    ehci_qh_t *qh;
+    ehci_qtd_t *qtd;
+    uint8_t *buf;
+    uint16_t len;
+    uint8_t toggle;
+    uint8_t kind;
+} ehci_hid_t;
+
+#define EHCI_MAX_HID     4
+#define HID_KIND_POINTER  1
+#define HID_KIND_KEYBOARD 2
+
+static ehci_hid_t hid_devs[EHCI_MAX_HID];
+static uint8_t hid_count;
 
 static uint8_t cfg_buf[256];
 
@@ -211,36 +221,51 @@ static int ehci_control(const ehci_dev_t *dev, uint8_t req_type, uint8_t req,
     return got;
 }
 
-static void ehci_arm_interrupt(void) {
-    ehci_fill_qtd(int_qtd, 1, 1, PID_IN, int_toggle, int_len, int_buf, 1);
-    int_qh->current_qtd = 0;
-    int_qh->alt_next_qtd = 1;
-    int_qh->token = 0;
-    int_qh->next_qtd = virt_to_phys(int_qtd);
+static void ehci_arm_interrupt(ehci_hid_t *hid) {
+    ehci_fill_qtd(hid->qtd, 1, 1, PID_IN, hid->toggle, hid->len, hid->buf, 1);
+    hid->qh->current_qtd = 0;
+    hid->qh->alt_next_qtd = 1;
+    hid->qh->token = 0;
+    hid->qh->next_qtd = virt_to_phys(hid->qtd);
 }
 
-static void ehci_setup_interrupt(const ehci_dev_t *dev, uint8_t ep, uint16_t mps) {
-    int_len = mps > 64 ? 64 : mps;
-    int_toggle = 0;
+static int ehci_setup_interrupt(const ehci_dev_t *dev, uint8_t ep, uint16_t mps, uint8_t kind) {
+    if (hid_count >= EHCI_MAX_HID) return 0;
 
-    int_qh->hlink = 1;
-    int_qh->ep_chars = dev->addr | ((uint32_t)ep << 8) | ((uint32_t)dev->speed << 12) |
-                       (1U << 14) | ((uint32_t)mps << 16);
+    ehci_hid_t *hid = &hid_devs[hid_count];
+    hid->qh = ehci_alloc_aligned(sizeof(ehci_qh_t), 32);
+    hid->qtd = ehci_alloc_aligned(sizeof(ehci_qtd_t), 32);
+    hid->buf = ehci_alloc_aligned(64, 64);
+    if (!hid->qh || !hid->qtd || !hid->buf) return 0;
+
+    hid->len = mps > 64 ? 64 : mps;
+    hid->toggle = 0;
+    hid->kind = kind;
+
+    hid->qh->hlink = 1;
+    hid->qh->ep_chars = dev->addr | ((uint32_t)ep << 8) | ((uint32_t)dev->speed << 12) |
+                        (1U << 14) | ((uint32_t)mps << 16);
     uint32_t caps = (1U << 30) | 0x01; // Mult=1, start-split in microframe 0
     if (dev->speed != SPEED_HIGH) {
         caps |= (0x1CU << 8) | ((uint32_t)dev->hub_port << 23) | ((uint32_t)dev->hub_addr << 16);
     }
-    int_qh->ep_caps = caps;
-    ehci_arm_interrupt();
+    hid->qh->ep_caps = caps;
+    ehci_arm_interrupt(hid);
 
-    uint32_t qh_ptr = virt_to_phys(int_qh) | 2;
-    for (int i = 0; i < 1024; i++) periodic_list[i] = qh_ptr;
-    int_ready = 1;
+    uint32_t qh_ptr = virt_to_phys(hid->qh) | 2;
+    if (hid_count == 0) {
+        for (int i = 0; i < 1024; i++) periodic_list[i] = qh_ptr;
+    } else {
+        hid_devs[hid_count - 1].qh->hlink = qh_ptr;
+    }
+    hid_count++;
+    return 1;
 }
 
 static void ehci_enum_hub(const ehci_dev_t *hub, int depth);
 
-static void ehci_bind_hid(const ehci_dev_t *dev, uint16_t total) {
+// Binds the first interrupt IN endpoint of the wanted kind; returns 1 on success.
+static int ehci_bind_hid_kind(const ehci_dev_t *dev, uint16_t total, uint8_t kind) {
     uint8_t in_hid = 0, iface = 0, subclass = 0, proto = 0;
 
     for (uint16_t i = 0; i + 2 <= total && cfg_buf[i] >= 2; i += cfg_buf[i]) {
@@ -250,8 +275,11 @@ static void ehci_bind_hid(const ehci_dev_t *dev, uint16_t total) {
             in_hid = (cfg_buf[i + 5] == 3);
             subclass = cfg_buf[i + 6];
             proto = cfg_buf[i + 7];
-        } else if (type == 5 && cfg_buf[i] >= 7 && in_hid && proto != 1 &&
+        } else if (type == 5 && cfg_buf[i] >= 7 && in_hid &&
                    (cfg_buf[i + 3] & 3) == 3 && (cfg_buf[i + 2] & 0x80)) {
+            int is_keyboard = (subclass == 1 && proto == 1);
+            if ((kind == HID_KIND_KEYBOARD) != is_keyboard) continue;
+
             uint8_t ep = cfg_buf[i + 2] & 0x0F;
             uint16_t mps = (cfg_buf[i + 4] | (cfg_buf[i + 5] << 8)) & 0x7FF;
 
@@ -259,18 +287,28 @@ static void ehci_bind_hid(const ehci_dev_t *dev, uint16_t total) {
             ehci_control(dev, 0x21, 0x0A, 0, iface, 0, NULL); // SET_IDLE
 
             // A boot mouse reports relative motion; other pointers (e.g. tablets) are absolute.
-            usb_mouse_set_absolute_mode(!(subclass == 1 && proto == 2));
-            ehci_setup_interrupt(dev, ep, mps);
+            if (kind == HID_KIND_POINTER) usb_mouse_set_absolute_mode(!(subclass == 1 && proto == 2));
+            if (!ehci_setup_interrupt(dev, ep, mps, kind)) {
+                serial_write("[EHCI] ERROR: could not set up the HID interrupt queue.\n");
+                return 0;
+            }
             EHCI_LOG(
-                serial_write("[EHCI] HID pointer bound: addr ");
+                serial_write(kind == HID_KIND_KEYBOARD ? "[EHCI] HID keyboard bound: addr " : "[EHCI] HID pointer bound: addr ");
                 serial_write_dec(dev->addr);
                 serial_write(" ep ");
                 serial_write_dec(ep);
-                serial_write(subclass == 1 && proto == 2 ? " (relative mouse)\n" : " (absolute pointer)\n");
+                serial_write("\n");
             );
-            return;
+            return 1;
         }
     }
+    return 0;
+}
+
+// A keyboard interface wins over pointer ones, so a keyboard's media-key interface is not taken for a mouse.
+static void ehci_bind_hid(const ehci_dev_t *dev, uint16_t total) {
+    if (ehci_bind_hid_kind(dev, total, HID_KIND_KEYBOARD)) return;
+    ehci_bind_hid_kind(dev, total, HID_KIND_POINTER);
 }
 
 static int ehci_enumerate(uint8_t speed, uint8_t hub_addr, uint8_t hub_port, int depth) {
@@ -333,7 +371,7 @@ static int ehci_enumerate(uint8_t speed, uint8_t hub_addr, uint8_t hub_port, int
 
     if (desc[4] == 9) {
         ehci_enum_hub(&dev, depth);
-    } else if (!int_ready) {
+    } else {
         ehci_bind_hid(&dev, total);
     }
     return 1;
@@ -465,12 +503,9 @@ void ehci_init(void) {
     ctrl_qtd = ehci_alloc_aligned(sizeof(ehci_qtd_t) * 3, 32);
     ctrl_setup = ehci_alloc_aligned(8, 32);
     ctrl_buf = ehci_alloc_aligned(256, 256);
-    int_qh = ehci_alloc_aligned(sizeof(ehci_qh_t), 32);
-    int_qtd = ehci_alloc_aligned(sizeof(ehci_qtd_t), 32);
-    int_buf = ehci_alloc_aligned(64, 64);
 
     if (!periodic_list || !async_head || !ctrl_qh || !ctrl_qtd || !ctrl_setup ||
-        !ctrl_buf || !int_qh || !int_qtd || !int_buf) {
+        !ctrl_buf) {
         serial_write("[EHCI] ERROR: Memory allocation failed.\n");
         return;
     }
@@ -543,30 +578,36 @@ void ehci_init(void) {
         ehci_enumerate(SPEED_HIGH, 0, 0, 0);
     }
 
-    if (!int_ready) {
-        serial_write("[EHCI] WARNING: no HID pointer device found.\n");
+    if (!hid_count) {
+        serial_write("[EHCI] WARNING: no HID device found.\n");
     }
     EHCI_LOG(serial_write("[EHCI] Controller running.\n"););
 }
 
 uint8_t ehci_poll(void) {
-    if (!ehci_active || !int_ready) return 0;
-
-    uint32_t token = int_qtd->token;
-    if (token & QTD_ACTIVE) return 0;
+    if (!ehci_active || !hid_count) return 0;
 
     uint8_t updated = 0;
-    if (!(token & QTD_ERR)) {
-        uint16_t got = int_len - ((token >> 16) & 0x7FFF);
-        int_toggle ^= 1;
-        if (got >= 3) {
-            usb_mouse_process_report(int_buf, (uint8_t)got);
-            updated = 1;
-        }
-    } else {
-        int_toggle = 0;
-    }
+    for (uint8_t i = 0; i < hid_count; i++) {
+        ehci_hid_t *hid = &hid_devs[i];
+        uint32_t token = hid->qtd->token;
+        if (token & QTD_ACTIVE) continue;
 
-    ehci_arm_interrupt();
+        if (!(token & QTD_ERR)) {
+            uint16_t got = hid->len - ((token >> 16) & 0x7FFF);
+            hid->toggle ^= 1;
+            if (hid->kind == HID_KIND_KEYBOARD && got >= 8) {
+                keyboard_usb_process_report(hid->buf);
+                updated = 1;
+            } else if (hid->kind == HID_KIND_POINTER && got >= 3) {
+                usb_mouse_process_report(hid->buf, (uint8_t)got);
+                updated = 1;
+            }
+        } else {
+            hid->toggle = 0;
+        }
+
+        ehci_arm_interrupt(hid);
+    }
     return updated;
 }
