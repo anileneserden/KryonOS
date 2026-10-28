@@ -28,6 +28,7 @@
 #include <arch/x86/io.h>
 #include <kernel/hexdump.h>
 #include <kernel/loader/kef2.h>
+#include <kernel/task/process.h> // Process Manager eklendi
 
 // serial.c içerisindeki mirror fonksiyonunun prototipi
 extern void serial_screen_mirror_enable(bool enable);
@@ -59,6 +60,9 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     pmm_init(mboot);
     vmm_init();
     heap_init(0x2000000, 1024 * 1024 * 16);
+
+    // Process Manager başlatılıyor (Bellek ve Heap'ten hemen sonra)
+    process_manager_init();
 
     // Framebuffer başlatılıyor
     fb_init(mboot);

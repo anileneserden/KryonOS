@@ -9,6 +9,7 @@
 #include <kernel/power.h>
 #include <kernel/drivers/input/keyboard_ps2.h>
 #include <kernel/loader/png.h>
+#include <kernel/task/process.h>
 
 #define WM_TITLEBAR_HEIGHT 24
 
@@ -365,6 +366,7 @@ static void kef_install_api(void) {
 
 // KEFv2 Yükleyici Fonksiyonu
 bool kef2_load_and_run(const char* path) {
+    // 1. Dosyayı oku ve başlık kontrollerini yap (Mevcut kodun)
     uint32_t file_size = 0;
     uint8_t* file = (uint8_t*)vfs_read_file(path, &file_size);
 
@@ -376,6 +378,14 @@ bool kef2_load_and_run(const char* path) {
     kef2_header_t* header = (kef2_header_t*)file;
     if (header->magic != KEF2_MAGIC || header->version != KEF2_VERSION) {
         serial_write("KEFV2: Invalid magic or version.\n");
+        kfree(file);
+        return false;
+    }
+
+    // 2. YENİ: Bu uygulama için Process Manager'da bir süreç oluşturuyoruz!
+    process_t* proc = process_create(path, KEF2_LOAD_ADDRESS);
+    if (!proc) {
+        serial_write("KEFV2 ERROR: Could not create process block!\n");
         kfree(file);
         return false;
     }
@@ -427,8 +437,15 @@ bool kef2_load_and_run(const char* path) {
     kef_install_api();
 
     serial_write("KEFV2: Calling application entry point (0x400000).\n");
+    
+    // Süreç durumunu çalışıyor olarak güncelle
+    proc->state = PROCESS_STATE_RUNNING;
+    
     kef_entry_t entry = (kef_entry_t)KEF2_LOAD_ADDRESS;
     (void)entry();
+
+    // Uygulama sonlandığında süreci temizle
+    process_destroy(proc->pid);
 
     window_t* win = wm_get_active_window();
     if (win) {
