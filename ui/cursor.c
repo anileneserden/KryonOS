@@ -39,7 +39,7 @@ void cursor_init(void) {
     old_mouse_y = mouse_y;
     cursor_visible = false;
     
-    png_image_t* cursor_png = png_load_from_file("C:/Kryon/Cursors/arrow.png");
+    png_image_t* cursor_png = png_load_from_file("C:/Lenor/Cursors/arrow.png");
     if (cursor_png) {
         custom_cursor_pixels = cursor_png->pixels;
         cursor_img_width = cursor_png->width;
@@ -64,9 +64,9 @@ void cursor_init(void) {
         }
 
         free(cursor_png);
-        serial_write("CURSOR: C:/Kryon/Cursors/arrow.png basariyla yuklendi ve otomatik hotspot hesaplandi!\n");
+        serial_write("CURSOR: C:/Lenor/Cursors/arrow.png basariyla yuklendi ve otomatik hotspot hesaplandi!\n");
     } else {
-        serial_write("CURSOR: C:/Kryon/Cursors/arrow.png bulunamadi, varsayilan imlec kullanilacak.\n");
+        serial_write("CURSOR: C:/Lenor/Cursors/arrow.png bulunamadi, varsayilan imlec kullanilacak.\n");
         hotspot_x = 0;
         hotspot_y = 0;
     }

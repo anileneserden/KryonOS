@@ -63,7 +63,7 @@ typedef struct {
 
 // Virtual to Physical address conversion helper for DMA
 static inline uint32_t virt_to_phys(volatile void* virt_addr) {
-    // KryonOS uses full 4GB identity mapping (VMM large pages), 
+    // LenorOS uses full 4GB identity mapping (VMM large pages), 
     // so virtual and physical addresses are identical, but wrapped for safety.
     return (uint32_t)virt_addr;
 }

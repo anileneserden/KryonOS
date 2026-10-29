@@ -25,7 +25,7 @@ typedef struct {
 // Filesystem mount entry
 typedef struct {
     char drive_letter;     // For example: 'C'
-    char volume_name[32];  // For example: "KryonVolume"
+    char volume_name[32];  // For example: "LenorVolume"
     fs_driver_t driver;    // Filesystem driver functions
     bool is_mounted;
 } vfs_mount_t;

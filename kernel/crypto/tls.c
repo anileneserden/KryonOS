@@ -52,7 +52,7 @@ int tls_parse_record(TlsStream *stream, TlsRecordHeader *out_header, uint8_t *ou
     return 0; // Başarılı
 }
 
-// Disk Üzerinden (KRYFS / VFS) Dosya Okuyarak Test Eden Fonksiyon
+// Disk Üzerinden (LNRFS / VFS) Dosya Okuyarak Test Eden Fonksiyon
 void run_tls_mock_test(void) {
     serial_write("[TLS] Reading encrypted TLS file from disk via VFS...\n");
 

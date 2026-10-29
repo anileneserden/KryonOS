@@ -7,7 +7,7 @@
 #include <kernel/crypto/tls.h>
 #include <kernel/drivers/video/fb.h>
 #include <kernel/drivers/storage/ata.h>
-#include <kernel/fs/kryfs.h>
+#include <kernel/fs/lnrfs.h>
 #include <kernel/fs/fat32.h>
 #include <kernel/fs/vfs.h>
 #include <kernel/drivers/audio/ac97.h>
@@ -34,7 +34,7 @@ extern void serial_screen_mirror_enable(bool enable);
 
 void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     serial_init();
-    serial_write("KryonOS started!\n");
+    serial_write("LenorOS started!\n");
 
     if (mboot_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
         serial_write("ERROR: Invalid magic number!\n");
@@ -101,17 +101,17 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         serial_write("FAT32: Driver could not be started!\n");
     }
 
-    // KRYFS Mount and VFS Integration (C Drive)
-    if (kryfs_mount() == 0) {
-        fs_driver_t kryfs_driver = kryfs_get_driver();
-        vfs_mount('C', "KRYFS_VOL", kryfs_driver);
-        serial_write("KRYFS mounted successfully and registered to VFS on C:\\.\n");
+    // LNRFS Mount and VFS Integration (C Drive)
+    if (lnrfs_mount() == 0) {
+        fs_driver_t lnrfs_driver = lnrfs_get_driver();
+        vfs_mount('C', "LNRFS_VOL", lnrfs_driver);
+        serial_write("LNRFS mounted successfully and registered to VFS on C:\\.\n");
         
         // Bu çağrının bu parantezlerin içinde olduğundan emin olun:
         run_tls_mock_test();
 
     } else {
-        serial_write("KRYFS: Driver could not be started!\n");
+        serial_write("LNRFS: Driver could not be started!\n");
     }
 
     serial_write("[input] xHCI USB input active.\n");
