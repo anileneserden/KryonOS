@@ -63,7 +63,7 @@ static void get_unique_filename(const char *base_dir, const char *base_name, con
             snprintf(out_path, max_len, "%s/%s (%d)%s", base_dir, base_name, counter, ext);
         }
 
-        // KRYFS tarafında vfs_read_file veya vfs_open varlığı doğrulayamıyorsa 
+        // LNRFS tarafında vfs_read_file veya vfs_open varlığı doğrulayamıyorsa 
         // file_exists sürekli false döner ve döngüden hemen çıkıp aynı isimle yazar.
         if (!file_exists(out_path)) {
             break;
@@ -346,7 +346,7 @@ void desktop_init(void) {
 
     // --- SETTINGS.CFG DOSYASINDAN AYARLARI OKUMA ---
     uint32_t cfg_size = 0;
-    char* cfg_content = (char*)vfs_read_file("C:/Kryon/System32/settings.cfg", &cfg_size);
+    char* cfg_content = (char*)vfs_read_file("C:/Lenor/System32/settings.cfg", &cfg_size);
     if (cfg_content && cfg_size > 0) {
         
         // 1. Timezone Offset Parse Etme

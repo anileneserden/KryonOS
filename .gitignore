@@ -1,7 +1,7 @@
 build/
 isodir/
-kryonos.bin
-kryonos.iso
+lenoros.bin
+lenoros.iso
 *.o
 *.txt
 .vscode/

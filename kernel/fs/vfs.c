@@ -232,7 +232,7 @@ bool vfs_file_exists(const char* full_path) {
         return false;
     }
 
-    // Eğer sürücü (KRYFS) özel bir file_exists / stat fonksiyonu sunuyorsa onu çağır:
+    // Eğer sürücü (LNRFS) özel bir file_exists / stat fonksiyonu sunuyorsa onu çağır:
     if (mount_table[index].driver.file_exists) {
         return mount_table[index].driver.file_exists(filename);
     }

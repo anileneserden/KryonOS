@@ -55,7 +55,7 @@ void serial_screen_init(void) {
     current_col = 0;
     scroll_offset = 0;
     
-    serial_screen_write("=== KRYONOS KERNEL DEBUG SCREEN ===\n");
+    serial_screen_write("=== LENOROS KERNEL DEBUG SCREEN ===\n");
     serial_screen_write("Use Up/Down or PageUp/PageDown to scroll logs.\n");
 }
 

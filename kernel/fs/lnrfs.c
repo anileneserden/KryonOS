@@ -1,4 +1,4 @@
-#include <kernel/fs/kryfs.h>
+#include <kernel/fs/lnrfs.h>
 #include <kernel/fs/vfs.h>
 #include <kernel/drivers/storage/ata.h>
 #include <kernel/serial.h>
@@ -6,17 +6,17 @@
 #include <kernel/string.h>
 
 // Logları kontrol etmek için debug makrosu (0: Sadece kritik loglar/hatalar, 1: Tüm tarama detayları)
-#define KRYFS_DEBUG_ENABLED 0
+#define LNRFS_DEBUG_ENABLED 0
 
-static kryfs_superblock_t sb_cache;
-static int kryfs_is_mounted = 0;
+static lnrfs_superblock_t sb_cache;
+static int lnrfs_is_mounted = 0;
 
-int kryfs_mount(void) {
-    serial_write("[KRYFS] Mounting process is starting....\n");
+int lnrfs_mount(void) {
+    serial_write("[LNRFS] Mounting process is starting....\n");
 
     uint8_t* sector_buffer = (uint8_t*)kmalloc(512);
     if (!sector_buffer) {
-        serial_write("[KRYFS ERROR] Memory allocation failed (kmalloc)!\n");
+        serial_write("[LNRFS ERROR] Memory allocation failed (kmalloc)!\n");
         return -1;
     }
 
@@ -24,34 +24,34 @@ int kryfs_mount(void) {
     ata_read_sectors(0, 0, 1, sector_buffer);
 
     // Copy the read data to the cache structure.
-    memcpy(&sb_cache, sector_buffer, sizeof(kryfs_superblock_t));
+    memcpy(&sb_cache, sector_buffer, sizeof(lnrfs_superblock_t));
     kfree(sector_buffer); // Releasing it to prevent a memory leak.
 
-    // Magic Number check ('KRYF' -> 0x4B525946)
-    if (sb_cache.magic != 0x4B525946) {
-        serial_write("[KRYFS ERROR] Invalid file system signature (Magic mismatch)!\n");
+    // Magic Number check ('LNRF' -> 0x4C4E5246)
+    if (sb_cache.magic != 0x4C4E5246) {
+        serial_write("[LNRFS ERROR] Invalid file system signature (Magic mismatch)!\n");
         return -1;
     }
 
-    serial_write("[KRYFS] Superblock successfully verified!\n");
-    serial_write("[KRYFS] -> Total Number of Blocks: ");
+    serial_write("[LNRFS] Superblock successfully verified!\n");
+    serial_write("[LNRFS] -> Total Number of Blocks: ");
     serial_write_num(sb_cache.total_blocks);
     serial_write("\n");
-    serial_write("[KRYFS] -> Inode Table Block: ");
+    serial_write("[LNRFS] -> Inode Table Block: ");
     serial_write_num(sb_cache.inode_table_block);
     serial_write("\n");
-    serial_write("[KRYFS] -> Data Block Start: ");
+    serial_write("[LNRFS] -> Data Block Start: ");
     serial_write_num(sb_cache.data_block_start);
     serial_write("\n");
 
-    kryfs_is_mounted = 1;
-    serial_write("[KRYFS] File system successfully mounted!\n");
+    lnrfs_is_mounted = 1;
+    serial_write("[LNRFS] File system successfully mounted!\n");
     return 0;
 }
 
-int kryfs_find_inode(const char* filename, kryfs_inode_t* out_inode) {
-    if (!kryfs_is_mounted) {
-        serial_write("[KRYFS ERROR] File system not mounted!\n");
+int lnrfs_find_inode(const char* filename, lnrfs_inode_t* out_inode) {
+    if (!lnrfs_is_mounted) {
+        serial_write("[LNRFS ERROR] File system not mounted!\n");
         return -1;
     }
 
@@ -72,7 +72,7 @@ int kryfs_find_inode(const char* filename, kryfs_inode_t* out_inode) {
     uint32_t total_buffer_size = inode_table_sectors * 512;
     uint8_t* sector_buf = (uint8_t*)kmalloc(total_buffer_size);
     if (!sector_buf) {
-        serial_write("[KRYFS ERROR] Memory allocation failed for inode search!\n");
+        serial_write("[LNRFS ERROR] Memory allocation failed for inode search!\n");
         return -1;
     }
 
@@ -80,14 +80,14 @@ int kryfs_find_inode(const char* filename, kryfs_inode_t* out_inode) {
     ata_read_sectors(0, table_lba, inode_table_sectors, sector_buf);
 
     int found = -1;
-    uint32_t max_inodes = total_buffer_size / sizeof(kryfs_inode_t);
+    uint32_t max_inodes = total_buffer_size / sizeof(lnrfs_inode_t);
 
     for (uint32_t i = 0; i < max_inodes; i++) {
-        kryfs_inode_t* inode = (kryfs_inode_t*)(sector_buf + (i * sizeof(kryfs_inode_t)));
+        lnrfs_inode_t* inode = (lnrfs_inode_t*)(sector_buf + (i * sizeof(lnrfs_inode_t)));
 
         if (inode->is_used) {
-            if (KRYFS_DEBUG_ENABLED) {
-                serial_write("[KRYFS] Scanning inode: [");
+            if (LNRFS_DEBUG_ENABLED) {
+                serial_write("[LNRFS] Scanning inode: [");
                 serial_write(inode->filename);
                 serial_write("] | Looking for: [");
                 serial_write((char*)filename);
@@ -109,7 +109,7 @@ int kryfs_find_inode(const char* filename, kryfs_inode_t* out_inode) {
             }
 
             if (match) {
-                memcpy(out_inode, inode, sizeof(kryfs_inode_t));
+                memcpy(out_inode, inode, sizeof(lnrfs_inode_t));
                 found = 0;
                 break;
             }
@@ -119,7 +119,7 @@ int kryfs_find_inode(const char* filename, kryfs_inode_t* out_inode) {
     kfree(sector_buf);
 
     if (found != 0) {
-        serial_write("[KRYFS] File not found: ");
+        serial_write("[LNRFS] File not found: ");
         serial_write((char*)filename);
         serial_write("\n");
     }
@@ -127,45 +127,45 @@ int kryfs_find_inode(const char* filename, kryfs_inode_t* out_inode) {
     return found;
 }
 
-bool kryfs_file_exists(const char* path) {
-    if (!kryfs_is_mounted || !path) return false;
+bool lnrfs_file_exists(const char* path) {
+    if (!lnrfs_is_mounted || !path) return false;
 
-    kryfs_inode_t dummy_inode;
-    if (kryfs_find_inode(path, &dummy_inode) == 0) {
+    lnrfs_inode_t dummy_inode;
+    if (lnrfs_find_inode(path, &dummy_inode) == 0) {
         return true;
     }
 
     return false;
 }
 
-void* kryfs_read_file(const char* filename, uint32_t* out_size) {
-    if (!kryfs_is_mounted) {
-        serial_write("[KRYFS ERROR] File system not mounted!\n");
+void* lnrfs_read_file(const char* filename, uint32_t* out_size) {
+    if (!lnrfs_is_mounted) {
+        serial_write("[LNRFS ERROR] File system not mounted!\n");
         if (out_size) *out_size = 0;
         return NULL;
     }
 
-    kryfs_inode_t inode;
-    if (kryfs_find_inode(filename, &inode) != 0) {
+    lnrfs_inode_t inode;
+    if (lnrfs_find_inode(filename, &inode) != 0) {
         if (out_size) *out_size = 0;
         return NULL;
     }
 
     if (inode.is_directory) {
-        serial_write("[KRYFS ERROR] The specified name is a directory, not a file!\n");
+        serial_write("[LNRFS ERROR] The specified name is a directory, not a file!\n");
         if (out_size) *out_size = 0;
         return NULL;
     }
 
     // --- DETAILED DEBUG INFORMATION (Only if enabled) ---
-    if (KRYFS_DEBUG_ENABLED) {
-        serial_write("[KRYFS DEBUG] File Name: ");
+    if (LNRFS_DEBUG_ENABLED) {
+        serial_write("[LNRFS DEBUG] File Name: ");
         serial_write((char*)filename);
-        serial_write("\n[KRYFS DEBUG] Inode Size: ");
+        serial_write("\n[LNRFS DEBUG] Inode Size: ");
         serial_write_num(inode.size);
-        serial_write("\n[KRYFS DEBUG] Inode Start Block: ");
+        serial_write("\n[LNRFS DEBUG] Inode Start Block: ");
         serial_write_num(inode.start_block);
-        serial_write("\n[KRYFS DEBUG] Data Block Start: ");
+        serial_write("\n[LNRFS DEBUG] Data Block Start: ");
         serial_write_num(sb_cache.data_block_start);
         serial_write("\n");
     }
@@ -174,7 +174,7 @@ void* kryfs_read_file(const char* filename, uint32_t* out_size) {
     uint32_t size = inode.size;
     uint8_t* file_buffer = (uint8_t*)kmalloc(size + 1); // +1 for safe null terminator
     if (!file_buffer) {
-        serial_write("[KRYFS ERROR] Memory allocation failed for file content!\n");
+        serial_write("[LNRFS ERROR] Memory allocation failed for file content!\n");
         if (out_size) *out_size = 0;
         return NULL;
     }
@@ -212,16 +212,16 @@ void* kryfs_read_file(const char* filename, uint32_t* out_size) {
         *out_size = size;
     }
 
-    serial_write("[KRYFS] File successfully read: ");
+    serial_write("[LNRFS] File successfully read: ");
     serial_write((char*)filename);
     serial_write("\n");
 
     return file_buffer;
 }
 
-int kryfs_get_dir_files(const char* rel_path, vfs_file_info_t* out_list, int max_count) {
-    if (!kryfs_is_mounted) {
-        serial_write("[KRYFS ERROR] File system not mounted!\n");
+int lnrfs_get_dir_files(const char* rel_path, vfs_file_info_t* out_list, int max_count) {
+    if (!lnrfs_is_mounted) {
+        serial_write("[LNRFS ERROR] File system not mounted!\n");
         return 0;
     }
 
@@ -241,18 +241,18 @@ int kryfs_get_dir_files(const char* rel_path, vfs_file_info_t* out_list, int max
     uint32_t total_buffer_size = inode_table_sectors * 512;
     uint8_t* sector_buf = (uint8_t*)kmalloc(total_buffer_size);
     if (!sector_buf) {
-        serial_write("[KRYFS ERROR] Memory allocation failed for directory listing!\n");
+        serial_write("[LNRFS ERROR] Memory allocation failed for directory listing!\n");
         return 0;
     }
 
     ata_read_sectors(0, table_lba, inode_table_sectors, sector_buf);
 
     int count = 0;
-    uint32_t max_inodes = total_buffer_size / sizeof(kryfs_inode_t);
+    uint32_t max_inodes = total_buffer_size / sizeof(lnrfs_inode_t);
     int target_len = strlen(rel_path);
 
     for (uint32_t i = 0; i < max_inodes && count < max_count; i++) {
-        kryfs_inode_t* inode = (kryfs_inode_t*)(sector_buf + (i * sizeof(kryfs_inode_t)));
+        lnrfs_inode_t* inode = (lnrfs_inode_t*)(sector_buf + (i * sizeof(lnrfs_inode_t)));
 
         if (!inode->is_used) continue;
 
@@ -272,9 +272,9 @@ int kryfs_get_dir_files(const char* rel_path, vfs_file_info_t* out_list, int max
         }
 
         if (match && sub_name && sub_name[0] != '\0') {
-            char direct_child[KRYFS_MAX_FILENAME];
+            char direct_child[LNRFS_MAX_FILENAME];
             int j = 0;
-            while (sub_name[j] != '\0' && sub_name[j] != '/' && sub_name[j] != '\\' && j < KRYFS_MAX_FILENAME - 1) {
+            while (sub_name[j] != '\0' && sub_name[j] != '/' && sub_name[j] != '\\' && j < LNRFS_MAX_FILENAME - 1) {
                 direct_child[j] = sub_name[j];
                 j++;
             }
@@ -309,14 +309,14 @@ int kryfs_get_dir_files(const char* rel_path, vfs_file_info_t* out_list, int max
     return count;
 }
 
-int kryfs_create_file(const char* path) {
-    if (!kryfs_is_mounted) {
-        serial_write("[KRYFS ERROR] Not mounted!\n");
+int lnrfs_create_file(const char* path) {
+    if (!lnrfs_is_mounted) {
+        serial_write("[LNRFS ERROR] Not mounted!\n");
         return -1;
     }
 
-    if (kryfs_file_exists(path)) {
-        serial_write("[KRYFS ERROR] File already exists, skipping creation!\n");
+    if (lnrfs_file_exists(path)) {
+        serial_write("[LNRFS ERROR] File already exists, skipping creation!\n");
         return -1;
     }
 
@@ -334,17 +334,17 @@ int kryfs_create_file(const char* path) {
     uint32_t total_buffer_size = inode_table_sectors * 512;
     uint8_t* sector_buf = (uint8_t*)kmalloc(total_buffer_size);
     if (!sector_buf) {
-        serial_write("[KRYFS ERROR] kmalloc failed!\n");
+        serial_write("[LNRFS ERROR] kmalloc failed!\n");
         return -1;
     }
 
     ata_read_sectors(0, table_lba, inode_table_sectors, sector_buf);
 
-    uint32_t max_inodes = total_buffer_size / sizeof(kryfs_inode_t);
+    uint32_t max_inodes = total_buffer_size / sizeof(lnrfs_inode_t);
     int free_slot = -1;
 
     for (uint32_t i = 0; i < max_inodes; i++) {
-        kryfs_inode_t* inode = (kryfs_inode_t*)(sector_buf + (i * sizeof(kryfs_inode_t)));
+        lnrfs_inode_t* inode = (lnrfs_inode_t*)(sector_buf + (i * sizeof(lnrfs_inode_t)));
         if (!inode->is_used) {
             free_slot = i;
             break;
@@ -352,15 +352,15 @@ int kryfs_create_file(const char* path) {
     }
 
     if (free_slot == -1) {
-        serial_write("[KRYFS ERROR] Inode table full!\n");
+        serial_write("[LNRFS ERROR] Inode table full!\n");
         kfree(sector_buf);
         return -1;
     }
 
-    kryfs_inode_t* new_inode = (kryfs_inode_t*)(sector_buf + (free_slot * sizeof(kryfs_inode_t)));
-    memset(new_inode, 0, sizeof(kryfs_inode_t));
+    lnrfs_inode_t* new_inode = (lnrfs_inode_t*)(sector_buf + (free_slot * sizeof(lnrfs_inode_t)));
+    memset(new_inode, 0, sizeof(lnrfs_inode_t));
 
-    strncpy(new_inode->filename, path, KRYFS_MAX_FILENAME - 1);
+    strncpy(new_inode->filename, path, LNRFS_MAX_FILENAME - 1);
     new_inode->is_used = 1;
     new_inode->is_directory = 0;
     new_inode->size = 0;
@@ -369,14 +369,14 @@ int kryfs_create_file(const char* path) {
     ata_write_sectors(0, table_lba, inode_table_sectors, sector_buf);
     kfree(sector_buf);
 
-    serial_write("[KRYFS] File created successfully: ");
+    serial_write("[LNRFS] File created successfully: ");
     serial_write((char*)path);
     serial_write("\n");
     return 0;
 }
 
-int kryfs_mkdir(const char* path) {
-    if (!kryfs_is_mounted) return -1;
+int lnrfs_mkdir(const char* path) {
+    if (!lnrfs_is_mounted) return -1;
 
     if (path[0] == '/' || path[0] == '\\') {
         path++;
@@ -395,11 +395,11 @@ int kryfs_mkdir(const char* path) {
 
     ata_read_sectors(0, table_lba, inode_table_sectors, sector_buf);
 
-    uint32_t max_inodes = total_buffer_size / sizeof(kryfs_inode_t);
+    uint32_t max_inodes = total_buffer_size / sizeof(lnrfs_inode_t);
     int free_slot = -1;
 
     for (uint32_t i = 0; i < max_inodes; i++) {
-        kryfs_inode_t* inode = (kryfs_inode_t*)(sector_buf + (i * sizeof(kryfs_inode_t)));
+        lnrfs_inode_t* inode = (lnrfs_inode_t*)(sector_buf + (i * sizeof(lnrfs_inode_t)));
         if (!inode->is_used) {
             free_slot = i;
             break;
@@ -407,16 +407,16 @@ int kryfs_mkdir(const char* path) {
     }
 
     if (free_slot != -1) {
-        kryfs_inode_t* new_inode = (kryfs_inode_t*)(sector_buf + (free_slot * sizeof(kryfs_inode_t)));
-        memset(new_inode, 0, sizeof(kryfs_inode_t));
+        lnrfs_inode_t* new_inode = (lnrfs_inode_t*)(sector_buf + (free_slot * sizeof(lnrfs_inode_t)));
+        memset(new_inode, 0, sizeof(lnrfs_inode_t));
 
-        strncpy(new_inode->filename, path, KRYFS_MAX_FILENAME - 1);
+        strncpy(new_inode->filename, path, LNRFS_MAX_FILENAME - 1);
         new_inode->is_used = 1;
         new_inode->is_directory = 1;
         new_inode->size = 0;
 
         ata_write_sectors(0, table_lba, inode_table_sectors, sector_buf);
-        serial_write("[KRYFS] Directory created: ");
+        serial_write("[LNRFS] Directory created: ");
         serial_write((char*)path);
         serial_write("\n");
     }
@@ -425,14 +425,14 @@ int kryfs_mkdir(const char* path) {
     return free_slot != -1 ? 0 : -1;
 }
 
-fs_driver_t kryfs_get_driver(void) {
+fs_driver_t lnrfs_get_driver(void) {
     fs_driver_t driver;
-    driver.read_file = kryfs_read_file;
+    driver.read_file = lnrfs_read_file;
     driver.list_dir = NULL;
-    driver.get_dir_files = kryfs_get_dir_files;
-    driver.create_file = kryfs_create_file;
+    driver.get_dir_files = lnrfs_get_dir_files;
+    driver.create_file = lnrfs_create_file;
     driver.write_file = NULL;
-    driver.mkdir = kryfs_mkdir;
-    driver.file_exists = kryfs_file_exists;
+    driver.mkdir = lnrfs_mkdir;
+    driver.file_exists = lnrfs_file_exists;
     return driver;
 }
