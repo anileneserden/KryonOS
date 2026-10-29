@@ -10,6 +10,8 @@ int32_t usb_mouse_x = 400;
 int32_t usb_mouse_y = 300;
 uint8_t usb_mouse_buttons = 0;
 
+#define MOUSE_DEBUG_ENABLED 0
+
 void usb_mouse_set_absolute_mode(uint8_t new_absolute_mode) {
     absolute_mode = new_absolute_mode;
 }
@@ -78,11 +80,13 @@ void usb_mouse_process_report(const uint8_t* report, uint8_t length) {
     static int32_t last_print_x = -1;
     static int32_t last_print_y = -1;
     if (usb_mouse_x != last_print_x || usb_mouse_y != last_print_y) {
-        serial_write("[Mouse] X: ");
-        serial_write_dec(usb_mouse_x);
-        serial_write(" | Y: ");
-        serial_write_dec(usb_mouse_y);
-        serial_write("\n");
+        if (MOUSE_DEBUG_ENABLED) {
+            serial_write("[Mouse] X: ");
+            serial_write_dec(usb_mouse_x);
+            serial_write(" | Y: ");
+            serial_write_dec(usb_mouse_y);
+            serial_write("\n");
+        }
         
         last_print_x = usb_mouse_x;
         last_print_y = usb_mouse_y;
