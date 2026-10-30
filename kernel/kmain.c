@@ -135,6 +135,13 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     app_manager_init();
     fb_swap();
 
+    // C sürücüsündeki Program Files altına attığın lex2 paketini çalıştır
+    if (lex2_load_and_run("C:/Program Files/test2/test2.lex")) {
+        serial_write("Test2 uygulamasi basariyla calistirildi!\n");
+    } else {
+        serial_write("HATA: Test2 uygulamasi yuklenemedi!\n");
+    }
+
     // 6. AC97 audio driver initialization
     if (ac97_init() == 0) {
         ac97_set_master_volume(100);

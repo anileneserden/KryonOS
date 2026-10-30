@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <kernel/fs/vfs.h>
 
-#define LEX2_MAGIC 0x3246454B
+#define LEX2_MAGIC 0x3258454C
 #define LEX2_VERSION 2
 #define LEX2_ARCH_I386 1
 #define LEX2_LOAD_ADDRESS ((uint32_t)0x400000)
