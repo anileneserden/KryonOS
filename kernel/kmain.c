@@ -27,7 +27,7 @@
 #include <kernel/power.h>
 #include <arch/x86/io.h>
 #include <kernel/hexdump.h>
-#include <kernel/loader/kef2.h>
+#include <kernel/loader/lex2.h>
 
 // serial.c içerisindeki mirror fonksiyonunun prototipi
 extern void serial_screen_mirror_enable(bool enable);
