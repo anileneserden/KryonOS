@@ -4,7 +4,7 @@
 #include <stdbool.h>
 
 #ifndef KEYBOARD_USB_LOG
-#define KEYBOARD_USB_LOG 1
+#define KEYBOARD_USB_LOG 0
 #endif
 
 #define HID_USAGE_MAX 0x66
