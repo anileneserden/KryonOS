@@ -6,11 +6,11 @@ CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra -Iinclude -Iinclude/libc
 LDFLAGS = -T linker.ld -nostdlib
 
 BUILD = build
-TARGET = $(BUILD)/kryonos.elf
+TARGET = $(BUILD)/lenoros.elf
 
 # --- Disk Image Definitions ---
-DISK_KRYFS ?= $(HOME)/KryonOS/main/disk-kryfs.img
-DISK_FAT32 ?= $(HOME)/KryonOS/main/disk-fat32.img
+DISK_LNRFS ?= $(HOME)/LenorOS/main/disk-lnrfs.img
+DISK_FAT32 ?= $(HOME)/LenorOS/main/disk-fat32.img
 
 # --- Source Files ---
 SRC_S = \
@@ -45,10 +45,10 @@ SRC_C = \
     kernel/drivers/pci.c \
     kernel/drivers/rtc.c \
     kernel/fs/fat32.c \
-    kernel/fs/kryfs.c \
+    kernel/fs/lnrfs.c \
     kernel/fs/vfs.c \
-    kernel/loader/kef.c \
-    kernel/loader/kef2.c \
+    kernel/loader/lex.c \
+    kernel/loader/lex2.c \
     kernel/loader/png.c \
     kernel/mem/heap.c \
     kernel/mem/pmm.c \
@@ -84,21 +84,21 @@ $(BUILD)/%.o: %.S
 	$(AS) $< -o $@
 
 clean:
-	rm -rf $(BUILD) isodir kryonos.iso
+	rm -rf $(BUILD) isodir lenoros.iso
 
 iso: $(TARGET)
 	mkdir -p isodir/boot/grub
-	cp $(TARGET) isodir/boot/kryonos.bin
+	cp $(TARGET) isodir/boot/lenoros.bin
 	echo 'set timeout=0' > isodir/boot/grub/grub.cfg
 	echo 'insmod all_video' >> isodir/boot/grub/grub.cfg
-	echo 'menuentry "KryonOS UEFI/BIOS" {' >> isodir/boot/grub/grub.cfg
-	echo '    multiboot /boot/kryonos.bin' >> isodir/boot/grub/grub.cfg
+	echo 'menuentry "LenorOS UEFI/BIOS" {' >> isodir/boot/grub/grub.cfg
+	echo '    multiboot /boot/lenoros.bin' >> isodir/boot/grub/grub.cfg
 	echo '    boot' >> isodir/boot/grub/grub.cfg
 	echo '}' >> isodir/boot/grub/grub.cfg
-	grub-mkrescue -o kryonos.iso isodir
+	grub-mkrescue -o lenoros.iso isodir
 
 # Dosyalar yoksa otomatik boş imaj oluşturan kural
-$(DISK_KRYFS):
+$(DISK_LNRFS):
 	@mkdir -p $(dir $@)
 	dd if=/dev/zero of=$@ bs=1M count=2
 
@@ -107,12 +107,12 @@ $(DISK_FAT32):
 	dd if=/dev/zero of=$@ bs=1M count=16
 
 # QEMU'yu UEFI modunda çalıştırmak için -bios ekledik
-run: iso $(DISK_KRYFS) $(DISK_FAT32)
+run: iso $(DISK_LNRFS) $(DISK_FAT32)
 	qemu-system-x86_64 \
        -bios /usr/share/edk2/x64/OVMF.4m.fd \
-       -cdrom kryonos.iso \
+       -cdrom lenoros.iso \
        -m 2G \
-       -drive format=raw,file=$(DISK_KRYFS),index=0,media=disk \
+       -drive format=raw,file=$(DISK_LNRFS),index=0,media=disk \
        -drive format=raw,file=$(DISK_FAT32),index=1,media=disk \
        -audiodev pa,id=audio0 -device AC97,audiodev=audio0 \
        -machine pcspk-audiodev=audio0 \

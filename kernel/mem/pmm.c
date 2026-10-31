@@ -1,5 +1,5 @@
 #include <kernel/mem/pmm.h>
-#include <kernel/loader/kef.h>
+#include <kernel/loader/lex.h>
 #include <kernel/serial.h>
 
 // Start the bitmap well away from the kernel and initial regions (4MB)
@@ -38,10 +38,10 @@ void pmm_init(multiboot_info_t* mboot) {
         used_blocks--;
     }
 
-    // KEF API tablosunu VMM'nin page directory'sinden sonra ayir.
-    uint32_t kef_api_block = KEF_API_ADDRESS / PAGE_SIZE;
-    if (kef_api_block >= start_free_block && kef_api_block < end_free_block) {
-        mmap_set(kef_api_block);
+    // LEX API tablosunu VMM'nin page directory'sinden sonra ayir.
+    uint32_t lex_api_block = LEX_API_ADDRESS / PAGE_SIZE;
+    if (lex_api_block >= start_free_block && lex_api_block < end_free_block) {
+        mmap_set(lex_api_block);
         used_blocks++;
     }
 
