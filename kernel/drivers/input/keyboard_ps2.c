@@ -82,9 +82,11 @@ void keyboard_handler(void) {
         if (scancode == 0xB7 || scancode == 0x2A || scancode == 0xAA) return;
     }
 
-    bool is_released = (scancode & 0x80) != 0;
-    uint8_t base_scancode = scancode & 0x7F;
+    keyboard_process_scancode(scancode & 0x7F, (scancode & 0x80) != 0);
+}
 
+// Shared by every keyboard driver; takes a Set-1 base scancode without the 0x80 release bit.
+void keyboard_process_scancode(uint8_t base_scancode, bool is_released) {
     if (base_scancode < 128) {
         key_states[base_scancode] = !is_released; 
         if (!is_released) {
