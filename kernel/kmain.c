@@ -28,6 +28,16 @@
 #include <arch/x86/io.h>
 #include <kernel/hexdump.h>
 #include <kernel/loader/lex2.h>
+#include <ui/renderer3d.h>
+#include <ui/camera.h>
+
+// Ekran / Çalışma Modları Tanımlamaları
+#define MODE_DESKTOP      0
+#define MODE_SERIAL_DEBUG 1
+#define MODE_RENDERER_3D  2
+
+// Varsayılan başlangıç modumuz (İstediğinde MODE_RENDERER_3D yapabilirsin)
+static uint32_t current_display_mode = MODE_RENDERER_3D;
 
 // serial.c içerisindeki mirror fonksiyonunun prototipi
 extern void serial_screen_mirror_enable(bool enable);
@@ -64,9 +74,7 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     fb_init(mboot);
 
     if (debug_mode) {
-        serial_screen_init();
-        serial_screen_mirror_enable(true); // Tüm serial_write logları ekrana da akacak
-        serial_screen_write("DEBUG MODE ACTIVE: Screen & Mirror initialized.\n");
+        current_display_mode = MODE_SERIAL_DEBUG;
     }
 
     // 2. PCI, display, and speaker hardware drivers
@@ -106,41 +114,54 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
         fs_driver_t lnrfs_driver = lnrfs_get_driver();
         vfs_mount('C', "LNRFS_VOL", lnrfs_driver);
         serial_write("LNRFS mounted successfully and registered to VFS on C:\\.\n");
-        
-        // Bu çağrının bu parantezlerin içinde olduğundan emin olun:
         run_tls_mock_test();
-
     } else {
         serial_write("LNRFS: Driver could not be started!\n");
     }
 
     serial_write("[input] xHCI USB input active.\n");
 
-    // 5. Graphical Interface Initialization and Initial Drawing
+    // 3D Kamera nesnemizi tanımlayalım (Sadece 3D modunda kullanılacak)
+    camera_t test_camera;
+    test_camera.position.x = TO_FIXED(0);
+    test_camera.position.y = TO_FIXED(0);
+    test_camera.position.z = TO_FIXED(-200);
+    test_camera.yaw = 0;
+    test_camera.pitch = 0;
+
+    // 5. Graphical Interface & Mode Initialization
     uint32_t width = fb_get_width();
     uint32_t height = fb_get_height();
 
     if (width > 0 && height > 0) {
-        if (debug_mode) {
-            serial_screen_write("Debug screen fully loaded.\n");
-            while (1) {
-                // PS/2 port polling kaldırıldı
-            }
-        } else {
-            fb_clear(0xFF0000FF);
-            desktop_init(); 
+        switch (current_display_mode) {
+            case MODE_SERIAL_DEBUG:
+                serial_screen_init();
+                serial_screen_mirror_enable(true);
+                serial_screen_write("DEBUG MODE ACTIVE: Screen & Mirror initialized.\n");
+                break;
+
+            case MODE_DESKTOP:
+                fb_clear(0xFF0000FF);
+                desktop_init();
+                app_manager_init();
+                
+                // Uygulama yükleme sadece masaüstü moduna izole edildi
+                if (lex2_load_and_run("C:/Program Files/test2/test2.lex")) {
+                    serial_write("Test2 uygulamasi basariyla calistirildi!\n");
+                } else {
+                    serial_write("HATA: Test2 uygulamasi yuklenemedi!\n");
+                }
+                break;
+
+            case MODE_RENDERER_3D:
+                fb_clear(0x00000000); // Siyah ekran başlangıcı
+                renderer3d_init();
+                break;
         }
     }
 
-    app_manager_init();
     fb_swap();
-
-    // C sürücüsündeki Program Files altına attığın lex2 paketini çalıştır
-    if (lex2_load_and_run("C:/Program Files/test2/test2.lex")) {
-        serial_write("Test2 uygulamasi basariyla calistirildi!\n");
-    } else {
-        serial_write("HATA: Test2 uygulamasi yuklenemedi!\n");
-    }
 
     // 6. AC97 audio driver initialization
     if (ac97_init() == 0) {
@@ -149,19 +170,28 @@ void kernel_main(uint32_t mboot_magic, uint32_t* mboot_info_addr) {
     }
 
     interrupts_init();
-    serial_write("System initialized; idle loop polls USB EHCI events.\n");
+    serial_write("System initialized; running active display mode loop.\n");
 
-    // 7. Main event loop (GUI active loop with USB polling)
+    // 7. Main event loop (Mod bazlı optimize edilmiş ana döngü)
     while (1) {
-        uint8_t input_updated = 0;
+        // Donanım / USB yoklamaları her döngüde ortak çalışır
+        ehci_poll();
 
-        // EHCI poll mekanizmasını çağırıyoruz
-        input_updated = ehci_poll();
+        switch (current_display_mode) {
+            case MODE_SERIAL_DEBUG:
+                // Debug modunda özel döngü içi işlem gerekmiyor
+                break;
 
-        // Masaüstü ve uygulama güncellemelerini tetikle
-        desktop_process_input();
-        app_manager_update_all();
+            case MODE_DESKTOP:
+                desktop_process_input();
+                app_manager_update_all();
+                cursor_update_and_redraw();
+                break;
 
-        cursor_update_and_redraw();
+            case MODE_RENDERER_3D:
+                // Sadece 3D kamera ve çizim hesaplamaları çalışır (Boş RAM/CPU tüketimi yok)
+                renderer3d_draw_frame(&test_camera);
+                break;
+        }
     }
 }

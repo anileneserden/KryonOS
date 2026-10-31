@@ -54,10 +54,12 @@ SRC_C = \
     kernel/mem/vmm.c \
     libc/math.c \
     libc/stdlib.c \
+    ui/camera.c \
     ui/cursor.c \
     ui/desktop_icons.c \
     ui/desktop.c \
     ui/grid.c \
+    ui/renderer3d.c \
     ui/serial_screen.c \
     ui/window.c \
     ui/wm.c
